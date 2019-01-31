@@ -20,7 +20,8 @@
 module sim_param
 !*******************************************************************************
 use types, only : rprec
-use param, only : ld, ny, nz, lbz
+use param, only : ld, ny, nz, lbz, nxp
+use param, only : BOGUS
 implicit none
 
 save
@@ -34,7 +35,33 @@ real(rprec), dimension(:,:,:), allocatable :: u, v, w,                         &
     dpdx, dpdy, dpdz, txx, txy, tyy,                                           &
     txz, tyz, tzz, divtx, divty, divtz,                                        &
     fx, fy, fz, fxa, fya, fza
+
+#ifdef PPRNL
+real(rprec), dimension(:,:,:), allocatable :: u_pert, v_pert, w_pert,          &
+    dudy_pert, dudz_pert, dvdx_pert, dvdz_pert, dwdx_pert, dwdy_pert,          &
+    RHSx_pert, RHSy_pert, RHSz_pert
+#endif
+
+#ifdef PPGQL
+real(rprec), dimension(:,:,:), allocatable :: u_low, v_low, w_low,             &
+    dudy_low, dudz_low, dvdx_low, dvdz_low, dwdx_low, dwdy_low,                &
+    RHSx_low, RHSy_low, RHSz_low,                                              &
+    u_high, v_high, w_high,                                                    &
+    dudy_high, dudz_high, dvdx_high, dvdz_high, dwdx_high, dwdy_high,          &
+    RHSx_high, RHSy_high, RHSz_high
+#endif
+
 real(rprec), target, dimension(:,:,:), allocatable :: p
+
+real(rprec), dimension(:), allocatable :: JACO1, JACO2
+real(rprec), dimension(:), allocatable :: mesh_stretch, dj_dzeta
+real(rprec), dimension(:), allocatable :: dz_stretch
+
+real(rprec), dimension(:,:,:), allocatable :: uF, vF, wF
+real(rprec), target, dimension(:,:,:), allocatable :: pF
+real(rprec), dimension(:,:,:), allocatable :: dudyF, dudzF,                    &
+    dvdxF, dvdzF, dwdxF, dwdyF
+real(rprec), dimension(:,:,:), allocatable :: txzF, tyzF
 
 contains
 
@@ -50,21 +77,21 @@ implicit none
 allocate ( u(ld, ny, lbz:nz) ); u = 0.0_rprec
 allocate ( v(ld, ny, lbz:nz) ); v = 0.0_rprec
 allocate ( w(ld, ny, lbz:nz) ); w = 0.0_rprec
-allocate( dudx(ld, ny, lbz:nz) ); dudx = 0.0_rprec
-allocate( dudy(ld, ny, lbz:nz) ); dudy = 0.0_rprec
-allocate( dudz(ld, ny, lbz:nz) ); dudz = 0.0_rprec
-allocate( dvdx(ld, ny, lbz:nz) ); dvdx = 0.0_rprec
-allocate( dvdy(ld, ny, lbz:nz) ); dvdy = 0.0_rprec
-allocate( dvdz(ld, ny, lbz:nz) ); dvdz = 0.0_rprec
-allocate( dwdx(ld, ny, lbz:nz) ); dwdx = 0.0_rprec
-allocate( dwdy(ld, ny, lbz:nz) ); dwdy = 0.0_rprec
-allocate( dwdz(ld, ny, lbz:nz) ); dwdz = 0.0_rprec
-allocate( RHSx(ld, ny, lbz:nz) ); RHSx = 0.0_rprec
-allocate( RHSy(ld, ny, lbz:nz) ); RHSy = 0.0_rprec
-allocate( RHSz(ld, ny, lbz:nz) ); RHSz = 0.0_rprec
-allocate( RHSx_f(ld, ny, lbz:nz) ); RHSx_f = 0.0_rprec
-allocate( RHSy_f(ld, ny, lbz:nz) ); RHSy_f = 0.0_rprec
-allocate( RHSz_f(ld, ny, lbz:nz) ); RHSz_f = 0.0_rprec
+allocate ( dudx(ld, ny, lbz:nz) ); dudx = 0.0_rprec
+allocate ( dudy(ld, ny, lbz:nz) ); dudy = 0.0_rprec
+allocate ( dudz(ld, ny, lbz:nz) ); dudz = 0.0_rprec
+allocate ( dvdx(ld, ny, lbz:nz) ); dvdx = 0.0_rprec
+allocate ( dvdy(ld, ny, lbz:nz) ); dvdy = 0.0_rprec
+allocate ( dvdz(ld, ny, lbz:nz) ); dvdz = 0.0_rprec
+allocate ( dwdx(ld, ny, lbz:nz) ); dwdx = 0.0_rprec
+allocate ( dwdy(ld, ny, lbz:nz) ); dwdy = 0.0_rprec
+allocate ( dwdz(ld, ny, lbz:nz) ); dwdz = 0.0_rprec
+allocate ( RHSx(ld, ny, lbz:nz) ); RHSx = 0.0_rprec
+allocate ( RHSy(ld, ny, lbz:nz) ); RHSy = 0.0_rprec
+allocate ( RHSz(ld, ny, lbz:nz) ); RHSz = 0.0_rprec
+allocate ( RHSx_f(ld, ny, lbz:nz) ); RHSx_f = 0.0_rprec
+allocate ( RHSy_f(ld, ny, lbz:nz) ); RHSy_f = 0.0_rprec
+allocate ( RHSz_f(ld, ny, lbz:nz) ); RHSz_f = 0.0_rprec
 allocate ( dpdx(ld, ny, nz) ); dpdx = 0.0_rprec
 allocate ( dpdy(ld, ny, nz) ); dpdy = 0.0_rprec
 allocate ( dpdz(ld, ny, nz) ); dpdz = 0.0_rprec
@@ -78,6 +105,63 @@ allocate ( p(ld, ny, 0:nz) ); p = 0.0_rprec
 allocate ( divtx(ld, ny, lbz:nz) ); divtx = 0.0_rprec
 allocate ( divty(ld, ny, lbz:nz) ); divty = 0.0_rprec
 allocate ( divtz(ld, ny, lbz:nz) ); divtz = 0.0_rprec
+
+#ifdef PPRNL
+allocate ( u_pert(ld, ny, lbz:nz) ); u_pert = 0.0_rprec
+allocate ( v_pert(ld, ny, lbz:nz) ); v_pert = 0.0_rprec
+allocate ( w_pert(ld, ny, lbz:nz) ); w_pert = 0.0_rprec
+! note dudx_pert, dvdy_pert, and dwdz_pert are not here 
+! since they are not needed for convec subroutine
+allocate ( dudy_pert(ld, ny, lbz:nz) ); dudy_pert = 0.0_rprec
+allocate ( dudz_pert(ld, ny, lbz:nz) ); dudz_pert = 0.0_rprec
+allocate ( dvdx_pert(ld, ny, lbz:nz) ); dvdx_pert = 0.0_rprec
+allocate ( dvdz_pert(ld, ny, lbz:nz) ); dvdz_pert = 0.0_rprec
+allocate ( dwdx_pert(ld, ny, lbz:nz) ); dwdx_pert = 0.0_rprec
+allocate ( dwdy_pert(ld, ny, lbz:nz) ); dwdy_pert = 0.0_rprec
+allocate ( RHSx_pert(ld, ny, lbz:nz) ); RHSx_pert = 0.0_rprec
+allocate ( RHSy_pert(ld, ny, lbz:nz) ); RHSy_pert = 0.0_rprec
+allocate ( RHSz_pert(ld, ny, lbz:nz) ); RHSz_pert = 0.0_rprec
+#endif
+
+#ifdef PPGQL
+allocate ( u_low(ld, ny, lbz:nz) ); u_low = 0.0_rprec
+allocate ( v_low(ld, ny, lbz:nz) ); v_low = 0.0_rprec
+allocate ( w_low(ld, ny, lbz:nz) ); w_low = 0.0_rprec
+allocate ( dudy_low(ld, ny, lbz:nz) ); dudy_low = 0.0_rprec
+allocate ( dudz_low(ld, ny, lbz:nz) ); dudz_low = 0.0_rprec
+allocate ( dvdx_low(ld, ny, lbz:nz) ); dvdx_low = 0.0_rprec
+allocate ( dvdz_low(ld, ny, lbz:nz) ); dvdz_low = 0.0_rprec
+allocate ( dwdx_low(ld, ny, lbz:nz) ); dwdx_low = 0.0_rprec
+allocate ( dwdy_low(ld, ny, lbz:nz) ); dwdy_low = 0.0_rprec
+allocate ( RHSx_low(ld, ny, lbz:nz) ); RHSx_low = 0.0_rprec
+allocate ( RHSy_low(ld, ny, lbz:nz) ); RHSy_low = 0.0_rprec
+allocate ( RHSz_low(ld, ny, lbz:nz) ); RHSz_low = 0.0_rprec
+allocate ( u_high(ld, ny, lbz:nz) ); u_high = 0.0_rprec
+allocate ( v_high(ld, ny, lbz:nz) ); v_high = 0.0_rprec
+allocate ( w_high(ld, ny, lbz:nz) ); w_high = 0.0_rprec
+allocate ( dudy_high(ld, ny, lbz:nz) ); dudy_high = 0.0_rprec
+allocate ( dudz_high(ld, ny, lbz:nz) ); dudz_high = 0.0_rprec
+allocate ( dvdx_high(ld, ny, lbz:nz) ); dvdx_high = 0.0_rprec
+allocate ( dvdz_high(ld, ny, lbz:nz) ); dvdz_high = 0.0_rprec
+allocate ( dwdx_high(ld, ny, lbz:nz) ); dwdx_high = 0.0_rprec
+allocate ( dwdy_high(ld, ny, lbz:nz) ); dwdy_high = 0.0_rprec
+allocate ( RHSx_high(ld, ny, lbz:nz) ); RHSx_high = 0.0_rprec
+allocate ( RHSy_high(ld, ny, lbz:nz) ); RHSy_high = 0.0_rprec
+allocate ( RHSz_high(ld, ny, lbz:nz) ); RHSz_high = 0.0_rprec
+#endif
+
+allocate ( uF(nxp+2, ny, lbz:nz) ); uF = 0.0_rprec
+allocate ( vF(nxp+2, ny, lbz:nz) ); vF = 0.0_rprec
+allocate ( wF(nxp+2, ny, lbz:nz) ); wF = 0.0_rprec
+allocate ( pF(nxp+2, ny, 0:nz) ); pF = 0.0_rprec
+allocate ( dudyF(nxp+2, ny, lbz:nz) ); dudyF = 0.0_rprec
+allocate ( dudzF(nxp+2, ny, lbz:nz) ); dudzF = 0.0_rprec
+allocate ( dvdxF(nxp+2, ny, lbz:nz) ); dvdxF = 0.0_rprec
+allocate ( dvdzF(nxp+2, ny, lbz:nz) ); dvdzF = 0.0_rprec
+allocate ( dwdxF(nxp+2, ny, lbz:nz) ); dwdxF = 0.0_rprec
+allocate ( dwdyF(nxp+2, ny, lbz:nz) ); dwdyF = 0.0_rprec
+allocate ( txzF(nxp+2, ny, lbz:nz) ); txzF = 0.0_rprec
+allocate ( tyzF(nxp+2, ny, lbz:nz) ); tyzF = 0.0_rprec
 
 #ifdef PPTURBINES
 allocate ( fxa(ld, ny, nz) ); fxa = 0.0_rprec
@@ -94,6 +178,12 @@ if( .not. allocated(fxa) ) allocate ( fxa(ld, ny, nz) ); fxa = 0.0_rprec
 if( .not. allocated(fya) ) allocate ( fya(ld, ny, nz) ); fya = 0.0_rprec
 if( .not. allocated(fza) ) allocate ( fza(ld, ny, nz) ); fza = 0.0_rprec
 #endif
+
+allocate ( JACO1(lbz:nz) ); JACO1 = 1/BOGUS
+allocate ( JACO2(lbz:nz) ); JACO2 = 1/BOGUS
+allocate ( dj_dzeta(lbz:nz)); dj_dzeta = BOGUS
+allocate ( mesh_stretch(lbz:nz)); mesh_stretch = BOGUS
+allocate ( dz_stretch(lbz:nz)); dz_stretch = BOGUS
 
 sim_param_initialized = .true.
 

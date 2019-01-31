@@ -29,7 +29,7 @@ use param
 use messages
 use sim_param, only : u, v, w, divtz, p, dpdx, dpdy, dpdz
 use fft
-use emul_complex, only : OPERATOR(.MULI.)
+use sim_param, only : JACO1, JACO2, dj_dzeta
 
 implicit none
 
@@ -37,6 +37,7 @@ real(rprec) :: const, const2, const3, const4
 integer :: jx, jy, jz
 integer :: ir, ii
 integer :: jz_min
+integer :: end_kx, jx_s
 
 real(rprec), save, dimension(:,:,:), allocatable :: rH_x, rH_y, rH_z
 real(rprec), save, dimension(:,:), allocatable :: rtopw, rbottomw
@@ -48,7 +49,11 @@ logical, save :: arrays_allocated = .false.
 real(rprec), dimension(2) :: aH_x, aH_y
 
 ! Specifiy cached constants
-const = 1._rprec/(nx*ny)
+if (fourier) then
+    const = 1._rprec
+else
+    const = 1._rprec/(nx*ny)
+endif
 const2 = const/tadv1/dt
 const3 = 1._rprec/(dz**2)
 const4 = 1._rprec/(dz)
@@ -79,9 +84,13 @@ do jz = 1, nz-1
     rH_y(:,:,jz) = const2 * v(:,:,jz)
     rH_z(:,:,jz) = const2 * w(:,:,jz)
 
-    call dfftw_execute_dft_r2c(forw, rH_x(:,:,jz), rH_x(:,:,jz))
-    call dfftw_execute_dft_r2c(forw, rH_y(:,:,jz), rH_y(:,:,jz))
-    call dfftw_execute_dft_r2c(forw, rH_z(:,:,jz), rH_z(:,:,jz))
+    if (.not. fourier) then
+        call dfftw_execute_dft_r2c(forw, rH_x(:,:,jz), rH_x(:,:,jz))
+        call dfftw_execute_dft_r2c(forw, rH_y(:,:,jz), rH_y(:,:,jz))
+        call dfftw_execute_dft_r2c(forw, rH_z(:,:,jz), rH_z(:,:,jz))
+    endif
+    ! (else) fourier, do nothing already in fourier space
+
 end do
 
 #if defined(PPMPI) && defined(PPSAFETYMODE)
@@ -100,7 +109,12 @@ rH_y(1:ld:2,:,nz) = BOGUS
 #ifdef PPMPI
 if (coord == nproc-1) then
     rH_z(:,:,nz) = const2 * w(:,:,nz)
-    call dfftw_execute_dft_r2c(forw, rH_z(:,:,nz), rH_z(:,:,jz))
+    if (.not. fourier) then
+        ! call dfftw_execute_dft_r2c(forw, rH_z(:,:,nz), rH_z(:,:,jz))
+        call dfftw_execute_dft_r2c(forw, rH_z(:,:,nz), rH_z(:,:,nz))
+        ! possible typo here, nz -> jz instead of nz -> nz
+    endif
+    ! (else) fourier, do nothing already in fourier space
 #ifdef PPSAFETYMODE
 else
     rH_z(1:ld:2,:,nz) = BOGUS !--perhaps this should be 0 on top process?
@@ -108,23 +122,33 @@ else
 endif
 #else
 rH_z(:,:,nz) = const2 * w(:,:,nz)
-call dfftw_execute_dft_r2c(forw, rH_z(:,:,nz), rH_z(:,:,jz))
+if (.not. fourier) then
+    ! call dfftw_execute_dft_r2c(forw, rH_z(:,:,nz), rH_z(:,:,jz))
+    call dfftw_execute_dft_r2c(forw, rH_z(:,:,nz), rH_z(:,:,nz))
+    ! possible typo here, nz -> jz instead of nz -> nz
+endif
+! (else) fourier, do nothing already in fourier space
 #endif
 
 if (coord == 0) then
     rbottomw(:,:) = const * divtz(:,:,1)
-    call dfftw_execute_dft_r2c(forw, rbottomw, rbottomw )
+    if (.not. fourier) then
+        call dfftw_execute_dft_r2c(forw, rbottomw, rbottomw )
+    endif
+    ! (else) fourier, do nothing already in fourier space
 end if
 
 #ifdef PPMPI
 if (coord == nproc-1) then
 #endif
     rtopw(:,:) = const * divtz(:,:,nz)
-    call dfftw_execute_dft_r2c(forw, rtopw, rtopw)
+    if (.not. fourier) then
+        call dfftw_execute_dft_r2c(forw, rtopw, rtopw)
+    endif
+    ! (else) fourier, do nothing already in fourier space
 #ifdef PPMPI
 endif
 #endif
-
 
 ! set oddballs to 0
 rH_x(ld-1:ld,:,1:nz-1) = 0._rprec
@@ -153,8 +177,8 @@ if (coord == 0) then
 #endif
     b(:,:,1) = -1._rprec
     c(:,:,1) = 1._rprec
-    RHS_col(:,:,1) = -dz * rbottomw(:,:)
-
+    ! RHS_col(:,:,1) = -dz * rbottomw(:,:)
+    RHS_col(:,:,1) = - JACO1(1)*dz* rbottomw(:,:)
     jz_min = 2
 else
   jz_min = 1
@@ -169,7 +193,8 @@ if (coord == nproc-1) then
 #ifdef PPSAFETYMODE
     c(:,:,nz+1) = BOGUS
 #endif
-    RHS_col(:,:,nz+1) = -dz * rtopw(:,:)
+    ! RHS_col(:,:,nz+1) = -dz * rtopw(:,:)
+    RHS_col(:,:,nz+1) = -JACO1(nz)*dz * rtopw(:,:)
 #ifdef PPMPI
 endif
 #endif
@@ -185,21 +210,35 @@ endif
         rH_z(1, 1, nz), ld*ny, MPI_RPREC, up, 6, comm, status, ierr)
 #endif
 
+if (fourier) then
+    end_kx = kx_num
+else
+    end_kx = lh-1
+endif
+
 do jz = jz_min, nz
 do jy = 1, ny
     if (jy == ny/2 + 1) cycle
 
-    do jx = 1, lh-1
+    do jx = 1, end_kx
 
         if (jx*jy == 1) cycle
+
+        if (.not. fourier) then
 
         ii = 2*jx   ! imaginary index
         ir = ii - 1 ! real index
 
         ! JDA dissertation, eqn(2.85) a,b,c=coefficients and RHS_col=r_m
-        a(jx, jy, jz) = const3
-        b(jx, jy, jz) = -(kx(jx, jy)**2 + ky(jx, jy)**2 + 2._rprec*const3)
-        c(jx, jy, jz) = const3
+        ! a(jx, jy, jz) = const3
+        ! b(jx, jy, jz) = -(kx(jx, jy)**2 + ky(jx, jy)**2 + 2._rprec*const3)
+        ! c(jx, jy, jz) = const3
+        a(jx, jy, jz) = const3*(1._rprec/(JACO2(jz-1)**2)) -                   &
+            0.5_rprec*(1/JACO2(jz-1))*dj_dzeta(jz-1)*const4
+        b(jx, jy, jz) = -(kx(jx, jy)**2 + ky(jx, jy)**2 +                      &
+            2._rprec*const3*(1._rprec/(JACO2(jz-1)**2)))
+        c(jx, jy, jz) = const3*(1._rprec/(JACO2(jz-1)**2)) +                   &
+            0.5_rprec*(1/JACO2(jz-1))*dj_dzeta(jz-1)*const4
 
         !  Compute eye * kx * H_x
         aH_x(1) = -rH_x(ii,jy,jz-1) * kx(jx,jy)
@@ -207,8 +246,41 @@ do jy = 1, ny
         aH_y(1) = -rH_y(ii,jy,jz-1) * ky(jx,jy)
         aH_y(2) =  rH_y(ir,jy,jz-1) * ky(jx,jy)
 
-        RHS_col(ir:ii,jy,jz) =  aH_x + aH_y + (rH_z(ir:ii, jy, jz) -           &
-            rH_z(ir:ii, jy, jz-1)) *const4
+        ! RHS_col(ir:ii,jy,jz) =  aH_x + aH_y + (rH_z(ir:ii, jy, jz) -           &
+        !     rH_z(ir:ii, jy, jz-1))*const4
+        RHS_col(ir:ii,jy,jz) = aH_x + aH_y + (rH_z(ir:ii, jy, jz) -            &
+            rH_z(ir:ii, jy, jz-1))*const4/JACO2(jz-1)
+
+        else !! fourier
+
+        jx_s = kx_veci(jx)
+
+        ii = 2*jx_s ! imaginary index
+        ir = ii - 1 ! real index
+
+        ! JDA dissertation, eqn(2.85) a,b,c=coefficients and RHS_col=r_m
+        ! a(jx_s, jy, jz) = const3
+        ! b(jx_s, jy, jz) = -(kx(jx_s, jy)**2 + ky(jx_s, jy)**2 + 2._rprec*const3)
+        ! c(jx_s, jy, jz) = const3
+        a(jx_s, jy, jz) = const3*(1._rprec/(JACO2(jz-1)**2)) -                   &
+            0.5_rprec*(1/JACO2(jz-1))*dj_dzeta(jz-1)*const4
+        b(jx_s, jy, jz) = -(kx(jx_s, jy)**2 + ky(jx_s, jy)**2 +                  &
+            2._rprec*const3*(1._rprec/(JACO2(jz-1)**2)))
+        c(jx_s, jy, jz) = const3*(1._rprec/(JACO2(jz-1)**2)) +                   &
+            0.5_rprec*(1/JACO2(jz-1))*dj_dzeta(jz-1)*const4
+
+        !  Compute eye * kx * H_x
+        aH_x(1) = -rH_x(ii,jy,jz-1) * kx(jx_s,jy)
+        aH_x(2) =  rH_x(ir,jy,jz-1) * kx(jx_s,jy)
+        aH_y(1) = -rH_y(ii,jy,jz-1) * ky(jx_s,jy)
+        aH_y(2) =  rH_y(ir,jy,jz-1) * ky(jx_s,jy)
+
+        ! RHS_col(ir:ii,jy,jz) =  aH_x + aH_y + (rH_z(ir:ii, jy, jz) -           &
+        !     rH_z(ir:ii, jy, jz-1))*const4
+        RHS_col(ir:ii,jy,jz) = aH_x + aH_y + (rH_z(ir:ii, jy, jz) -            &
+            rH_z(ir:ii, jy, jz-1))*const4/JACO2(jz-1)
+
+        endif
 
     end do
 end do
@@ -224,13 +296,15 @@ call mpi_recv (p(1:2, 1, 1), 2, MPI_RPREC, down, 8, comm, status, ierr)
 #endif
 
 if (coord == 0) then
-    p(1:2, 1, 0) = 0._rprec
-    p(1:2, 1, 1) = p(1:2,1,0) - dz * rbottomw(1:2,1)
+    p(1:2, 1, 0) = 0._rprec !! BC, arbitrary pressure
+    ! p(1:2, 1, 1) = p(1:2,1,0) - dz * rbottomw(1:2,1)
+    p(1:2, 1, 1) = p(1:2,1,0) - JACO1(1)*dz * rbottomw(1:2,1)
 end if
 
 do jz = 2, nz
     ! JDA dissertation, eqn(2.88)
-    p(1:2, 1, jz) = p(1:2, 1, jz-1) + rH_z(1:2, 1, jz) * dz
+    ! p(1:2, 1, jz) = p(1:2, 1, jz-1) + rH_z(1:2, 1, jz) * dz
+    p(1:2, 1, jz) = p(1:2, 1, jz-1) + rH_z(1:2, 1, jz) * dz * JACO1(jz)
 end do
 
 #ifdef PPMPI
@@ -251,26 +325,46 @@ p(:,ny/2+1,:) = 0._rprec
 
 ! Now need to get p(wave,level) to physical p(jx,jy,jz)
 ! Loop over height levels
-call dfftw_execute_dft_c2r(back,p(:,:,0), p(:,:,0))
+if (.not. fourier) then
+    call dfftw_execute_dft_c2r(back,p(:,:,0), p(:,:,0))
+endif
+! (else) fourier, do nothing already in fourier space... no need to get physical
+
 do jz = 1, nz-1
     do jy = 1, ny
-    do jx = 1,lh
-        ii = 2*jx
-        ir = ii - 1
-        dpdx(ir,jy,jz) = -p(ii,jy,jz) * kx(jx,jy)
-        dpdx(ii,jy,jz) =  p(ir,jy,jz) * kx(jx,jy)
-        dpdy(ir,jy,jz) = -p(ii,jy,jz) * ky(jx,jy)
-        dpdy(ii,jy,jz) =  p(ir,jy,jz) * ky(jx,jy)
+    do jx = 1, end_kx
+        if (.not. fourier) then
+            ii = 2*jx   ! imaginary index
+            ir = ii - 1 ! real index
+            dpdx(ir,jy,jz) = -p(ii,jy,jz) * kx(jx,jy)
+            dpdx(ii,jy,jz) =  p(ir,jy,jz) * kx(jx,jy)
+            dpdy(ir,jy,jz) = -p(ii,jy,jz) * ky(jx,jy)
+            dpdy(ii,jy,jz) =  p(ir,jy,jz) * ky(jx,jy)
+        else
+            jx_s = kx_veci(jx)
+            ii = 2*jx_s ! imaginary index
+            ir = ii - 1 ! real index
+            dpdx(ir,jy,jz) = -p(ii,jy,jz) * kx(jx_s,jy)
+            dpdx(ii,jy,jz) =  p(ir,jy,jz) * kx(jx_s,jy)
+            dpdy(ir,jy,jz) = -p(ii,jy,jz) * ky(jx_s,jy)
+            dpdy(ii,jy,jz) =  p(ir,jy,jz) * ky(jx_s,jy)
+        endif
     end do
     end do
 
     ! note the oddballs of p are already 0, so we should be OK here
-    call dfftw_execute_dft_c2r(back,dpdx(:,:,jz), dpdx(:,:,jz))
-    call dfftw_execute_dft_c2r(back,dpdy(:,:,jz), dpdy(:,:,jz))
-    call dfftw_execute_dft_c2r(back,p(:,:,jz), p(:,:,jz))
+    if (.not. fourier) then
+        call dfftw_execute_dft_c2r(back,dpdx(:,:,jz), dpdx(:,:,jz))
+        call dfftw_execute_dft_c2r(back,dpdy(:,:,jz), dpdy(:,:,jz))
+        call dfftw_execute_dft_c2r(back,p(:,:,jz), p(:,:,jz))
+    endif
+    ! (else) fourier, do nothing already in fourier space
 end do
 
-if(coord==nproc-1) call dfftw_execute_dft_c2r(back,p(:,:,nz),p(:,:,nz))
+if ( (coord==nproc-1) .and. (.not. fourier) ) then
+    call dfftw_execute_dft_c2r(back,p(:,:,nz),p(:,:,nz))
+endif
+! (else) fourier, do nothing already in fourier space
 
 ! nz level is not needed elsewhere (although its valid)
 #ifdef PPSAFETYMODE
@@ -281,10 +375,16 @@ if(coord<nproc-1) p(:,:,nz) = BOGUS
 
 ! Final step compute the z-derivative of p
 ! note: p has additional level at z=-dz/2 for this derivative
-dpdz(1:nx, 1:ny, 1:nz-1) = (p(1:nx, 1:ny, 1:nz-1) - p(1:nx, 1:ny, 0:nz-2)) / dz
+! dpdz(1:nx, 1:ny, 1:nz-1) = (p(1:nx, 1:ny, 1:nz-1) - p(1:nx, 1:ny, 0:nz-2)) / dz
+do jz = 1, nz-1
+    dpdz(1:nx, 1:ny, jz) = (p(1:nx, 1:ny, jz) - p(1:nx, 1:ny, jz-1))         &
+        / dz / JACO1(jz)
+end do
 #ifdef PPSAFETYMODE
 if(coord<nproc-1)  dpdz(:,:,nz) = BOGUS
 #endif
-if(coord==nproc-1) dpdz(1:nx,1:ny,nz) = (p(1:nx,1:ny,nz)-p(1:nx,1:ny,nz-1))/ dz
+! if(coord==nproc-1) dpdz(1:nx,1:ny,nz) = (p(1:nx,1:ny,nz)-p(1:nx,1:ny,nz-1)) / dz
+if(coord==nproc-1) dpdz(1:nx,1:ny,nz) = (p(1:nx,1:ny,nz)-p(1:nx,1:ny,nz-1))  &
+    / dz / JACO1(nz)
 
 end subroutine press_stag_array

@@ -68,7 +68,7 @@ real(rprec), parameter :: zero=1.e-24_rprec ! zero = infimum(0)
 logical, save :: F_LM_MM_init = .false.
 logical, save :: F_QN_NN_init = .false.
 
-#ifdef PPOUTPUT_EXTRA
+#ifdef PPOUTPUT_SGS
 integer :: i, j
 character (64) :: fnamek
 integer :: count_all, count_clip
@@ -92,7 +92,7 @@ call interpolag_Sdep()
 !   Then update the running averages, F_*(:,:,jz), which are used to
 !   calculate Cs_opt2(:,:,jz).
 do jz = 1, nz
-#ifdef PPOUTPUT_EXTRA
+#ifdef PPOUTPUT_SGS
     ! Reset counting variables for Cs clipping stats
     count_all = 0
     count_clip = 0
@@ -411,7 +411,7 @@ do jz = 1, nz
         Cs_opt2(ld,:,jz) = zero
         Cs_opt2(ld-1,:,jz) = zero
 
-#ifdef PPOUTPUT_EXTRA
+#ifdef PPOUTPUT_SGS
     ! Count how often Cs is clipped
     do i = 1, nx
     do j = 1, ny
@@ -424,7 +424,7 @@ do jz = 1, nz
     ! Clip, if necessary
     Cs_opt2(:,:,jz)=max(zero,Cs_opt2(:,:,jz))
 
-#ifdef PPOUTPUT_EXTRA
+#ifdef PPOUTPUT_SGS
     ! Write average Tn for this level to file
     fnamek = path
 #ifdef PPDYN_TN

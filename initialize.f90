@@ -29,7 +29,9 @@ use param, only : path
 use param, only : USE_MPI, coord, dt, jt_total, nsteps
 use param, only : use_cfl_dt, cfl, cfl_f, dt_dim, z_i, u_star
 use iwmles
+use tlwmles, only : tlwm_init
 use param, only : lbc_mom
+use param, only : fourier
 #ifdef PPMPI
 use param, only : MPI_COMM_WORLD, ierr
 #else
@@ -101,7 +103,6 @@ call read_input_conf()
 call openfiles()
 
 if( jt_total >= nsteps ) then
-
     if (coord == 0) write(*,'(a)') 'Full number of time steps reached'
 #ifdef PPMPI
     ! First make sure everyone in has finished
@@ -111,22 +112,30 @@ if( jt_total >= nsteps ) then
     stop
 endif
 
-! Write simulation data to file
-! Commented out since we now have an input file and case information
-! can be preserved via it; may still be useful for double checking that
-! the input was read correctly and is sane.
-if (coord == 0) call param_output()
-
 ! Define simulation parameters
 call sim_param_init ()
+
 ! Initialize sgs variables
 call sgs_param_init()
 
 ! Initialize uv grid (calculate x,y,z vectors)
-call grid%build()
+if (fourier) then
+    call grid%build_fourier()
+else
+    call grid%build()
+endif
 
 !  Initialize variables used for output statistics and instantaneous data
 call output_init()
+
+! Initialize two layer wall model
+if ((lbc_mom == 5) .or. (lbc_mom == 6) .or.                        &
+    (lbc_mom == 7) .or. (lbc_mom == 8)) then
+    if (coord==0) call tlwm_init()
+endif
+
+! Write simulation data to file
+if (coord == 0) call param_output()
 
 ! Initialize turbines
 #ifdef PPTURBINES

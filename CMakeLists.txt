@@ -18,6 +18,9 @@ set(hostname "default")
 set(WRITE_ENDIAN "DEFAULT")
 set(READ_ENDIAN "DEFAULT")
 
+# Compiling options for linking
+option(USE_MKL "Enable MKL for FFTs." OFF)
+
 # Options to enable various features in the code
 option(USE_MPI "Enable parallelization support." ON)
 option(USE_CPS "Enable concurrent precursor simulations." OFF)
@@ -26,10 +29,18 @@ option(USE_STREAKS "Shift the domain in the y (spanwise) direction to eliminate 
 option(USE_LVLSET "Enable level set." OFF)
 option(USE_TURBINES "Enable actuator disk model without rotation." OFF)
 option(USE_ATM "Enable actuator line/section model" OFF)
-option(OUTPUT_EXTRA "Output additional quantities to file." OFF)
 option(USE_DYN_TN "Dynamically update T, the timescale for Lagrangian averaging, using Taylor timescale." OFF)
 option(USE_SAFETYMODE "Set extra safety measures." ON)
 option(USE_CGNS "Enable CGNS data output." OFF)
+option(USE_RNL "Enable restricted nonlinear model." OFF)
+option(USE_GQL "Enable generalized quasilinear model." OFF)
+
+option(OUTPUT_SGS "Output time-averaging statistics on SGS model." OFF)
+option(OUTPUT_BUDGET "Output time-averaging statistics needed for budgets." OFF)
+option(OUTPUT_TURBSPEC "Output time-averaging spectra data." OFF)
+option(OUTPUT_CORR "Output time-averaging correlation data." OFF)
+option(OUTPUT_WMLES "Output time-averaging statistics on wall model." OFF)
+option(OUTPUT_SSP "Output self-sustaining process analysis." OFF)
 
 ################################################################################
 #                         Set up build (do not change)
@@ -55,7 +66,11 @@ project (lesgo)
 set(exec_name "lesgo")
 
 # Library links
-link_libraries(fftw3)
+if (USE_MKL)
+    set(CMAKE_Fortran_FLAGS ${CMAKE_Fortran_FLAGS} -mkl)
+else()
+    link_libraries(fftw3)
+endif()
 
 # Common include and link directories
 include_directories(/usr/local/include)
@@ -80,8 +95,15 @@ if (${hostname} STREQUAL "panoramix")
 elseif (${hostname} STREQUAL "marcc")
     # Intel
     if (${CMAKE_Fortran_COMPILER_ID} STREQUAL "Intel")
-        include_directories(/cm/shared/apps/Intel/fftw/3.3.4/include)
-        link_directories(/cm/shared/apps/Intel/fftw/3.3.4/lib)
+        # include_directories(/cm/shared/apps/Intel/fftw/3.3.4/include)
+        # link_directories(/cm/shared/apps/Intel/fftw/3.3.4/lib)
+        if (USE_MKL) 
+            include_directories(/software/apps/compilers/intel/mkl/include/fftw/)
+            link_directories(/software/apps/compilers/intel/mkl/lib/intel64/)
+        else()
+            include_directories(/software/apps/fftw3/3.3.8/intel/18.0/include)
+            link_directories(/software/apps/fftw3/3.3.8/intel/18.0/lib)
+        endif()
     # GNU -- These have to be installed locally for now.
     elseif (${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU")
         if (USE_CGNS)
@@ -114,7 +136,7 @@ set (Sources cfl_util.f90 clocks.f90 convec.f90 derivatives.f90 divstress_uv.f90
      sgs_param.f90 sgs_stag_util.f90 sim_param.f90 stat_defs.f90 
      std_dynamic.f90 string_util.f90 test_filtermodule.f90 tridag_array.f90 
      types.f90 wallstress.f90 init_random_seed.f90
-     iwmles.f90)
+     iwmles.f90 tlwmles.f90 load_jacobian.f90)
 
 if (USE_MPI)
     add_definitions(-DPPMPI)
@@ -161,11 +183,6 @@ if (USE_ATM)
     set(exec_name "${exec_name}-ATM")
 endif (USE_ATM)
 
-if (OUTPUT_EXTRA)
-    add_definitions(-DPPOUTPUT_EXTRA)
-    set(exec_name "${exec_name}-exout")
-endif (OUTPUT_EXTRA)
-
 if (USE_DYN_TN)
     add_definitions(-DPPDYN_TN)
     set(exec_name "${exec_name}-dyntn")
@@ -182,6 +199,40 @@ if (USE_CGNS)
     link_libraries(cgns hdf5)
     set(exec_name "${exec_name}-cgns")
 endif (USE_CGNS)
+
+if (USE_RNL)
+    add_definitions(-DPPRNL)
+    set(exec_name "${exec_name}-rnl")
+endif (USE_RNL)
+
+if (USE_GQL)
+    add_definitions(-DPPGQL)
+    set(exec_name "${exec_name}-gql")
+endif (USE_GQL)
+
+if (OUTPUT_SGS)
+    add_definitions(-DPPOUTPUT_SGS)
+endif (OUTPUT_SGS)
+
+if (OUTPUT_BUDGET)
+    add_definitions(-DPPOUTPUT_BUDGET)
+endif (OUTPUT_BUDGET)
+
+if (OUTPUT_TURBSPEC)
+    add_definitions(-DPPOUTPUT_TURBSPEC)
+endif (OUTPUT_TURBSPEC)
+
+if (OUTPUT_CORR)
+    add_definitions(-DPPOUTPUT_CORR)
+endif (OUTPUT_CORR)
+
+if (OUTPUT_WMLES)
+    add_definitions(-DPPOUTPUT_WMLES)
+endif (OUTPUT_WMLES)
+
+if (OUTPUT_SSP)
+    add_definitions(-DPPOUTPUT_SSP)
+endif (OUTPUT_SSP)
 
 if (WRITE_ENDIAN STREQUAL "LITTLE")
     add_definitions(-DPPWRITE_LITTLE_ENDIAN)
@@ -201,7 +252,9 @@ endif (READ_ENDIAN STREQUAL "BIG")
 
 # Intel
 if (CMAKE_Fortran_COMPILER_ID STREQUAL "Intel")
-    set (CMAKE_Fortran_FLAGS "-cpp -O2 -funroll-loops -no-wrap-margin -assume byterecl")
+    set (CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -cpp -O2 -funroll-loops -no-wrap-margin -assume byterecl")
+    #set (CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -cpp -O0 -g -traceback -no-wrap-margin -assume byterecl")
+    #set (CMAKE_Fortran_FLAGS "-cpp -O2 -funroll-loops -no-wrap-margin -assume byterecl")
 # GNU
 else (CMAKE_Fortran_COMPILER_ID STREQUAL "Intel")
     set (CMAKE_Fortran_FLAGS "-cpp -O2 -ffast-math -funroll-loops -fall-intrinsics -Wall -fcheck=all")

@@ -32,10 +32,26 @@ public :: padd, unpadd, init_fft
 
 public :: kx, ky, k2
 public :: forw, back, forw_big, back_big
+public :: forw_x, back_x, forw_y, forw_x_fourier
+public :: forw_fourier, back_fourier
+public :: ycomp_forw_big, ycomp_back_big
 
 real(rprec), allocatable, dimension(:,:) :: kx, ky, k2
+integer, allocatable, dimension(:) :: kx_veci
+
 integer*8 :: forw, back, forw_big, back_big
+integer*8 :: forw_x, back_x, forw_y, forw_x_fourier
+integer*8 :: forw_fourier, back_fourier
+integer*8 :: ycomp_forw_big, ycomp_back_big
+
 real (rprec), dimension (:, :), allocatable :: data, data_big
+
+real (rprec), dimension (:), allocatable :: data_x_in, data_y_in, data_x_fourier_in
+complex (rprec), dimension (:), allocatable :: data_x_out, data_y_out, data_x_fourier_out
+
+real (rprec), dimension (:, :), allocatable :: data_fourier
+
+complex (rprec), dimension(:), allocatable :: ycomp_data_big
 
 contains
 
@@ -101,12 +117,23 @@ end subroutine unpadd
 !*******************************************************************************
 subroutine init_fft()
 !*******************************************************************************
-use param, only : nx,ny,nx2,ny2
+use param, only : nx, ny, nx2, ny2, nxp
 implicit none
 
 ! Allocate temporary arrays for creating the FFTW plans
 allocate( data(ld, ny) )
 allocate( data_big(ld_big, ny2) )
+
+allocate( data_x_in(nx) )
+allocate( data_x_out(nx/2+1) )
+allocate( data_y_in(ny) )
+allocate( data_y_out(ny/2+1) )
+allocate( data_x_fourier_in(nxp) )
+allocate( data_x_fourier_out(nxp/2+1) )
+
+allocate( data_fourier(nxp+2, ny) )
+
+allocate( ycomp_data_big(ny2) ) !! complex stored as real
 
 ! Create the forward and backward plans for the unpadded and padded
 ! domains. Notice we are using FFTW_UNALIGNED since the arrays used will not be
@@ -120,8 +147,39 @@ call dfftw_plan_dft_r2c_2d(forw_big, nx2, ny2, data_big,                       &
 call dfftw_plan_dft_c2r_2d(back_big, nx2, ny2, data_big,                       &
     data_big, FFTW_PATIENT, FFTW_UNALIGNED)
 
+call dfftw_plan_dft_r2c_1d(forw_x, nx, data_x_in,                              &
+    data_x_out, FFTW_PATIENT, FFTW_UNALIGNED)
+call dfftw_plan_dft_c2r_1d(back_x, nx, data_x_out,                             &
+    data_x_in, FFTW_PATIENT, FFTW_UNALIGNED)
+call dfftw_plan_dft_r2c_1d(forw_y, ny, data_y_in,                              &
+    data_y_out, FFTW_PATIENT, FFTW_UNALIGNED)
+call dfftw_plan_dft_r2c_1d(forw_x_fourier, nxp, data_x_fourier_in,             &
+    data_x_fourier_out, FFTW_PATIENT, FFTW_UNALIGNED)
+
+call dfftw_plan_dft_r2c_2d(forw_fourier, nxp, ny, data_fourier,                &
+    data_fourier, FFTW_PATIENT, FFTW_UNALIGNED)
+call dfftw_plan_dft_c2r_2d(back_fourier, nxp, ny, data_fourier,                &
+    data_fourier, FFTW_PATIENT, FFTW_UNALIGNED)
+
+call dfftw_plan_dft_1d(ycomp_forw_big, ny2, ycomp_data_big,                    &
+    ycomp_data_big, FFTW_FORWARD, FFTW_PATIENT, FFTW_UNALIGNED)
+call dfftw_plan_dft_1d(ycomp_back_big, ny2, ycomp_data_big,                    &
+    ycomp_data_big, FFTW_BACKWARD, FFTW_PATIENT, FFTW_UNALIGNED)
+
 deallocate(data)
 deallocate(data_big)
+
+deallocate(data_x_in)
+deallocate(data_x_out)
+deallocate(data_y_in)
+deallocate(data_y_out)
+deallocate(data_x_fourier_in)
+deallocate(data_x_fourier_out)
+
+
+deallocate(data_fourier)
+
+deallocate(ycomp_data_big)
 
 call init_wavenumber()
 end subroutine init_fft
@@ -129,16 +187,29 @@ end subroutine init_fft
 !*******************************************************************************
 subroutine init_wavenumber()
 !*******************************************************************************
-use param, only : lh,ny,L_x,L_y,pi
+use param, only : lh, ny, L_x, L_y, pi
+use param, only : kxs_in, fourier, kx_num, coord
 implicit none
 integer :: jx,jy
 
 ! Allocate wavenumbers
 allocate( kx(lh,ny), ky(lh,ny), k2(lh,ny) )
+allocate(kx_veci ( kx_num ) )
+
+! Create wavenumber index
+do jx = 1, kx_num
+    kx_veci(jx) = int( jx ) !! note: starts at 1, not 0
+enddo
 
 do jx = 1, lh-1
     kx(jx,:) = real(jx-1,kind=rprec)
 end do
+
+if (fourier) then
+    do jx = 1, kx_num
+        kx(jx,:) = kxs_in(jx)
+    end do
+endif
 
 do jy = 1, ny
     ky(:,jy) = real(modulo(jy - 1 + ny/2,ny) - ny/2,kind=rprec)
@@ -156,6 +227,16 @@ ky = 2._rprec*pi/L_y*ky
 
 ! magnitude squared: will have 0's around the edge
 k2 = kx*kx + ky*ky
+
+if ((coord == 0) .and. fourier) then
+    write(*,*) '>>>>>>>>>>>>>>>>>>>>>>>>>>>'
+    write(*,*) 'SIMULATING IN FOURIER SPACE'
+    WRITE(*,*) '<<<<<<<<<<<<<<<<<<<<<<<<<<<'
+    write(*,*) 'SOLVING ON KX MODES:'
+    do jx = 1, lh-1
+        write(*,*) kx(jx,1)
+    enddo
+endif
 
 end subroutine init_wavenumber
 

@@ -168,6 +168,11 @@ function mul_real_complex_imag_2D( a, a_c ) result(b)
 !
 !  Note: nx_c must be nx_r/2
 !
+! This function has been modified for the fourier flag, the size of a_c
+! is kx_num if fourier is on.
+! 
+use param, only : fourier, kx_num 
+use fft, only : kx_veci
 implicit none
 
 real(rprec), dimension( :, : ), intent(in) :: a
@@ -180,30 +185,44 @@ real(rprec) ::  a_c_i, cache
 
 integer :: i,j,ii,ir
 integer :: nx_r, nx_c, ny
+integer :: i_s
 
 ! Get the size of the incoming arrays
 nx_r = size(a,1)
 ny = size(a,2)
 
-nx_c = size(a_c,1)
-
 ! Allocate the returned array
 allocate( b(nx_r, ny ) )
 
+! Change number 
+if (fourier) then
+    nx_c = kx_num
+else
+    nx_c = size(a_c,1)
+endif
+
 !  Emulate complex multiplication
 do j = 1, ny !  Using outer loop to get contiguous memory access
-do i = 1,nx_c
+do i = 1, nx_c
+
+    if (fourier) then
+        i_s = kx_veci(i)
+    else
+        i_s = i
+    endif
+
     !  Real and imaginary indicies of a
-    ii = 2*i
+    ii = 2*i_s
     ir = ii-1
 
     !  Cache multi-usage variables
-    a_c_i = a_c(i,j)
+    a_c_i = a_c(i_s,j)
 
     !  Perform multiplication (cache data to ensure sequential access)
     cache = a(ir,j) * a_c_i
     b(ir,j) = - a(ii,j) * a_c_i
     b(ii,j) =  cache
+
 enddo
 enddo
 

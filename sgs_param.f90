@@ -30,11 +30,14 @@ public
 integer ::jt_count
 real(rprec) :: delta, nu
 real(rprec), dimension(:,:,:),allocatable :: S11, S12, S22, S33, S13, S23
-! eddy viscosity
-real(rprec), dimension(:,:,:),allocatable :: Nu_t
-! (C_s)^2, Dynamic Smag coeff
-real(rprec), dimension(:,:,:),allocatable :: Cs_opt2
+real(rprec), dimension(:,:,:),allocatable :: Nu_t !! eddy viscosity
+real(rprec), dimension(:,:,:),allocatable :: Cs_opt2 !! (C_s)^2, Dynamic Smag Coef
 real(rprec), dimension(:,:),  allocatable :: S
+
+real(rprec), dimension(:,:,:), allocatable :: S11F, S22F, S33F, S12F, S13F, S23F
+real(rprec), dimension(:,:,:), allocatable :: Nu_tF !! eddy viscosity
+real(rprec), dimension(:,:,:), allocatable :: Cs_opt2F !! (C_s)^2, Dynamic Smag Coef
+real(rprec), dimension(:,:), allocatable :: SF
 
 ! For all dynamic models (2-5)
 real(rprec), dimension(:,:,:),allocatable :: ee_now
@@ -49,8 +52,7 @@ real(rprec), dimension(:,:),  allocatable :: u_bar, v_bar, w_bar, S_bar
 
 ! For Lagrangian models (4,5)
 real(rprec) :: lagran_dt = 0._rprec
-! (Meneveau, Lund, Cabot; JFM 1996)
-real(rprec), parameter :: opftime = 1.5_rprec
+real(rprec), parameter :: opftime = 1.5_rprec ! (Meneveau, Lund, Cabot; JFM 1996)
 real(rprec), dimension(:,:,:), allocatable :: F_LM, F_MM, F_QN, F_NN
 real(rprec), dimension(:,:,:), allocatable :: Beta, Tn_all
 
@@ -80,7 +82,9 @@ subroutine sgs_param_init ()
 !*******************************************************************************
 use param, only : ld, ny, nz, lbz, molec, nu_molec, u_star,                    &
     z_i, dx, dy, dz, sgs_model
+use param, only : fourier, nxp
 use test_filtermodule, only : filter_size
+
 implicit none
 
 ! For all sgs models:
@@ -93,6 +97,19 @@ allocate ( S33(ld,ny,nz) ); S33 = 0._rprec
 allocate ( Nu_t(ld,ny,nz) ); Nu_t = 0._rprec
 allocate ( Cs_opt2(ld,ny,nz) ); Cs_opt2 = 0._rprec
 allocate ( S(ld,ny) ); S = 0._rprec
+
+! RNL-LES only for sgs = 1
+if (fourier) then
+    allocate ( S11F(nxp+2,ny,nz) ); S11F = 0._rprec
+    allocate ( S12F(nxp+2,ny,nz) ); S12F = 0._rprec
+    allocate ( S13F(nxp+2,ny,nz) ); S13F = 0._rprec
+    allocate ( S22F(nxp+2,ny,nz) ); S22F = 0._rprec
+    allocate ( S23F(nxp+2,ny,nz) ); S23F = 0._rprec
+    allocate ( S33F(nxp+2,ny,nz) ); S33F = 0._rprec
+    allocate ( Nu_tF(nxp+2,ny,nz) ); Nu_tF = 0._rprec
+    allocate ( Cs_opt2F(nxp+2,ny,nz) ); Cs_opt2F = 0._rprec
+    allocate ( SF(nxp+2,ny) ); SF = 0._rprec
+endif
 
 ! For dynamic models:
 if (sgs_model .ne. 1) then

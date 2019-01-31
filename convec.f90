@@ -18,7 +18,7 @@
 !!
 
 !*******************************************************************************
-subroutine convec
+subroutine convec(u,v,w,dudy,dudz,dvdx,dvdz,dwdx,dwdy,RHSx,RHSy,RHSz)
 !*******************************************************************************
 !
 ! Computes the rotation convective term in physical space
@@ -28,14 +28,13 @@ subroutine convec
 !
 use types, only : rprec
 use param
-use sim_param, only : u, v, w, dudy, dudz, dvdx, dvdz, dwdx, dwdy
-use sim_param, only : RHSx, RHSy, RHSz
 use fft
+use derivatives, only : convolve_rnl, dft_direct_forw_2d_n_yonlyC_big,      &
+    dft_direct_back_2d_n_yonlyC_big
 
 implicit none
 
-integer :: jz
-integer :: jz_min
+integer :: jz, jz_min
 integer :: jzLo, jzHi, jz_max  ! added for full channel capabilities
 
 real(rprec), save, allocatable, dimension(:,:,:) :: cc_big,                    &
@@ -43,6 +42,11 @@ real(rprec), save, allocatable, dimension(:,:,:) :: cc_big,                    &
 logical, save :: arrays_allocated = .false.
 
 real(rprec) :: const
+
+real(rprec), dimension(ld,ny,lbz:nz), intent(in) :: u, v, w,                &
+    dudy, dudz, dvdx, dvdz, dwdx, dwdy
+
+real(rprec), dimension(ld,ny,lbz:nz), intent(out) :: RHSx, RHSy, RHSz
 
 if (sgs) then
     jzLo = 2        !! necessary for LES or else blows up ....?
@@ -69,27 +73,40 @@ endif
 ! Loop through horizontal slices
 ! MPI: u_big, v_big needed at jz = 0, w_big not needed though
 ! MPI: could get u{1,2}_big
-const = 1._rprec/(nx*ny)
+if (fourier) then
+    const = 1._rprec
+else
+    const = 1._rprec/(nx*ny)
+endif
+
 do jz = lbz, nz
     ! use RHSx,RHSy,RHSz for temp storage
     RHSx(:,:,jz)=const*u(:,:,jz)
     RHSy(:,:,jz)=const*v(:,:,jz)
     RHSz(:,:,jz)=const*w(:,:,jz)
 
-    ! do forward fft on normal-size arrays
-    call dfftw_execute_dft_r2c(forw, RHSx(:,:,jz), RHSx(:,:,jz))
-    call dfftw_execute_dft_r2c(forw, RHSy(:,:,jz), RHSy(:,:,jz))
-    call dfftw_execute_dft_r2c(forw, RHSz(:,:,jz), RHSz(:,:,jz))
+    if (.not. fourier) then
+        ! do forward fft on normal-size arrays
+        call dfftw_execute_dft_r2c(forw, RHSx(:,:,jz), RHSx(:,:,jz))
+        call dfftw_execute_dft_r2c(forw, RHSy(:,:,jz), RHSy(:,:,jz))
+        call dfftw_execute_dft_r2c(forw, RHSz(:,:,jz), RHSz(:,:,jz))
+    endif
+    ! else (fourier) no need to transform, already in fourier space
 
     ! zero pad: padd takes care of the oddballs
+    ! no changes needed for fourier here
     call padd(u_big(:,:,jz), RHSx(:,:,jz))
     call padd(v_big(:,:,jz), RHSy(:,:,jz))
     call padd(w_big(:,:,jz), RHSz(:,:,jz))
 
-    ! Back to physical space
-    call dfftw_execute_dft_c2r(back_big, u_big(:,:,jz), u_big(:,:,jz))
-    call dfftw_execute_dft_c2r(back_big, v_big(:,:,jz), v_big(:,:,jz))
-    call dfftw_execute_dft_c2r(back_big, w_big(:,:,jz), w_big(:,:,jz))
+    if (.not. fourier) then
+        ! Back to physical space
+        call dfftw_execute_dft_c2r(back_big, u_big(:,:,jz), u_big(:,:,jz))
+        call dfftw_execute_dft_c2r(back_big, v_big(:,:,jz), v_big(:,:,jz))
+        call dfftw_execute_dft_c2r(back_big, w_big(:,:,jz), w_big(:,:,jz))
+    endif
+    ! else (fourier) no need to transform, want to stay in fourier space
+
 end do
 
 
@@ -108,40 +125,46 @@ do jz = 1, nz
 
         ! Wall (all cases >= 1)
         case (1:)
-            ! dwdy(jz=1) should be 0, so we can use this
-            RHSx(:, :, 1) = const * ( 0.5_rprec * (dwdy(:, :, 1) +             &
-                dwdy(:, :, 2))  - dvdz(:, :, 1) )
-            ! dwdx(jz=1) should be 0, so we can use this
-            RHSy(:, :, 1) = const * ( dudz(:, :, 1) -                          &
-                0.5_rprec * (dwdx(:, :, 1) + dwdx(:, :, 2)) )
+            if (sgs) then
+                ! dwdy(jz=1) should be 0, so we can use this
+                RHSx(:, :, 1) = const * ( 0.5_rprec * (dwdy(:, :, 1) +             &
+                    dwdy(:, :, 2))  - dvdz(:, :, 1) )
+                ! dwdx(jz=1) should be 0, so we can use this
+                RHSy(:, :, 1) = const * ( dudz(:, :, 1) -                          &
+                    0.5_rprec * (dwdx(:, :, 1) + dwdx(:, :, 2)) )
+            else ! for DNS, dudz(1) and dvdz(1) located at the w-node(1)
+                RHSx(:, :, 1) = const * ( 0.5_rprec *(dwdy(:, :, 1)+ dwdy(:, :,2)) &
+                    - 0.5_rprec *(dvdz(:, :, 1)+dvdz(:, :, 2)))
+                ! RHSx(:, :, 1) located at uv-node(1)
+                RHSy(:, :, 1) = const * (0.5_rprec *(dudz(:, :, 1)+ dudz(:, :, 2)) &
+                    -0.5_rprec *(dwdx(:, :, 1)+ dwdx(:, :, 2)))
+                ! RHSy(:, :, 1) located at uv-node(1)
+            endif
+        end select
+    endif
+
+    if ( (coord == nproc-1) .and. (jz == nz) ) then
+
+        select case (ubc_mom)
+
+        ! Stress free
+        case (0)
+            RHSx(:, :, nz) = 0._rprec
+            RHSy(:, :, nz) = 0._rprec
+
+        ! No-slip and wall model
+        case (1:)
+            ! dwdy(jz=1) should be 0, so we could use this
+            ! this RHSx = vort1 is actually uvp nz-1 but stored as w nz
+            RHSx(:, :, nz) = const * ( 0.5_rprec * (dwdy(:, :, nz-1) +         &
+                dwdy(:, :, nz)) - dvdz(:, :, nz-1) )
+            ! dwdx(jz=1) should be 0, so we could use this
+            ! this RHSy = vort2 is actually uvp nz-1 but stored as w nz
+            RHSy(:, :, nz) = const * ( dudz(:, :, nz-1) -                      &
+                0.5_rprec * (dwdx(:, :, nz-1) + dwdx(:, :, nz)) )
 
         end select
-  endif
-
-  if ( (coord == nproc-1) .and. (jz == nz) ) then
-
-     select case (ubc_mom)
-
-     ! Stress free
-     case (0)
-
-         RHSx(:, :, nz) = 0._rprec
-         RHSy(:, :, nz) = 0._rprec
-
-      ! No-slip and wall model
-      case (1:)
-
-         ! dwdy(jz=1) should be 0, so we could use this
-         ! this RHSx = vort1 is actually uvp nz-1 but stored as w nz
-         RHSx(:, :, nz) = const * ( 0.5_rprec * (dwdy(:, :, nz-1) +            &
-            dwdy(:, :, nz)) - dvdz(:, :, nz-1) )
-         ! dwdx(jz=1) should be 0, so we could use this
-         ! this RHSy = vort2 is actually uvp nz-1 but stored as w nz
-         RHSy(:, :, nz) = const * ( dudz(:, :, nz-1) -                         &
-            0.5_rprec * (dwdx(:, :, nz-1) + dwdx(:, :, nz)) )
-
-      end select
-   endif
+    endif
 
     ! very kludgy -- fix later      !! channel
     if (.not.(coord==0 .and. jz==1) .and. .not. (ubc_mom>0 .and.               &
@@ -152,29 +175,59 @@ do jz = 1, nz
 
     RHSz(:,:,jz)=const*(dvdx(:,:,jz)-dudy(:,:,jz))
 
-    ! do forward fft on normal-size arrays
-    call dfftw_execute_dft_r2c(forw, RHSx(:,:,jz), RHSx(:,:,jz))
-    call dfftw_execute_dft_r2c(forw, RHSy(:,:,jz), RHSy(:,:,jz))
-    call dfftw_execute_dft_r2c(forw, RHSz(:,:,jz), RHSz(:,:,jz))
+    if (.not. fourier) then
+        ! do forward fft on normal-size arrays
+        call dfftw_execute_dft_r2c(forw, RHSx(:,:,jz), RHSx(:,:,jz))
+        call dfftw_execute_dft_r2c(forw, RHSy(:,:,jz), RHSy(:,:,jz))
+        call dfftw_execute_dft_r2c(forw, RHSz(:,:,jz), RHSz(:,:,jz))
+    endif 
+    ! else (fourier) no need to transform, already in fourier space
+
+    ! no changes needed for fourier here
     call padd(vort1_big(:,:,jz), RHSx(:,:,jz))
     call padd(vort2_big(:,:,jz), RHSy(:,:,jz))
     call padd(vort3_big(:,:,jz), RHSz(:,:,jz))
 
-    ! Back to physical space
-    ! the normalization should be ok...
-    call dfftw_execute_dft_c2r(back_big, vort1_big(:,:,jz), vort1_big(:,:,jz))
-    call dfftw_execute_dft_c2r(back_big, vort2_big(:,:,jz), vort2_big(:,:,jz))
-    call dfftw_execute_dft_c2r(back_big, vort3_big(:,:,jz), vort3_big(:,:,jz))
+    if (.not. fourier) then
+        ! Back to physical space
+        call dfftw_execute_dft_c2r(back_big, vort1_big(:,:,jz), vort1_big(:,:,jz))
+        call dfftw_execute_dft_c2r(back_big, vort2_big(:,:,jz), vort2_big(:,:,jz))
+        call dfftw_execute_dft_c2r(back_big, vort3_big(:,:,jz), vort3_big(:,:,jz))
+    endif
+    ! else (fourier) no need to transform, want to stay in fourier space
 end do
+
+if (fourier) then
+    ! Transform ky --> y
+    do jz = lbz, nz
+        call dft_direct_back_2d_n_yonlyC_big( u_big(:,:,jz) )
+        call dft_direct_back_2d_n_yonlyC_big( v_big(:,:,jz) )
+        call dft_direct_back_2d_n_yonlyC_big( w_big(:,:,jz) )
+    enddo
+    do jz = 1, nz
+        call dft_direct_back_2d_n_yonlyC_big( vort1_big(:,:,jz) )
+        call dft_direct_back_2d_n_yonlyC_big( vort2_big(:,:,jz) )
+        call dft_direct_back_2d_n_yonlyC_big( vort3_big(:,:,jz) )
+    enddo
+endif
 
 ! RHSx
 ! redefinition of const
-const=1._rprec/(nx2*ny2)
+if (.not. fourier) then
+    const=1._rprec/(nx2*ny2)
+endif
+! else (fourier) keep const = 1._rprec
 
+! (fourier) u_big and vort_big in (kx,y,z) space, need to convolve because of kx
 if (coord == 0) then
     ! the cc's contain the normalization factor for the upcoming fft's
-    cc_big(:,:,1)=const*(v_big(:,:,1)*(-vort3_big(:,:,1))&
-       +0.5_rprec*w_big(:,:,2)*(vort2_big(:,:,jzLo)))   ! (default index was 2)
+    if (fourier) then
+        cc_big(:,:,1)=const*(convolve_rnl(v_big(:,:,1),-vort3_big(:,:,1))    &
+            +0.5_rprec*convolve_rnl(w_big(:,:,2),vort2_big(:,:,jzLo)))
+    else
+        cc_big(:,:,1)=const*(v_big(:,:,1)*(-vort3_big(:,:,1))                &
+            +0.5_rprec*w_big(:,:,2)*(vort2_big(:,:,jzLo)))   ! (default index was 2)
+    endif
     !--vort2(jz=1) is located on uvp-node        ^  try with 1 (experimental)
     !--the 0.5 * w(:,:,2) is the interpolation of w to the first uvp node
     !  above the wall (could arguably be 0.25 * w(:,:,2))
@@ -185,8 +238,13 @@ end if
 
 if (coord == nproc-1 ) then  ! channel
     ! the cc's contain the normalization factor for the upcoming fft's
-    cc_big(:,:,nz-1)=const*(v_big(:,:,nz-1)*(-vort3_big(:,:,nz-1))&
-        +0.5_rprec*w_big(:,:,nz-1)*(vort2_big(:,:,jzHi)))   ! channel
+    if (fourier) then
+        cc_big(:,:,nz-1)=const*(convolve_rnl(v_big(:,:,nz-1),-vort3_big(:,:,nz-1))       &
+            +0.5_rprec*convolve_rnl(w_big(:,:,nz-1),vort2_big(:,:,jzHi)))
+    else
+        cc_big(:,:,nz-1)=const*(v_big(:,:,nz-1)*(-vort3_big(:,:,nz-1))       &
+            +0.5_rprec*w_big(:,:,nz-1)*(vort2_big(:,:,jzHi)))
+    endif
     !--vort2(jz=1) is located on uvp-node        ^  try with nz-1 (experimental)
     !--the 0.5 * w(:,:,nz-1) is the interpolation of w to the uvp node at nz-1
     !  below the wall (could arguably be 0.25 * w(:,:,2))
@@ -197,27 +255,49 @@ else
 end if
 
 do jz = jz_min, jz_max    !nz-1   ! channel
-    cc_big(:,:,jz)=const*(v_big(:,:,jz)*(-vort3_big(:,:,jz))&
-        +0.5_rprec*(w_big(:,:,jz+1)*(vort2_big(:,:,jz+1))&
-        +w_big(:,:,jz)*(vort2_big(:,:,jz))))
+    if (fourier) then
+        cc_big(:,:,jz)=const*(convolve_rnl(v_big(:,:,jz),-vort3_big(:,:,jz))       &
+            +0.5_rprec*(convolve_rnl(w_big(:,:,jz+1),vort2_big(:,:,jz+1))          &
+            +convolve_rnl(w_big(:,:,jz),vort2_big(:,:,jz))))
+    else
+        cc_big(:,:,jz)=const*(v_big(:,:,jz)*(-vort3_big(:,:,jz))       &
+            +0.5_rprec*(w_big(:,:,jz+1)*(vort2_big(:,:,jz+1))          &
+            +w_big(:,:,jz)*(vort2_big(:,:,jz))))
+    endif
 end do
 
 ! Loop through horizontal slices
 do jz=1,nz-1
-    call dfftw_execute_dft_r2c(forw_big, cc_big(:,:,jz),cc_big(:,:,jz))
+    if (.not. fourier) then
+        call dfftw_execute_dft_r2c(forw_big, cc_big(:,:,jz),cc_big(:,:,jz))
+    else
+        ! (fourier) transform y --> ky
+        call dft_direct_forw_2d_n_yonlyC_big( cc_big(:,:,jz) )
+    endif
+
     ! un-zero pad
     ! note: cc_big is going into RHSx
+    ! (fourier) no changes needed here
     call unpadd(RHSx(:,:,jz),cc_big(:,:,jz))
+
     ! Back to physical space
-    call dfftw_execute_dft_c2r(back, RHSx(:,:,jz), RHSx(:,:,jz))
+    if (.not. fourier) then
+        call dfftw_execute_dft_c2r(back, RHSx(:,:,jz), RHSx(:,:,jz))
+    endif
+    ! else (fourier) do nothing, exit with RHSx in fourier space
 end do
 
 ! RHSy
-! const should be 1./(nx2*ny2) here
+! const should be 1./(nx2*ny2) here -> for fourier const = 1.0_rprec
 if (coord == 0) then
     ! the cc's contain the normalization factor for the upcoming fft's
-    cc_big(:,:,1)=const*(u_big(:,:,1)*(vort3_big(:,:,1))&
-        +0.5_rprec*w_big(:,:,2)*(-vort1_big(:,:,jzLo)))   ! channel
+    if (fourier) then
+        cc_big(:,:,1)=const*(convolve_rnl(u_big(:,:,1),vort3_big(:,:,1))   &
+            +0.5_rprec*convolve_rnl(w_big(:,:,2),-vort1_big(:,:,jzLo)))
+    else
+        cc_big(:,:,1)=const*(u_big(:,:,1)*(vort3_big(:,:,1))               &
+            +0.5_rprec*w_big(:,:,2)*(-vort1_big(:,:,jzLo)))
+    endif
     !--vort1(jz=1) is uvp-node                    ^ try with 1 (experimental)
     !--the 0.5 * w(:,:,2) is the interpolation of w to the first uvp node
     !  above the wall (could arguably be 0.25 * w(:,:,2))
@@ -228,8 +308,13 @@ end if
 
 if (coord == nproc-1) then   ! channel
     ! the cc's contain the normalization factor for the upcoming fft's
-    cc_big(:,:,nz-1)=const*(u_big(:,:,nz-1)*(vort3_big(:,:,nz-1))&
-        +0.5_rprec*w_big(:,:,nz-1)*(-vort1_big(:,:,jzHi)))    ! channel
+    if (fourier) then
+        cc_big(:,:,nz-1)=const*(convolve_rnl(u_big(:,:,nz-1),vort3_big(:,:,nz-1)) &
+            +0.5_rprec*convolve_rnl(w_big(:,:,nz-1),-vort1_big(:,:,jzHi)))
+    else
+        cc_big(:,:,nz-1)=const*(u_big(:,:,nz-1)*(vort3_big(:,:,nz-1))             &
+            +0.5_rprec*w_big(:,:,nz-1)*(-vort1_big(:,:,jzHi)))
+    endif
     !--vort1(jz=1) is uvp-node                    ^ try with nz-1 (experimental)
     !--the 0.5 * w(:,:,nz-1) is the interpolation of w to the uvp node at nz-1
     !  below the wall
@@ -240,19 +325,35 @@ else
 end if
 
 do jz = jz_min, jz_max  !nz - 1   ! channel
-   cc_big(:,:,jz)=const*(u_big(:,:,jz)*(vort3_big(:,:,jz))&
-        +0.5_rprec*(w_big(:,:,jz+1)*(-vort1_big(:,:,jz+1))&
-        +w_big(:,:,jz)*(-vort1_big(:,:,jz))))
+    if (fourier) then
+        cc_big(:,:,jz)=const*(convolve_rnl(u_big(:,:,jz),vort3_big(:,:,jz))  &
+            +0.5_rprec*(convolve_rnl(w_big(:,:,jz+1),-vort1_big(:,:,jz+1))   &
+            +convolve_rnl(w_big(:,:,jz),-vort1_big(:,:,jz))))
+    else
+        cc_big(:,:,jz)=const*(u_big(:,:,jz)*(vort3_big(:,:,jz))              &
+            +0.5_rprec*(w_big(:,:,jz+1)*(-vort1_big(:,:,jz+1))               &
+            +w_big(:,:,jz)*(-vort1_big(:,:,jz))))
+    endif
 end do
 
 do jz=1,nz-1
-    call dfftw_execute_dft_r2c(forw_big, cc_big(:,:,jz), cc_big(:,:,jz))
+    if (.not. fourier) then
+        call dfftw_execute_dft_r2c(forw_big, cc_big(:,:,jz), cc_big(:,:,jz))
+    else
+        ! (fourier) transform y --> ky
+        call dft_direct_forw_2d_n_yonlyC_big( cc_big(:,:,jz) )
+    endif
+
     ! un-zero pad
     ! note: cc_big is going into RHSy
+    ! (fourier) no changes needed here
     call unpadd(RHSy(:,:,jz), cc_big(:,:,jz))
 
     ! Back to physical space
-    call dfftw_execute_dft_c2r(back, RHSy(:,:,jz), RHSy(:,:,jz))
+    if (.not. fourier) then
+        call dfftw_execute_dft_c2r(back, RHSy(:,:,jz), RHSy(:,:,jz))
+    endif
+    ! else (fourier) do nothing, exit with RHSy in fourier space
 end do
 
 ! RHSz
@@ -299,21 +400,36 @@ end if
 
 ! channel
 do jz = jz_min, jz_max    !nz - 1
-    cc_big(:,:,jz) = const*0.5_rprec*(                                         &
-        (u_big(:,:,jz)+u_big(:,:,jz-1))*(-vort2_big(:,:,jz))                   &
-        +(v_big(:,:,jz)+v_big(:,:,jz-1))*(vort1_big(:,:,jz)))
+    if (fourier) then
+        cc_big(:,:,jz) = const*0.5_rprec*(                                         &
+            convolve_rnl(u_big(:,:,jz)+u_big(:,:,jz-1),-vort2_big(:,:,jz))         &
+            +convolve_rnl(v_big(:,:,jz)+v_big(:,:,jz-1),vort1_big(:,:,jz)))
+    else
+        cc_big(:,:,jz) = const*0.5_rprec*(                                         &
+            (u_big(:,:,jz)+u_big(:,:,jz-1))*(-vort2_big(:,:,jz))                   &
+            +(v_big(:,:,jz)+v_big(:,:,jz-1))*(vort1_big(:,:,jz)))
+    endif
 end do
 
 ! Loop through horizontal slices
 do jz=1,nz !nz - 1
-    call dfftw_execute_dft_r2c(forw_big,cc_big(:,:,jz),cc_big(:,:,jz))
+    if (.not. fourier) then
+        call dfftw_execute_dft_r2c(forw_big,cc_big(:,:,jz),cc_big(:,:,jz))
+    else
+        ! (fourier) transform y --> ky
+        call dft_direct_forw_2d_n_yonlyC_big( cc_big(:,:,jz) )
+    endif
 
     ! un-zero pad
     ! note: cc_big is going into RHSz!!!!
+    ! (fourier) no changes needed here
     call unpadd(RHSz(:,:,jz),cc_big(:,:,jz))
 
     ! Back to physical space
-    call dfftw_execute_dft_c2r(back,RHSz(:,:,jz),   RHSz(:,:,jz))
+    if (.not. fourier) then
+        call dfftw_execute_dft_c2r(back,RHSz(:,:,jz),   RHSz(:,:,jz))
+    endif
+    ! else (fourier) do nothing, exit with RHSz in fourier space
 end do
 
 #ifdef PPMPI

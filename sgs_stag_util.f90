@@ -186,16 +186,20 @@ if (sgs) then
 
         ! Use the Smagorinsky model until DYN_init timestep
         if ((jt == 1) .and. (inilag)) then
+#ifdef PPOUTPUT_SGS
             write(*,*) 'CS_opt2 initialiazed'
+#endif
             Cs_opt2 = 0.03_rprec
 
         ! Update Sij, Cs every cs_count timesteps (specified in param)
         elseif ( ((jt.GE.DYN_init).OR.(initu)) .AND.                           &
             (mod(jt_total,cs_count)==0) ) then
 
+#ifdef PPOUTPUT_SGS
             if (jt == DYN_init) then
                 write(*,*) 'running dynamic sgs_model = ', sgs_model
             end if
+#endif
 
             ! Standard dynamic model
             if (sgs_model == 2) then
@@ -218,8 +222,8 @@ if (sgs) then
             end if
 
         end if
-    end if
-end if
+    end if !! for Smagorinsky/Dynamic SGS
+end if !! if (sgs)
 
 
 ! Define |S| and eddy viscosity (nu_t= c_s^2 l^2 |S|) for entire domain
@@ -331,11 +335,10 @@ if (coord == nproc-1) then
                 const = 0._rprec
                 do jy = 1, ny
                 do jx = 1, nx
-                    txx(jx,jy,nz-1) = -(nu)*(S11(jx,jy,nz-1) + S11(jx,jy,nz))
-                    txy(jx,jy,nz-1) = -(nu)*(S12(jx,jy,nz-1) + S12(jx,jy,nz))
-                    tyy(jx,jy,nz-1) = -(nu)*(S22(jx,jy,nz-1) + S22(jx,jy,nz))
-                    tzz(jx,jy,nz-1) = -(nu)*(S33(jx,jy,nz-1) + S33(jx,jy,nz))
-                    ! for top wall, include w-grid stress since we touched nz-1
+                    txx(jx,jy,nz-1) = -2._rprec*(nu)*S11(jx,jy,nz-1)
+                    txy(jx,jy,nz-1) = -2._rprec*(nu)*S12(jx,jy,nz-1)
+                    tyy(jx,jy,nz-1) = -2._rprec*(nu)*S22(jx,jy,nz-1)
+                    tzz(jx,jy,nz-1) = -2._rprec*(nu)*S33(jx,jy,nz-1)
                     txz(jx,jy,nz-1) = -2._rprec*(nu)*S13(jx,jy,nz-1)
                     tyz(jx,jy,nz-1) = -2._rprec*(nu)*S23(jx,jy,nz-1)
                 end do
@@ -417,10 +420,10 @@ else
     do jz = jz_min, jz_max
     do jy = 1, ny
     do jx = 1, nx
-        txx(jx,jy,jz)=-(nu)*(S11(jx,jy,jz) + S11(jx,jy,jz+1))
-        txy(jx,jy,jz)=-(nu)*(S12(jx,jy,jz) + S12(jx,jy,jz+1))
-        tyy(jx,jy,jz)=-(nu)*(S22(jx,jy,jz) + S22(jx,jy,jz+1))
-        tzz(jx,jy,jz)=-(nu)*(S33(jx,jy,jz) + S33(jx,jy,jz+1))
+        txx(jx,jy,jz)=-2._rprec*(nu) * S11(jx,jy,jz)
+        txy(jx,jy,jz)=-2._rprec*(nu) * S12(jx,jy,jz)
+        tyy(jx,jy,jz)=-2._rprec*(nu) * S22(jx,jy,jz)
+        tzz(jx,jy,jz)=-2._rprec*(nu) * S33(jx,jy,jz)
         txz(jx,jy,jz)=-2._rprec*(nu) * S13(jx,jy,jz)
         tyz(jx,jy,jz)=-2._rprec*(nu) * S23(jx,jy,jz)
     end do
@@ -524,15 +527,12 @@ if (coord == 0) then
         case (1:)
             do jy=1,ny
             do jx=1,nx
-                ! these values stored on uvp-nodes
-                S11(jx,jy,1) = dudx(jx,jy,1)
-                S12(jx,jy,1) = 0.5_rprec*(dudy(jx,jy,1)+dvdx(jx,jy,1))
-                wx = 0.5_rprec*(dwdx(jx,jy,1)+dwdx(jx,jy,2))
-                S13(jx,jy,1) = 0.5_rprec*(dudz(jx,jy,1)+wx)
-                S22(jx,jy,1) = dvdy(jx,jy,1)
-                wy = 0.5_rprec*(dwdy(jx,jy,1)+dwdy(jx,jy,2))
-                S23(jx,jy,1) = 0.5_rprec*(dvdz(jx,jy,1)+wy)
-                S33(jx,jy,1) = dwdz(jx,jy,1)
+                S11(jx,jy,1) = dudx(jx,jy,1) !! uv1 node
+                S12(jx,jy,1) = 0.5_rprec*(dudy(jx,jy,1)+dvdx(jx,jy,1)) !! uv1 node
+                S13(jx,jy,1) = 0.5_rprec*(dudz(jx,jy,1)+dwdx(jx,jy,1)) !! w1 node
+                S22(jx,jy,1) = dvdy(jx,jy,1) !! uv1 node
+                S23(jx,jy,1) = 0.5_rprec*(dvdz(jx,jy,1)+dwdy(jx,jy,1)) !! w1 node
+                S33(jx,jy,1) = dwdz(jx,jy,1) !! uv1 node
             end do
             end do
 
@@ -556,25 +556,12 @@ if (coord == nproc-1) then
 
             do jy=1,ny
             do jx=1,nx
-                ! Sij values are supposed to be on w-nodes for this case
-                !   does that mean they (Sij) should all be zero?
-                ux = dudx(jx,jy,nz-1)
-                uy = dudy(jx,jy,nz-1)
-                uz = dudz(jx,jy,nz)   ! this comes from wallstress() i.e. zero
-                vx = dvdx(jx,jy,nz-1)
-                vy = dvdy(jx,jy,nz-1)
-                vz = dvdz(jx,jy,nz)   ! this comes from wallstress() i.e. zero
-                wx = dwdx(jx,jy,nz)
-                wy = dwdy(jx,jy,nz)
-                wz = 0.5_rprec*(dwdz(jx,jy,nz-1) + 0._rprec)
-
-                ! these values are stored on w-nodes
-                S11(jx,jy,nz) = ux
-                S12(jx,jy,nz) = 0.5_rprec*(uy+vx)
-                S13(jx,jy,nz) = 0.5_rprec*(uz+wx)
-                S22(jx,jy,nz) = vy
-                S23(jx,jy,nz) = 0.5_rprec*(vz+wy)
-                S33(jx,jy,nz) = wz
+                S11(jx,jy,nz) = dudx(jx,jy,nz-1) !! uv, because u(nz) = u(nz-1) and taking x-derivative
+                S12(jx,jy,nz) = 0.5_rprec*(dudy(jx,jy,nz-1) + dvdx(jx,jy,nz-1)) !!  uv
+                S13(jx,jy,nz) = 0.5_rprec*(dudz(jx,jy,nz)+dwdx(jx,jy,nz)) !! w
+                S22(jx,jy,nz) = dvdy(jx,jy,nz-1) !! uv
+                S23(jx,jy,nz) = 0.5_rprec*(dvdz(jx,jy,nz)+dwdy(jx,jy,nz)) !! w
+                S33(jx,jy,nz) = dwdz(jx,jy,nz-1) !! uv
             end do
             end do
 
@@ -620,14 +607,12 @@ call mpi_sync_real_array( dwdz(:,:,1:), 1, MPI_SYNC_DOWN )
 do jz = jz_min, jz_max
 do jy = 1, ny
 do jx = 1, nx
-    S11(jx,jy,jz) = 0.5_rprec*(dudx(jx,jy,jz) + dudx(jx,jy,jz-1))
-    uy = (dudy(jx,jy,jz) + dudy(jx,jy,jz-1))
-    vx = (dvdx(jx,jy,jz) + dvdx(jx,jy,jz-1))
-    S12(jx,jy,jz) = 0.25_rprec*(uy+vx)
-    S13(jx,jy,jz) = 0.5_rprec*(dudz(jx,jy,jz) + dwdx(jx,jy,jz))
-    S22(jx,jy,jz) = 0.5_rprec*(dvdy(jx,jy,jz) + dvdy(jx,jy,jz-1))
-    S23(jx,jy,jz) = 0.5_rprec*(dvdz(jx,jy,jz) + dwdy(jx,jy,jz))
-    S33(jx,jy,jz) = 0.5_rprec*(dwdz(jx,jy,jz) + dwdz(jx,jy,jz-1))
+    S11(jx,jy,jz) = dudx(jx,jy,jz) !! uv
+    S12(jx,jy,jz) = 0.5_rprec*(dudy(jx,jy,jz) + dvdx(jx,jy,jz)) !! uv
+    S13(jx,jy,jz) = 0.5_rprec*(dudz(jx,jy,jz) + dwdx(jx,jy,jz)) !! w
+    S22(jx,jy,jz) = dvdy(jx,jy,jz) !! uv
+    S23(jx,jy,jz) = 0.5_rprec*(dvdz(jx,jy,jz) + dwdy(jx,jy,jz)) !! w
+    S33(jx,jy,jz) = dwdz(jx,jy,jz) !! uv
 end do
 end do
 end do

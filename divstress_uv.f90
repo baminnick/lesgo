@@ -26,7 +26,7 @@ subroutine divstress_uv (divtx, divty, txx, txy, txz, tyy, tyz)
 !
 use types, only : rprec
 use param, only : ld, ny, nz, BOGUS, lbz
-use derivatives, only : ddx, ddy, ddz_w,ddxy
+use derivatives, only : ddx, ddy, ddz_w, ddxy
 implicit none
 
 real(rprec), dimension(ld,ny,lbz:nz), intent(out) :: divtx, divty
@@ -37,18 +37,14 @@ real(rprec), dimension(ld,ny,lbz:nz) :: dtxdx2, dtydy2, dtzdz2
 ! compute stress gradients
 ! MPI: tx 1:nz-1 => dtxdx 1:nz-1
 call ddx(txx, dtxdx, lbz)  ! really should replace with ddxy (save an fft)
+call ddy(tyy, dtydy2, lbz)
+call ddxy(txy , dtxdx2, dtydy, lbz)
 
 ! MPI: tz 1:nz => ddz_w limits dtzdz to 1:nz-1, except top process 1:nz
 call ddz_w(txz, dtzdz, lbz)
 
-! MPI: ty 1:nz-1 => dtdy 1:nz-1
-call ddy(tyy, dtydy2, lbz)
-
 ! MPI: tz 1:nz => ddz_w limits dtzdz to 1:nz-1, except top process 1:nz
 call ddz_w(tyz, dtzdz2, lbz)
-
-! MPI: ty 1:nz-1 => dtdy 1:nz-1
-call ddxy(txy , dtxdx2, dtydy, lbz)
 
 ! MPI following comment only true at bottom process
 ! the following gives bad results...but it seems like i the

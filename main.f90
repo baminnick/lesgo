@@ -31,11 +31,14 @@ use param
 use sim_param
 use grid_m
 use io, only : energy, output_loop, output_final, jt_total
-use io, only : write_tau_wall_bot, write_tau_wall_top
+use io, only : write_tau_wall_bot, write_tau_wall_top, kx_energy, kx_energy_fourier
+use io, only : ky_energy
 use fft
 use derivatives, only : filt_da, ddz_uv, ddz_w
+use derivatives, only : wave2physF
 use test_filtermodule
 use cfl_util
+use sgs_param, only : nu
 use sgs_stag_util, only : sgs_stag
 use forcing
 use functions, only: get_tau_wall_bot, get_tau_wall_top
@@ -58,6 +61,14 @@ use turbines, only : turbines_forcing, turbine_vel_init
 use sgs_param, only: F_LM, F_MM, F_QN, F_NN
 #endif
 
+#ifdef PPRNL
+use functions, only : x_avg
+#endif
+
+#ifdef PPGQL
+use functions, only : gql_filter
+#endif
+
 use messages
 
 implicit none
@@ -72,10 +83,14 @@ character (*), parameter :: prog_name = 'main'
 integer :: jt_step, nstart
 real(rprec) :: rmsdivvel, ke, maxcfl, tt
 
-type(clock_t) :: clock, clock_total, clock_forcing
+type(clock_t) :: clock, clock_total
+!type(clock_t) :: clock_forcing
+#ifdef PPOUTPUT_WMLES
+type(clock_t) :: clock_wm
+#endif
 
 ! Measure total time in forcing function
-real(rprec) :: clock_total_f = 0.0
+!real(rprec) :: clock_total_f = 0.0
 
 #ifdef PPMPI
 ! Buffers used for MPI communication
@@ -83,6 +98,9 @@ real(rprec) :: rbuffer
 real(rprec) :: maxdummy ! Used to calculate maximum with mpi_allreduce
 real(rprec) :: tau_top   ! Used to write top wall stress at first proc
 #endif
+
+real(rprec), dimension(:,:,:), allocatable :: tempRHS
+allocate( tempRHS (ld, ny, lbz:nz) )
 
 ! Initialize MPI
 #ifdef PPMPI
@@ -107,6 +125,7 @@ if(coord == 0) then
 #else
     write(*,'(1a,E15.7)') 'Initialization cpu time: ', clock % time
 #endif
+
 endif
 
 call clock_total%start
@@ -135,6 +154,13 @@ time_loop: do jt_step = nstart, nsteps
 
     if (use_cfl_dt) then
 
+        ! Go back to physical space to calculate CFL
+        if (fourier) then
+            call wave2physF( u, uF )
+            call wave2physF( v, vF )
+            call wave2physF( w, wF )
+        endif
+
         dt_f = dt
         dt = get_cfl_dt()
         dt_dim = dt * z_i / u_star
@@ -144,18 +170,30 @@ time_loop: do jt_step = nstart, nsteps
 
     end if
 
-   ! Advance time
-   jt_total = jt_step
-   jt = jt + 1
-   total_time = total_time + dt
-   total_time_dim = total_time_dim + dt_dim
-   tt = tt+dt
+    ! Advance time
+    jt_total = jt_step
+    jt = jt + 1
+    total_time = total_time + dt
+    total_time_dim = total_time_dim + dt_dim
+    tt = tt+dt
 
     ! Save previous time's right-hand-sides for Adams-Bashforth Integration
     ! NOTE: RHS does not contain the pressure gradient
     RHSx_f = RHSx
     RHSy_f = RHSy
     RHSz_f = RHSz
+
+    ! Attempt to trigger turbulence by lowering the viscosity
+    if (trigger) then
+        if (jt_total == trig_on) then
+            nu_molec = nu_molec / trig_factor
+            nu = nu / trig_factor
+        endif
+        if (jt_total == trig_off) then
+            nu_molec = nu_molec*trig_factor
+            nu = nu*trig_factor
+        endif       
+    end if
 
     ! Calculate velocity derivatives
     ! Calculate dudx, dudy, dvdx, dvdy, dwdx, dwdy (in Fourier space)
@@ -174,11 +212,19 @@ time_loop: do jt_step = nstart, nsteps
 
     ! Calculate wall stress and derivatives at the wall
     ! (txz, tyz, dudz, dvdz at jz=1)
-    ! using the velocity log-law
     ! MPI: bottom and top processes only
-    if (coord == 0 .or. coord == nproc-1) then
+    if (coord == 0) then
+#ifdef PPOUTPUT_WMLES
+        call clock_wm%start
         call wallstress()
-    end if
+        call clock_wm%stop
+#else
+        call wallstress()
+#endif
+    endif
+    if (coord == nproc-1) then
+        call wallstress()
+    endif
 
     ! Calculate turbulent (subgrid) stress for entire domain
     !   using the model specified in param.f90 (Smag, LASD, etc)
@@ -196,12 +242,90 @@ time_loop: do jt_step = nstart, nsteps
     ! Compute divergence of SGS shear stresses
     ! the divt's and the diagonal elements of t are not equivalenced
     ! in this version. Provides divtz 1:nz-1, except 1:nz at top process
-    call divstress_uv (divtx, divty, txx, txy, txz, tyy, tyz)
+    call divstress_uv(divtx, divty, txx, txy, txz, tyy, tyz)
     call divstress_w(divtz, txz, tyz, tzz)
 
     ! Calculates u x (omega) term in physical space. Uses 3/2 rule for
     ! dealiasing. Stores this term in RHS (right hand side) variable
-    call convec()
+
+#ifdef PPRNL
+    ! Use RNL equations
+    call convec(u,v,w,dudy,dudz,dvdx,dvdz,dwdx,dwdy,RHSx,RHSy,RHSz)
+
+    if (.not. fourier) then
+        u_pert = u - x_avg(u)
+        v_pert = v - x_avg(v)
+        w_pert = w - x_avg(w)
+        dudy_pert = dudy - x_avg(dudy)
+        dudz_pert = dudz - x_avg(dudz)
+        dvdx_pert = dvdx - x_avg(dvdx)
+        dvdz_pert = dvdz - x_avg(dvdz)
+        dwdx_pert = dwdx - x_avg(dwdx)
+        dwdy_pert = dwdy - x_avg(dwdy)
+
+        call convec(u_pert, v_pert, w_pert,                                       &
+                dudy_pert, dudz_pert, dvdx_pert, dvdz_pert, dwdx_pert, dwdy_pert, &
+                RHSx_pert, RHSy_pert, RHSz_pert)
+
+        RHSx = RHSx - RHSx_pert + x_avg(RHSx_pert)
+        RHSy = RHSy - RHSy_pert + x_avg(RHSy_pert)
+        RHSz = RHSz - RHSz_pert + x_avg(RHSz_pert)
+    endif
+    ! if fourier and RNL, just run convec since convolution is used
+#else
+    ! Use full NS equations --> OR running RNL/GQL in Fourier space
+    ! OR if use GQL (not Fourier) equations as below
+    call convec(u,v,w,dudy,dudz,dvdx,dvdz,dwdx,dwdy,RHSx,RHSy,RHSz) 
+
+#ifdef PPGQL
+
+    if (.not. fourier) then
+        ! Use GQL equations
+        RHSx = RHSx - gql_filter( RHSx )
+        RHSy = RHSy - gql_filter( RHSy )
+        RHSz = RHSz - gql_filter( RHSz )
+
+        u_low = gql_filter( u )
+        v_low = gql_filter( v )
+        w_low = gql_filter( w )
+        dudy_low = gql_filter( dudy )
+        dudz_low = gql_filter( dudz )
+        dvdx_low = gql_filter( dvdx )
+        dvdz_low = gql_filter( dvdz )
+        dwdx_low = gql_filter( dwdx )
+        dwdy_low = gql_filter( dwdy )
+
+        call convec(u_low, v_low, w_low,                                          &
+                dudy_low, dudz_low, dvdx_low, dvdz_low, dwdx_low, dwdy_low,       &
+                RHSx_low, RHSy_low, RHSz_low)
+
+        RHSx = RHSx - RHSx_low + 2.0_rprec*gql_filter( RHSx_low )
+        RHSy = RHSy - RHSy_low + 2.0_rprec*gql_filter( RHSy_low )
+        RHSz = RHSz - RHSz_low + 2.0_rprec*gql_filter( RHSz_low )
+
+        u_high = u - u_low
+        v_high = v - v_low
+        w_high = w - w_low
+        dudy_high = dudy - dudy_low
+        dudz_high = dudz - dudz_low
+        dvdx_high = dvdx - dvdx_low
+        dvdz_high = dvdz - dvdz_low
+        dwdx_high = dwdx - dwdx_low
+        dwdy_high = dwdy - dwdy_low
+
+        call convec(u_high, v_high, w_high,                                       &
+                dudy_high, dudz_high, dvdx_high, dvdz_high, dwdx_high, dwdy_high, &
+                RHSx_high, RHSy_high, RHSz_high)
+
+        RHSx = RHSx - RHSx_high + 2.0_rprec*gql_filter( RHSx_high )
+        RHSy = RHSy - RHSy_high + 2.0_rprec*gql_filter( RHSy_high )
+        RHSz = RHSz - RHSz_high + 2.0_rprec*gql_filter( RHSz_high )
+    endif
+
+
+#endif
+
+#endif
 
     ! Add div-tau term to RHS variable
     !   this will be used for pressure calculation
@@ -227,7 +351,13 @@ time_loop: do jt_step = nstart, nsteps
     !  we add force (mean press forcing) here so that u^(*) is as close
     !  to the final velocity as possible
     if (use_mean_p_force) then
-        RHSx(:,:,1:nz-1) = RHSx(:,:,1:nz-1) + mean_p_force
+        if (fourier) then
+            ! only add to the mean (kx=0) mode
+            ! no need to transform mean_p_force to kx space
+            RHSx(1,1,1:nz-1) = RHSx(1,1,1:nz-1) + mean_p_force
+        else
+            RHSx(:,:,1:nz-1) = RHSx(:,:,1:nz-1) + mean_p_force
+        endif
     end if
 
     ! Optional random forcing, i.e. to help prevent relaminarization
@@ -247,16 +377,16 @@ time_loop: do jt_step = nstart, nsteps
     !  Applied forcing (forces are added to RHS{x,y,z})
 
     ! Calculate forcing time
-    call clock_forcing%start
+    !call clock_forcing%start
 
     ! Apply forcing. These forces will later go into RHS
     call forcing_applied()
 
     ! Calculate forcing time
-    call clock_forcing%stop
+    !call clock_forcing%stop
 
     ! Calculate the total time of the forcing
-    clock_total_f = clock_total_f + clock_forcing % time
+    !clock_total_f = clock_total_f + clock_forcing % time
 
     !  Update RHS with applied forcing
 #if defined(PPTURBINES) || defined(PPATM)
@@ -357,6 +487,14 @@ time_loop: do jt_step = nstart, nsteps
 
     if (modulo (jt_total, wbase) == 0) then
 
+        if (fourier) then
+            call wave2physF( u, uF )
+            call wave2physF( v, vF )
+            call wave2physF( w, wF )
+            call wave2physF( txz, txzF )
+            call wave2physF( tyz, tyzF )
+        endif
+
         ! Get the ending time for the iteration
         call clock%stop
         call clock_total%stop
@@ -375,17 +513,17 @@ time_loop: do jt_step = nstart, nsteps
         call mpi_allreduce(clock_total % time, maxdummy, 1, mpi_rprec,         &
             MPI_MAX, comm, ierr)
         clock_total % time = maxdummy
-        call mpi_allreduce(clock_forcing % time, maxdummy, 1, mpi_rprec,       &
-            MPI_MAX, comm, ierr)
-        clock_forcing % time = maxdummy
-        call mpi_allreduce(clock_total_f , maxdummy, 1, mpi_rprec,             &
-            MPI_MAX, comm, ierr)
-        clock_total_f = maxdummy
+        !call mpi_allreduce(clock_forcing % time, maxdummy, 1, mpi_rprec,       &
+        !    MPI_MAX, comm, ierr)
+        !clock_forcing % time = maxdummy
+        !call mpi_allreduce(clock_total_f , maxdummy, 1, mpi_rprec,             &
+        !    MPI_MAX, comm, ierr)
+        !clock_total_f = maxdummy
 #endif
 
         ! Send top wall stress to bottom process
 #ifdef PPMPI
-        if (coord == nproc-1) then
+        if ( (coord == nproc-1) .and. (ubc_mom >0) ) then
             tau_top = get_tau_wall_top()
         else
             tau_top = 0._rprec
@@ -398,36 +536,87 @@ time_loop: do jt_step = nstart, nsteps
 
         if (coord == 0) then
             write(*,*)
-            write(*,'(a)') '==================================================='
+            write(*,'(a)') '========================================================'
             write(*,'(a)') 'Time step information:'
             write(*,'(a,i9)') '  Iteration: ', jt_total
             write(*,'(a,E15.7)') '  Time step: ', dt
             write(*,'(a,E15.7)') '  CFL: ', maxcfl
-            write(*,'(a,2E15.7)') '  AB2 TADV1, TADV2: ', tadv1, tadv2
+            ! write(*,'(a,2E15.7)') '  AB2 TADV1, TADV2: ', tadv1, tadv2
             write(*,*)
             write(*,'(a)') 'Flow field information:'
             write(*,'(a,E15.7)') '  Velocity divergence metric: ', rmsdivvel
             write(*,'(a,E15.7)') '  Kinetic energy: ', ke
             write(*,'(a,E15.7)') '  Bot wall stress: ', get_tau_wall_bot()
+            write(*,'(a,E15.7)') '  Turnovers: ', total_time_dim / ( L_x * z_i / u_star )
 #ifdef PPMPI
-            write(*,'(a,E15.7)') '  Top wall stress: ', tau_top
+            if (ubc_mom > 0) then
+                write(*,'(a,E15.7)') '  Top wall stress: ', tau_top
+            end if
 #else
-            write(*,'(a,E15.7)') '  Top wall stress: ', get_tau_wall_top()
+            if (ubc_mom > 0) then
+                write(*,'(a,E15.7)') '  Top wall stress: ', get_tau_wall_top()
+            end if
 #endif
             write(*,*)
             write(*,'(1a)') 'Simulation wall times (s): '
             write(*,'(1a,E15.7)') '  Iteration: ', clock % time
             write(*,'(1a,E15.7)') '  Cumulative: ', clock_total % time
-            write(*,'(1a,E15.7)') '  Forcing: ', clock_forcing % time
-            write(*,'(1a,E15.7)') '  Cumulative Forcing: ', clock_total_f
-            write(*,'(1a,E15.7)') '  Forcing %: ',                             &
-                clock_total_f /clock_total % time
-            write(*,'(a)') '==================================================='
+            ! write(*,'(1a,E15.7)') '  Forcing: ', clock_forcing % time
+            ! write(*,'(1a,E15.7)') '  Cumulative Forcing: ', clock_total_f
+            ! write(*,'(1a,E15.7)') '  Forcing %: ',                             &
+            !     clock_total_f /clock_total % time
+#ifdef PPOUTPUT_WMLES
+            write(*,'(1a,E15.7)') '  WM Iteration: ', clock_wm % time
+#endif
+            write(*,'(a)') '========================================================'
             call write_tau_wall_bot()
         end if
-        if(coord == nproc-1) then
+        if ((coord == nproc-1) .AND. (ubc_mom /= 0)) then
             call write_tau_wall_top()
         end if
+
+        if (fourier) then
+            if(coord == 0) then
+                write(*,'(a)') '======================= BOTTOM ========================='
+                write(*,*) 'u: ', uF(nxp/2,ny/2,1:2)
+                write(*,*) 'v: ', vF(nxp/2,ny/2,1:2)
+                write(*,*) 'w: ', wF(nxp/2,ny/2,1:2)
+                write(*,'(a)') '========================================================'
+            end if
+            call mpi_barrier(comm, ierr)
+            if(coord == nproc-1) then
+                write(*,'(a)') '======================== TOP ==========================='
+                write(*,*) 'u: ', uF(nxp/2,ny/2,nz-2:nz-1)
+                write(*,*) 'v: ', vF(nxp/2,ny/2,nz-2:nz-1)
+                write(*,*) 'w: ', wF(nxp/2,ny/2,nz-1:nz)
+                write(*,'(a)') '========================================================'
+            end if
+            call mpi_barrier(comm, ierr)
+        else
+            if(coord == 0) then
+                write(*,'(a)') '======================= BOTTOM ========================='
+                write(*,*) 'u: ', u(nx/2,ny/2,1:2)
+                write(*,*) 'v: ', v(nx/2,ny/2,1:2)
+                write(*,*) 'w: ', w(nx/2,ny/2,1:2)
+                write(*,'(a)') '========================================================'
+            end if
+            call mpi_barrier(comm, ierr)
+            if(coord == nproc-1) then
+                write(*,'(a)') '======================== TOP ==========================='
+                write(*,*) 'u: ', u(nx/2,ny/2,nz-2:nz-1)
+                write(*,*) 'v: ', v(nx/2,ny/2,nz-2:nz-1)
+                write(*,*) 'w: ', w(nx/2,ny/2,nz-1:nz)
+                write(*,'(a)') '========================================================'
+            end if
+            call mpi_barrier(comm, ierr)
+        endif
+
+        if (.not. fourier) then
+            call kx_energy()
+            call ky_energy()
+        else
+            call kx_energy_fourier()
+        endif
 
         ! Check if we are to check the allowable runtime
         if (runtime > 0) then

@@ -36,32 +36,19 @@ integer :: jx, jy, jz
 
 ! compute stress gradients
 ! tx 1:nz => dtxdx 1:nz
-call ddx(tx, dtxdx, lbz)
-#ifdef PPSAFETYMODE
-#ifdef PPMPI
-dtxdx(:, :, 0) = BOGUS
-#endif
-#endif
-
 ! ty 1:nz => dtydy 1:nz
+call ddx(tx, dtxdx, lbz)
 call ddy(ty, dtydy, lbz)
-#ifdef PPSAFETYMODE
-#ifdef PPMPI
-dtydy(:, :, 0) = BOGUS
-#endif
-#endif
 
 ! tz 0:nz-1 (special case) => dtzdz 1:nz-1 (default), 2:nz-1 (bottom),
 ! and 1:nz (top)
 call ddz_uv(tz, dtzdz, lbz)
-#ifdef PPSAFETYMODE
-#ifdef PPMPI
-dtzdz(:, :, 0) = BOGUS
-#endif
-#endif
 
 #ifdef PPSAFETYMODE
 #ifdef PPMPI
+dtxdx(:, :, 0) = BOGUS
+dtydy(:, :, 0) = BOGUS
+dtzdz(:, :, 0) = BOGUS
 divt(:, :, 0) = BOGUS
 #endif
 #endif

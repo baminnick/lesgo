@@ -53,22 +53,26 @@ subroutine forcing_random()
 !
 use types, only : rprec
 use param, only : nx,ny,nz,rms_random_force
-use sim_param, only : RHSy, RHSz
+use sim_param, only : RHSx, RHSy, RHSz
 
 real(rprec) :: dummy_rand
 integer :: jx,jy,jz
 
 ! Note: the "default" rms of a unif variable is 0.289
+! Used to divide rms_random_force by 0.289_rprec
 call init_random_seed
 do jz = 2, nz-1 ! don't force too close to the wall
 do jy = 1, ny
 do jx = 1, nx
     call random_number(dummy_rand)
+    RHSx(jx,jy,jz) = RHSx(jx,jy,jz) +                                          &
+        (rms_random_force)*(dummy_rand-.5_rprec)
+    call random_number(dummy_rand)
     RHSy(jx,jy,jz) = RHSy(jx,jy,jz) +                                          &
-        (rms_random_force/.289_rprec)*(dummy_rand-.5_rprec)
+        (rms_random_force)*(dummy_rand-.5_rprec)
     call random_number(dummy_rand)
     RHSz(jx,jy,jz) = RHSz(jx,jy,jz) +                                          &
-        (rms_random_force/.289_rprec)*(dummy_rand-.5_rprec)
+        (rms_random_force)*(dummy_rand-.5_rprec)
 end do
 end do
 end do

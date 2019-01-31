@@ -41,8 +41,20 @@ integer, parameter :: CHAR_BUFF_LENGTH = 1024 ! Default size of string buffers w
 character(*), parameter :: PATH = './'
 character(*), parameter :: checkpoint_file = path // 'vel.out'
 character(*), parameter :: checkpoint_tavg_file = path // 'tavg.out'
-#ifdef PPOUTPUT_EXTRA
+#ifdef PPOUTPUT_SGS
 character(*), parameter :: checkpoint_tavg_sgs_file = path // 'tavg_sgs.out'
+#endif
+#ifdef PPOUTPUT_BUDGET
+character(*), parameter :: checkpoint_tavg_budget_file = path // 'tavg_budget.out'
+#endif
+#ifdef PPOUTPUT_TURBSPEC
+character(*), parameter :: checkpoint_tavg_turbspec_file = path // 'tavg_turbspec.out'
+#endif
+#ifdef PPOUTPUT_CORR
+character(*), parameter :: checkpoint_tavg_corr_file = path // 'tavg_corr.out'
+#endif
+#ifdef PPOUTPUT_WMLES
+character(*), parameter :: checkpoint_tavg_wmles_file = path // 'tavg_wmles.out'
 #endif
 character(*), parameter :: checkpoint_spectra_file = path // 'spectra.out'
 #ifdef PPWRITE_BIG_ENDIAN
@@ -145,7 +157,21 @@ real(rprec) :: coriol = 1.0e-4_rprec, ug=1.0_rprec, vg=0.0_rprec
 ! nu_molec is dimensional m^2/s
 real(rprec) :: nu_molec = 1.14e-5_rprec
 
+! trigger turbulence
+logical :: trigger = .false.
+integer :: trig_on = 500, trig_off = 2000
+real(rprec) :: trig_factor = 5.0_rprec
+
 logical :: molec=.false., sgs=.true.
+
+! mode limiting options for RNL
+logical :: fourier = .false.
+real(rprec), allocatable, dimension(:) :: kxs_in
+integer :: kx_num = 3
+integer :: nxp = 32
+
+! mode limiting options for GQL
+integer :: thrx = 0
 
 !---------------------------------------------------
 ! TIMESTEP PARAMETERS
@@ -185,6 +211,10 @@ logical :: inilag = .true.
 ! channel branch is complete)
 integer :: lbc_mom = 1
 integer :: ubc_mom = 0
+
+! Inputs for RNL TLWMLES
+real(rprec), allocatable, dimension(:) :: tlwm_kxin
+integer :: tlwm_kxnum = 3
 
 ! Prescribe bottom and top wall streamwise velocity
 ! Only for DNS (sgs=.false.) and full channel (lbc_mom = ubc_mom = 1)

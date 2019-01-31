@@ -33,6 +33,7 @@ type grid_t
     integer, pointer, dimension(:) :: autowrap_i, autowrap_j
 contains
     procedure, public :: build
+    procedure, public :: build_fourier
 end type grid_t
 
 ! The uv grid
@@ -83,17 +84,17 @@ do k = lbz, nz
 #else
     z(k) = (k - 0.5_rprec) * dz
 #endif
-enddo
+end do
+
+zw = z - dz/2._rprec
 
 do j = 1, ny+1
     y(j) = (j-1)*dy
 enddo
 
 do i = 1, nx+1
-    x(i) = (i - 1)*dx
+    x(i) = (i-1)*dx
 enddo
-
-zw = z - dz/2._rprec
 
 ! Set index autowrapping arrays
 autowrap_i(0) = nx
@@ -126,5 +127,92 @@ jzmax = nz
 #endif
 
 end subroutine build
+
+!*******************************************************************************
+subroutine build_fourier(this)
+!*******************************************************************************
+!  This subroutine creates the uv grid for the domain.
+
+use param, only : nxp, ny, nz, jzmin, jzmax, dx, dy, dz, lbz
+#ifdef PPMPI
+use param,only:nproc,coord
+#endif
+implicit none
+
+class(grid_t) :: this
+integer :: i,j,k
+real(rprec), pointer, dimension(:) :: x, y, z, zw
+integer, pointer, dimension(:) :: autowrap_i, autowrap_j
+
+nullify(x, y, z, zw)
+nullify(autowrap_i,autowrap_j)
+
+!  x and y go to nx+1, ny+1 respectively for adding
+!  the buffered points for periodicity
+allocate(grid % x(nxp+1),grid % y(ny+1))
+allocate(grid % z(lbz:nz), grid % zw(lbz:nz))
+allocate(grid % autowrap_i(0:nxp+1), grid % autowrap_j(0:ny+1))
+
+! Initialize built
+grid % built = .false.
+
+! Set pointers
+x => this % x
+y => this % y
+z => this % z
+zw => this % zw
+
+autowrap_i => this % autowrap_i
+autowrap_j => this % autowrap_j
+
+do k = lbz, nz
+#ifdef PPMPI
+    z(k) = (coord*(nz-1) + k - 0.5_rprec) * dz
+#else
+    z(k) = (k - 0.5_rprec) * dz
+#endif
+end do
+
+zw = z - dz/2._rprec
+
+do j = 1, ny+1
+    y(j) = (j-1)*dy
+enddo
+
+do i = 1, nxp+1
+    x(i) = (i-1)*dx
+enddo
+
+! Set index autowrapping arrays
+autowrap_i(0) = nxp
+autowrap_j(0) = ny
+autowrap_i(nxp+1) = 1
+autowrap_j(ny+1) = 1
+do i=1,nxp; autowrap_i(i) = i; enddo
+do j=1,ny; autowrap_j(j) = j; enddo
+
+this % built = .true.
+
+nullify(x,y,z,zw)
+nullify(autowrap_i,autowrap_j)
+
+! Set jzmin and jzmax - the levels that this processor "owns"
+#ifdef PPMPI
+if (coord == 0) then
+    jzmin = 0
+    jzmax = nz-1
+elseif (coord == nproc-1) then
+    jzmin = 1
+    jzmax = nz
+else
+    jzmin = 1
+    jzmax = nz-1
+endif
+#else
+jzmin = 1
+jzmax = nz
+#endif
+
+end subroutine build_fourier
 
 end module grid_m

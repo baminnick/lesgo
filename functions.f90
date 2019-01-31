@@ -27,9 +27,13 @@ implicit none
 save
 private
 
-public interp_to_uv_grid, trilinear_interp, trilinear_interp_w,                &
+public interp_to_uv_grid, trilinear_interp, trilinear_interp_w, binary_search, &
     bilinear_interp, linear_interp, cell_indx, buff_indx, interp_to_w_grid,    &
-    get_tau_wall_bot, get_tau_wall_top
+    get_tau_wall_bot, get_tau_wall_top, x_avg, y_avg, int2str,                 &
+    interleave_c2r, interleave_r2c
+#ifdef PPGQL
+public gql_filter
+#endif
 
 character (*), parameter :: mod_name = 'functions'
 
@@ -867,13 +871,30 @@ return
 end function buff_indx
 
 !*******************************************************************************
+character(len=20) function int2str(n)
+!*******************************************************************************
+!
+! This function converts an integer to a string. It should be used with the 
+! trim function. For example:
+!       open(2, file='Output'//trim(int2str(n))//'.dat)
+!
+
+integer, intent(in) :: n
+write(int2str, *) n
+int2str = adjustl(int2str)
+
+return
+end function int2str
+
+!*******************************************************************************
 function get_tau_wall_bot() result(twall)
 !*******************************************************************************
 !
 ! This function provides plane-averaged value of wall stress magnitude
+! 
 use types, only: rprec
-use param, only : nx, ny
-use sim_param, only : txz, tyz
+use param, only : nx, ny, nxp, fourier
+use sim_param, only : txz, tyz, txzF, tyzF
 
 implicit none
 real(rprec) :: twall, txsum, tysum
@@ -881,26 +902,35 @@ integer :: jx, jy
 
 txsum = 0._rprec
 tysum = 0._rprec
-do jx = 1, nx
-do jy = 1, ny
-    txsum = txsum + txz(jx,jy,1)
-    tysum = tysum + tyz(jx,jy,1)
-enddo
-enddo
-
-twall = sqrt( (txsum/(nx*ny))**2 + (tysum/(nx*ny))**2  )
+if (fourier) then
+    do jx = 1, nxp
+    do jy = 1, ny
+        txsum = txsum + txzF(jx,jy,1)
+        tysum = tysum + tyzF(jx,jy,1)
+    enddo
+    enddo
+    twall = sqrt( (txsum/(nxp*ny))**2 + (tysum/(nxp*ny))**2  )
+else
+    do jx = 1, nx
+    do jy = 1, ny
+        txsum = txsum + txz(jx,jy,1)
+        tysum = tysum + tyz(jx,jy,1)
+    enddo
+    enddo
+    twall = sqrt( (txsum/(nx*ny))**2 + (tysum/(nx*ny))**2  )
+endif
 
 end function get_tau_wall_bot
-
 
 !*******************************************************************************
 function get_tau_wall_top() result(twall)
 !*******************************************************************************
 !
 ! This function provides plane-averaged value of wall stress magnitude
+! 
 use types, only: rprec
-use param, only : nx, ny, nz
-use sim_param, only : txz, tyz
+use param, only : nx, ny, nz, nxp, fourier
+use sim_param, only : txz, tyz, txzF, tyzF
 
 implicit none
 real(rprec) :: twall, txsum, tysum
@@ -908,15 +938,238 @@ integer :: jx, jy
 
 txsum = 0._rprec
 tysum = 0._rprec
-do jx = 1, nx
-do jy = 1, ny
-    txsum = txsum + txz(jx,jy,nz)
-    tysum = tysum + tyz(jx,jy,nz)
-enddo
-enddo
-
-twall = sqrt( (txsum/(nx*ny))**2 + (tysum/(nx*ny))**2  )
+if (fourier) then
+    do jx = 1, nxp
+    do jy = 1, ny
+        txsum = txsum + txzF(jx,jy,nz)
+        tysum = tysum + tyzF(jx,jy,nz)
+    enddo
+    enddo
+    twall = sqrt( (txsum/(nxp*ny))**2 + (tysum/(nxp*ny))**2  )
+else
+    do jx = 1, nx
+    do jy = 1, ny
+        txsum = txsum + txz(jx,jy,nz)
+        tysum = tysum + tyz(jx,jy,nz)
+    enddo
+    enddo
+    twall = sqrt( (txsum/(nx*ny))**2 + (tysum/(nx*ny))**2  )
+endif
 
 end function get_tau_wall_top
+
+!*******************************************************************************
+function x_avg(vel) result(vel_avg)
+!*******************************************************************************
+!
+! This function provides the streamwise averaged value of the velocity field.
+! Currently it returns vel_avg having the same size as vel. 
+! 
+! This function is used to run RNL in main.f90
+!
+
+use types, only: rprec
+use param, only: ld, ny, lbz, nz, nx
+
+implicit none
+real(rprec), dimension(:,:,:), intent(in)  :: vel
+real(rprec), dimension(ld,ny,lbz:nz) :: vel_avg
+real(rprec), dimension(ny,lbz:nz) :: vel_sum
+integer :: i
+
+vel_sum = 0._rprec
+vel_avg = 0._rprec
+
+do i = 1, nx
+    vel_sum = vel_sum + vel(i,:,:)
+enddo
+
+vel_sum = vel_sum / real(nx,rprec)
+
+do i = 1, nx
+    vel_avg(i,:,:) = vel_sum
+enddo
+
+return
+end function x_avg
+
+#ifdef PPGQL
+!*******************************************************************************
+function gql_filter( f ) result( ft )
+!*******************************************************************************
+!
+! Transform velocity or velocity gradient from (x,y,z) to (kx,ky,z), then
+! band-pass, i.e. filter out larger kx wavenumbers, then transform back
+! 
+! This filter is used in main.f90 when RNL is on and fourier = .false.
+! 
+use types, only : rprec
+use param, only : nx, ny, nz, lbz
+use fft
+implicit none
+
+real(rprec), dimension(:,:,lbz:), intent(in) :: f
+real(rprec), dimension(ld,ny,lbz:nz) :: ft
+real(rprec) :: const
+integer :: jx, jy, jz
+integer :: kx_thresh = 6
+!integer :: ky_thresh = 1
+! kx_thresh = 1 keeps only the mean kx = 0 mode, 
+! and if ky_thresh > (ny-1)/2, then RNL
+! 
+
+const = 1._rprec / ( nx * ny )
+ft(:,:,:) = f(:,:,:)
+
+! Loop through horizontal slices
+do jz = lbz, nz
+    ! transform
+    ft(:,:,jz) = const*ft(:,:,jz) !! normalization
+    call dfftw_execute_dft_r2c(forw, ft(:,:,jz), ft(:,:,jz))
+
+    ! apply spectral filter
+    ! leave kx <= kx_thresh untouched, similarly for ky
+    do jx = (2*kx_thresh+1), ld
+        ft(jx,:,jz) = 0.0_rprec ! zero out kx modes above threshold
+    enddo
+    !do jy = (2*ky_thresh+1), ny
+    !    ft(:,jy,jz) = 0.0_rprec ! zero out ky modes above threshold
+    !enddo
+
+    ! transform back
+    call dfftw_execute_dft_r2c(back, ft(:,:,jz), ft(:,:,jz))
+enddo
+
+return
+end function gql_filter
+#endif
+
+!*******************************************************************************
+function y_avg(q) result(q_avg)
+!*******************************************************************************
+!
+! This function provides the spanwise average of the quantity q on the velocity
+! field. Unlike x_avg, the input of y_avg is of size (nx,ny,1) and the output 
+! is of size (nx).
+! 
+! This function is used to dynamically modify the wall model coefficient in
+! tlwmles.f90
+!
+
+use types, only: rprec
+use param, only: nx, ny
+
+implicit none
+real(rprec), dimension(:,:), intent(in)  :: q
+real(rprec), dimension(nx) :: q_avg
+integer :: j
+
+q_avg = 0._rprec
+
+do j = 1, ny
+    q_avg = q_avg + q(:,j)
+enddo
+
+q_avg = q_avg / real(ny,rprec)
+
+return
+end function y_avg
+
+!*******************************************************************************
+function interleave_c2r(fc) result(f)
+!*******************************************************************************
+! 
+! Interleaves the complex type array fc into a real type array f.
+! 
+! This function is intended to be used for fourier.
+! 
+
+use types, only : rprec
+use param, only : kx_num
+use fft, only : kx_veci
+
+implicit none
+
+complex(rprec), dimension(:,:), intent(in) :: fc
+real(rprec), allocatable, dimension(:,:) :: f
+integer :: jx, jx_s, ii, ir, ldh, nyh
+
+ldh = size(fc,1) + 2 !! ld or ld_big
+nyh = size(fc,2) !! ny or ny2
+
+allocate( f(ldh, nyh) )
+
+f(:,:) = 0._rprec
+
+do jx = 1, kx_num
+    jx_s = kx_veci( jx )
+    ii = 2*jx_s ! imag index
+    ir = ii - 1 ! real index
+
+    f(ir,:) = real( fc(jx_s,:), rprec )
+    f(ii,:) = aimag( fc(jx_s,:) )
+enddo
+
+return
+end function interleave_c2r
+
+!*******************************************************************************
+function interleave_r2c(f) result(fc)
+!*******************************************************************************
+! 
+! Interleaves the real type array f into a complex type array fc.
+! 
+! This function is intended to be used for fourier.
+! 
+
+use types, only : rprec
+use param, only : nx, kx_num
+use fft, only : kx_veci
+
+implicit none
+
+real(rprec), dimension(:,:), intent(in) :: f
+complex(rprec), allocatable, dimension(:,:) :: fc
+integer :: jx, jx_s, ii, ir, nyh
+
+nyh = size(f,2) !! ny or ny2
+
+allocate( fc(nx, nyh) )
+
+fc(:,:) = (0._rprec, 0._rprec)
+
+do jx = 1, kx_num
+    jx_s = kx_veci( jx )
+    ii = 2*jx_s ! imag index
+    ir = ii - 1 ! real index
+
+    fc(jx_s,:) = cmplx( f(ir,:), f(ii,:), rprec )
+enddo
+
+return
+end function interleave_r2c
+
+!*******************************************************************************
+function calc_realpres() result(pres_real)
+!*******************************************************************************
+! 
+! This function extracts the energy from simulation pressure to give the real 
+! pressure
+! 
+
+use types, only : rprec
+use param, only : nx, ny, lbz, nz
+use sim_param, only : p, u, v, w
+
+implicit none 
+
+real(rprec), dimension(nx,ny,lbz:nz) :: pres_real
+
+pres_real(1:nx,1:ny,lbz:nz) = p(1:nx,1:ny,lbz:nz)                        &
+    - 0.5_rprec * ( u(1:nx,1:ny,lbz:nz)**2                               & 
+    + v(1:nx,1:ny,lbz:nz)**2                                             &
+    + interp_to_uv_grid( w(1:nx,1:ny,lbz:nz), lbz)**2 )
+
+end function calc_realpres
 
 end module functions

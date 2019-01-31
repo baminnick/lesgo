@@ -84,7 +84,7 @@ do
 
     if (ios /= 0) exit
 
-    if (block_entry_pos == 0) then  !--for now, invalid format if no block entry found
+    if (block_entry_pos == 0) then  !for now, invalid format if no block entry found
         call error (sub_name, 'block entry not found on line', line)
     end if
 
@@ -109,8 +109,8 @@ do
             call turbines_block()
 #endif
         case default
-            if (coord == 0) write(*,*) 'Found unused input block: '//          &
-                buff(1:block_entry_pos-1)
+            ! if (coord == 0) write(*,*) 'Found unused input block: '//          &
+            !     buff(1:block_entry_pos-1)
             ! Now need to 'fast-forward' until we reach the end of the block
             do while ( block_exit_pos == 0 )
                 call readline( lun, line, buff, block_entry_pos,               &
@@ -167,8 +167,8 @@ do
             case ('UNIFORM_SPACING')
                 read (buff(equal_pos+1:), *) uniform_spacing
             case default
-                if (coord == 0) write(*,*) 'Found unused data value in '       &
-                    // block_name // ' block: ' // buff(1:equal_pos-1)
+                ! if (coord == 0) write(*,*) 'Found unused data value in '       &
+                !     // block_name // ' block: ' // buff(1:equal_pos-1)
         end select
     elseif (block_exit_pos == 1) then
         ! Check or reset nproc based on MPI setup
@@ -195,6 +195,8 @@ do
         if (coord == 0 .AND. ival_read /= nz_tot )                             &
            write(*,*) 'Reseting Nz (total) to: ', nz_tot
 
+        ! All grid size variables involving nx are changed later if:
+        !     fourier .and. ( nx .ne. 2*(kx_num - 1) )
         ! Grid size for dealiasing
         nx2 = 3 * nx / 2
         ny2 = 3 * ny / 2
@@ -206,7 +208,7 @@ do
         ld_big = 2 * lh_big
 
         ! Grid spacing (x direction)
-        dx = L_x / nx
+        dx = L_x / nx !! this is changed later if fourier=true
 
         ! Check if we are to enforce uniform grid spacing
         if (uniform_spacing) then
@@ -286,16 +288,62 @@ do
                 read (buff(equal_pos+1:), *) molec
             case ('SGS')
                 read (buff(equal_pos+1:), *) sgs
+            case ('TRIGGER')
+                read (buff(equal_pos+1:), *) trigger
+            case ('TRIG_ON')
+                read (buff(equal_pos+1:), *) trig_on
+            case ('TRIG_OFF')
+                read (buff(equal_pos+1:), *) trig_off
+            case ('TRIG_FACTOR')
+                read (buff(equal_pos+1:), *) trig_factor
+            case ('FOURIER')
+                read (buff(equal_pos+1:), *) fourier
+            case ('KXS_IN')
+                call parse_vector( buff(equal_pos+1:), kx_num, kxs_in )
+            case ('NXP')
+                read (buff(equal_pos+1:), *) nxp
+            case ('THRX')
+                read (buff(equal_pos+1:), *) thrx
             case default
-                if (coord == 0) write(*,*) 'Found unused data value in '       &
-                    // block_name // ' block: ' // buff(1:equal_pos-1)
+                ! if (coord == 0) write(*,*) 'Found unused data value in '       &
+                !     // block_name // ' block: ' // buff(1:equal_pos-1)
         end select
     elseif( block_exit_pos == 1 ) then
+
+        ! Interpret user input for fourier setting
+        if (fourier) then
+            dx = L_x / nxp
+
+            if ( nxp .le. 2*maxval(kxs_in) ) then
+                nxp = int( 2*(kxs_in(kx_num) + 1) )
+                if (coord == 0) then 
+                    write(*,*) 'FOURIER: Physical grid (nxp) not large enough'
+                    write(*,*) '>>> Changing Nxp to ', nxp
+                endif
+            endif
+
+            if (nx .ne. 2*(kx_num - 1) ) then
+                nx = 2*(kx_num - 1)
+
+                if (coord == 0) write(*,*) 'FOURIER: Changing Nx to ', nx
+
+                ! Grid size for dealiasing
+                nx2 = 3 * nx / 2
+
+                ! Grid size for FFT's
+                lh = nx / 2 + 1
+                ld = 2 * lh
+                lh_big = nx2 / 2 + 1
+                ld_big = 2 * lh_big
+            endif
+        endif
+
         return
     else
         call error( sub_name, block_name //                                    &
             ' data block not formatted correctly: ' // buff(1:equal_pos-1) )
     endif
+
 enddo
 
 end subroutine model_block
@@ -334,8 +382,8 @@ do
             case('CUMULATIVE_TIME')
                 read (buff(equal_pos+1:), *) cumulative_time
             case default
-                if (coord == 0) write(*,*) 'Found unused data value in '       &
-                    // block_name // ' block: ' // buff(1:equal_pos-1)
+                ! if (coord == 0) write(*,*) 'Found unused data value in '       &
+                !     // block_name // ' block: ' // buff(1:equal_pos-1)
         end select
 
     elseif (block_exit_pos == 1) then
@@ -394,6 +442,8 @@ do
                 Read (buff(equal_pos+1:), *) lbc_mom
             case ('UBC_MOM')
                 Read (buff(equal_pos+1:), *) ubc_mom
+            case ('TLWM_KXIN')
+                call parse_vector( buff(equal_pos+1:), tlwm_kxnum, tlwm_kxin )
             case ('UBOT')
                 Read (buff(equal_pos+1:), *) ubot
             case ('UTOP')
@@ -456,8 +506,8 @@ do
 #endif
 
             case default
-                if (coord == 0) write(*,*) 'Found unused data value in '       &
-                    // block_name // ' block: ' // buff(1:equal_pos-1)
+                ! if (coord == 0) write(*,*) 'Found unused data value in '       &
+                !     // block_name // ' block: ' // buff(1:equal_pos-1)
         end select
     elseif (block_exit_pos == 1) then
         if( use_mean_p_force .AND. eval_mean_p_force ) then
@@ -567,8 +617,8 @@ do
             case ('ZPLANE_LOC')
                 call parse_vector( buff(equal_pos+1:), zplane_nloc, zplane_loc )
             case default
-                if (coord == 0) write(*,*) 'Found unused data value in '       &
-                    // block_name // ' block: ' // buff(1:equal_pos-1)
+                ! if (coord == 0) write(*,*) 'Found unused data value in '       &
+                !     // block_name // ' block: ' // buff(1:equal_pos-1)
         end select
     elseif (block_exit_pos == 1 ) then
         return
@@ -648,8 +698,8 @@ do
                 read (buff(equal_pos+1:), *) nFMMbot
 #endif
             case default
-                if (coord == 0) write(*,*) 'Found unused data value in '       &
-                    // block_name // ' block: ' // buff(1:equal_pos-1)
+                ! if (coord == 0) write(*,*) 'Found unused data value in '       &
+                !     // block_name // ' block: ' // buff(1:equal_pos-1)
         end select
     elseif( block_exit_pos == 1 ) then
         return
@@ -721,8 +771,8 @@ do
             case ('TBASE')
                 read (buff(equal_pos+1:), *) tbase
             case default
-                if (coord == 0) write(*,*) 'Found unused data value in '       &
-                    // block_name // ' block: ' // buff(1:equal_pos-1)
+                ! if (coord == 0) write(*,*) 'Found unused data value in '       &
+                !     // block_name // ' block: ' // buff(1:equal_pos-1)
         end select
     elseif (block_exit_pos == 1) then
         return

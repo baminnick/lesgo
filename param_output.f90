@@ -24,6 +24,9 @@ use param
 #ifdef PPLVLSET
 use level_set_base
 #endif
+#ifdef PPOUTPUT_WMLES
+use tlwmles, only : hwm, nzr
+#endif
 
 implicit none
 
@@ -78,6 +81,20 @@ write(2,f_fmt) 'vonk : ', vonk
 write(2,l_fmt) 'coriolis_forcing : ', coriolis_forcing
 write(2,x3f_fmt) 'coriol : ', coriol, ug, vg
 write(2,f_fmt) 'nu_molec : ', nu_molec
+write(2,x3l_fmt) 'trigger : ', trigger
+write(2,i_fmt) 'trig_on : ', trig_on
+write(2,i_fmt) 'trig_off : ', trig_off
+write(2,f_fmt) 'trig_factor', trig_factor
+write(2,x3l_fmt) 'fourier : ', fourier
+if (fourier) then
+do n = 1, kx_num
+    write(2,if_fmt) 'n, kxs_in(n) : ', n, kxs_in(n)
+enddo
+write(2,i_fmt) 'nxp : ', nxp
+#ifdef PPGQL
+write(2,i_fmt) 'thrx : ', thrx
+#endif
+endif
 write(2,x3l_fmt) 'molec, sgs : ', molec, sgs
 write(2,c_fmt) ''
 write(2,c_fmt) '---------------------------------------------------'
@@ -100,9 +117,18 @@ write(2,l_fmt) 'initu : ', initu
 write(2,l_fmt) 'inilag : ', inilag
 write(2,i_fmt) 'lbc_mom : ', lbc_mom
 write(2,i_fmt) 'ubc_mom : ', ubc_mom
+if (lbc_mom == 7) then
+do n = 1, tlwm_kxnum
+    write(2,if_fmt), 'n, tlwm_kxin(n) : ', n, tlwm_kxin(n)
+enddo
+endif
 write(2,f_fmt) 'ubot : ', ubot
 write(2,f_fmt) 'utop : ', utop
 write(2,f_fmt) 'zo : ', zo
+#ifdef PPOUTPUT_WMLES
+write(2,f_fmt) 'hwm : ', hwm
+write(2,i_fmt) 'nzr : ', nzr
+#endif
 write(2,l_fmt) 'inflow : ', inflow
 write(2,f_fmt) 'fringe_region_end : ', fringe_region_end
 write(2,f_fmt) 'fringe_region_len : ', fringe_region_len
@@ -112,6 +138,16 @@ write(2,f_fmt) 'mean_p_force : ', mean_p_force
 write(2,l_fmt) 'use_random_force : ', use_random_force
 write(2,i_fmt) 'stop_random_force : ', stop_random_force
 write(2,f_fmt) 'rms_random_force : ', rms_random_force
+#ifdef PPRNL
+write(2,c_fmt) 'RNL ON'
+#else
+write(2,c_fmt) 'RNL OFF'
+#endif
+#ifdef PPGQL
+write(2,c_fmt) 'GQL ON'
+#else
+write(2,c_fmt) 'GQL OFF'
+#endif
 write(2,c_fmt) ''
 write(2,c_fmt) '---------------------------------------------------'
 write(2,c_fmt) 'DATA OUTPUT PARAMETERS'
