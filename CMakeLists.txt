@@ -38,9 +38,11 @@ option(USE_GQL "Enable generalized quasilinear model." OFF)
 option(OUTPUT_SGS "Output time-averaging statistics on SGS model." OFF)
 option(OUTPUT_BUDGET "Output time-averaging statistics needed for budgets." OFF)
 option(OUTPUT_TURBSPEC "Output time-averaging spectra data." OFF)
-option(OUTPUT_CORR "Output time-averaging correlation data." OFF)
 option(OUTPUT_WMLES "Output time-averaging statistics on wall model." OFF)
 option(OUTPUT_SSP "Output self-sustaining process analysis." OFF)
+
+# Enable verbose mode
+set(CMAKE_VERBOSE_MAKEFILE ON)
 
 ################################################################################
 #                         Set up build (do not change)
@@ -48,12 +50,9 @@ option(OUTPUT_SSP "Output self-sustaining process analysis." OFF)
 # Set compiler versions for Cmake
 #  Intel
 if (CMAKE_Fortran_COMPILER_ID STREQUAL "Intel")
-    add_definitions(-DPPIFORT)
     set(compiler_name "ifort")
-    add_definitions(-DPPIFORT)
 #  GNU
 elseif (CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
-    add_definitions(-DPPGFORTRAN)
     set(compiler_name "gfortran")
 endif ()
 find_program(WHICH NAMES which)
@@ -66,8 +65,12 @@ project (lesgo)
 set(exec_name "lesgo")
 
 # Library links
-if (USE_MKL)
-    set(CMAKE_Fortran_FLAGS ${CMAKE_Fortran_FLAGS} -mkl)
+if (${hostname} STREQUAL "marcc")
+    if (${CMAKE_Fortran_COMPILER_ID} STREQUAL "Intel")
+        set(CMAKE_Fortran_FLAGS ${CMAKE_Fortran_FLAGS} -mkl)
+    else()
+        link_libraries(fftw3)
+    endif()
 else()
     link_libraries(fftw3)
 endif()
@@ -95,17 +98,12 @@ if (${hostname} STREQUAL "panoramix")
 elseif (${hostname} STREQUAL "marcc")
     # Intel
     if (${CMAKE_Fortran_COMPILER_ID} STREQUAL "Intel")
-        # include_directories(/cm/shared/apps/Intel/fftw/3.3.4/include)
-        # link_directories(/cm/shared/apps/Intel/fftw/3.3.4/lib)
-        if (USE_MKL) 
-            include_directories(/software/apps/compilers/intel/mkl/include/fftw/)
-            link_directories(/software/apps/compilers/intel/mkl/lib/intel64/)
-        else()
-            include_directories(/software/apps/fftw3/3.3.8/intel/18.0/include)
-            link_directories(/software/apps/fftw3/3.3.8/intel/18.0/lib)
-        endif()
+        include_directories(/software/apps/compilers/intel/mkl/include/fftw/)
+        link_directories(/software/apps/compilers/intel/mkl/lib/intel64/)
     # GNU -- These have to be installed locally for now.
     elseif (${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU")
+        include_directories(/software/apps/fftw3/3.3.8/gcc/5.5.0/include/)
+        link_directories(/software/apps/fftw3/3.3.8/gcc/5.5.0/lib/)
         if (USE_CGNS)
             include_directories($ENV{HOME}/cgns/include/)
             link_directories($ENV{HOME}/hdf5/lib/ $ENV{HOME}/cgns/lib/)
@@ -129,8 +127,8 @@ endif ()
 set (Sources cfl_util.f90 clocks.f90 convec.f90 derivatives.f90 divstress_uv.f90
      divstress_w.f90 emul_complex.f90 fft.f90 finalize.f90
      forcing.f90 fringe_util.f90 functions.f90 grid.f90
-     initial.f90 initialize.f90 input_util.f90 interpolag_Sdep.f90 
-     interpolag_Ssim.f90 io.f90 lagrange_Sdep.f90 lagrange_Ssim.f90 main.f90 
+     initial.f90 initialize.f90 input_util.f90 interpolag_Sdep.f90
+     interpolag_Ssim.f90 io.f90 lagrange_Sdep.f90 lagrange_Ssim.f90 main.f90
      messages.f90 param.f90 param_output.f90
      press_stag_array.f90 rmsdiv.f90 scaledep_dynamic.f90 
      sgs_param.f90 sgs_stag_util.f90 sim_param.f90 stat_defs.f90 
@@ -172,7 +170,7 @@ endif (USE_LVLSET)
 
 if (USE_TURBINES)
     add_definitions(-DPPTURBINES)
-    set(Sources ${Sources} turbines.f90)
+    set(Sources ${Sources} turbines.f90 turbine_indicator.f90)
     set(exec_name "${exec_name}-turbines")
 endif (USE_TURBINES)
 
@@ -222,10 +220,6 @@ if (OUTPUT_TURBSPEC)
     add_definitions(-DPPOUTPUT_TURBSPEC)
 endif (OUTPUT_TURBSPEC)
 
-if (OUTPUT_CORR)
-    add_definitions(-DPPOUTPUT_CORR)
-endif (OUTPUT_CORR)
-
 if (OUTPUT_WMLES)
     add_definitions(-DPPOUTPUT_WMLES)
 endif (OUTPUT_WMLES)
@@ -254,12 +248,11 @@ endif (READ_ENDIAN STREQUAL "BIG")
 if (CMAKE_Fortran_COMPILER_ID STREQUAL "Intel")
     set (CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -cpp -O2 -funroll-loops -no-wrap-margin -assume byterecl")
     #set (CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -cpp -O0 -g -traceback -no-wrap-margin -assume byterecl")
-    #set (CMAKE_Fortran_FLAGS "-cpp -O2 -funroll-loops -no-wrap-margin -assume byterecl")
 # GNU
 else (CMAKE_Fortran_COMPILER_ID STREQUAL "Intel")
     set (CMAKE_Fortran_FLAGS "-cpp -O2 -ffast-math -funroll-loops -fall-intrinsics -Wall -fcheck=all")
+    #set (CMAKE_Fortran_FLAGS "-cpp -O0 -g -fbacktrace -fall-intrinsics -Wall -fcheck=all")
 endif (CMAKE_Fortran_COMPILER_ID STREQUAL "Intel")
 
 # main lesgo executable
 add_executable(${exec_name} ${Sources})
-

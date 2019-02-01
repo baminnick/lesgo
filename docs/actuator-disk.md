@@ -6,17 +6,21 @@ the coarse grid resolution does not allow for the modeling of individual
 blades. LESGO's implementation does not include rotation of the drag disk, and
 tangential forces are not applied to the flow.
 
-The turbine force is given by
-\\[F = -\frac{1}{2} \rho C_T' \left \langle u_d \right \rangle^2 A\\]
+A smoothed normalized [indicator function](indicator-function.html) \\(\mathcal{R}(\mathbf{x})\\)
+is used to distribute the turbine thrust force
+\\[\mathbf{F}(\mathbf{x}) = -\frac{1}{2} \frac{\pi D^2}{4} \rho C_T' \left \langle \bar{u}^T_d \right \rangle^2 \mathcal{R}(\mathbf{x}) \, \mathbf{\hat{e}_1} \\]
 where \\(\rho\\) is the fluid density, \\(C_T'\\) is the local thrust
-coefficient, \\(\left \langle u_d \right \rangle\\) is the disk and time-averaged
-velocity, and \\(A\\) is the rotor swept area.
+coefficient, \\(\left \langle \bar{u}^T_d \right \rangle\\) is the disk and time-averaged
+velocity, \\(D\\) is the diameter of the disk, and \\(\mathbf{\hat{e}_1}\\) is
+the unit vector pointing outward from the disk in the direction of the flow. The
+disk averaged velocity is also found using the smoothed indicator function
 
-The force is distributed across grid points using an indicator function which
-is determined during code initialization. To avoid Gibbs phenomenon with sharp
-gradients, this indicator function (currently 1 inside and 0 outside a turbine)
-is smoothed with a Gaussian filter. Each grid point with a non-zero indicator
-function applies a force on the flow.
+\\[ \left\langle u_d \right\rangle = \int \mathcal{R}(\mathbf{x}) \, \tilde{\mathbf{u}}(\mathbf{x}) \, d^3\mathbf{x}. \\]
+
+A correction factor can also be included to correct measured disk-averaged velocity when running simulations on coarse grids.
+
+\\[ \left\langle u_d \right\rangle = M \int \mathcal{R}(\mathbf{x}) \, \tilde{\mathbf{u}}(\mathbf{x}) \, d^3\mathbf{x}. \\]
+
 
 ## Settings
 The first settings specify the wind-turbine array geometry and orientation.
@@ -59,4 +63,7 @@ Calaf M, Meneveau C, and Meyers J. "[Large eddy simulation study of fully develo
 wind-turbine array boundary layers](http://dx.doi.org/10.1063/1.3291077)."
 *Physics of Fluids* **22** (2010). 015110.
 
-Meyers J, Meneveau C. "[Large eddy simulations of large wind-turbine arrays in the atmospheric boundary layer](http://dx.doi.org/10.2514/6.2010-827)." *50th AIAA Aerospace Sciences Meeting*, (2010). Orlando, FL. AIAA Paper No. 2010-827.
+Meyers J and Meneveau C. "[Large eddy simulations of large wind-turbine arrays in the atmospheric boundary layer](http://dx.doi.org/10.2514/6.2010-827)." *50th AIAA Aerospace Sciences Meeting*, (2010). Orlando, FL. AIAA Paper No. 2010-827.
+
+Shapiro C, Gayme D, and Meneveau C. "[Filtered actuator disks: Theory and application to wind turbine models in large eddy simulation](https://arxiv.org/abs/1901.10056). arXiv.org. (2019).
+

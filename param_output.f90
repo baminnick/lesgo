@@ -134,7 +134,8 @@ write(2,f_fmt) 'fringe_region_end : ', fringe_region_end
 write(2,f_fmt) 'fringe_region_len : ', fringe_region_len
 write(2,f_fmt) 'inflow_velocity : ', inflow_velocity
 write(2,l_fmt) 'use_mean_p_force : ', use_mean_p_force
-write(2,f_fmt) 'mean_p_force : ', mean_p_force
+write(2,f_fmt) 'mean_p_force_x : ', mean_p_force_x
+write(2,f_fmt) 'mean_p_force_y : ', mean_p_force_y
 write(2,l_fmt) 'use_random_force : ', use_random_force
 write(2,i_fmt) 'stop_random_force : ', stop_random_force
 write(2,f_fmt) 'rms_random_force : ', rms_random_force
@@ -154,7 +155,7 @@ write(2,c_fmt) 'DATA OUTPUT PARAMETERS'
 write(2,c_fmt) '---------------------------------------------------'
 #if ( defined(PPWRITE_BIG_ENDIAN) || defined(PPWRITE_LITTLE_ENDIAN) )
 write(2,x2c_fmt) 'write_endian : ', write_endian
-#elif (defined(PPIFORT))
+#elif (defined(__INTEL_COMPILER))
 ! According to https://software.intel.com/en-us/node/524834:
 ! Intel Fortran expects numeric data to be in native little endian order.
 write(2,x2c_fmt) 'write_endian : ', 'LITTLE_ENDIAN'
@@ -164,7 +165,7 @@ write(2,x2c_fmt) 'write_endian : ', ch
 #endif
 #if ( defined(PPREAD_BIG_ENDIAN) || defined(PPREAD_LITTLE_ENDIAN) )
 write(2,x2c_fmt) 'read_endian : ', write_endian
-#elif (defined(PPIFORT))
+#elif (defined(__INTEL_COMPILER))
 ! According to https://software.intel.com/en-us/node/524834:
 ! Intel Fortran expects numeric data to be in native little endian order.
 write(2,x2c_fmt) 'read_endian : ', 'LITTLE_ENDIAN'

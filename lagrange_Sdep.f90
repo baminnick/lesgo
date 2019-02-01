@@ -92,6 +92,7 @@ call interpolag_Sdep()
 !   Then update the running averages, F_*(:,:,jz), which are used to
 !   calculate Cs_opt2(:,:,jz).
 do jz = 1, nz
+
 #ifdef PPOUTPUT_SGS
     ! Reset counting variables for Cs clipping stats
     count_all = 0

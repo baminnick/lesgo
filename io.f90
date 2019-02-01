@@ -27,6 +27,7 @@ use sim_param, only : w, dudz, dvdz
 use sgs_param, only : cs_opt2
 use string_util
 use messages
+
 #ifdef PPMPI
 use mpi
 #endif
@@ -1453,7 +1454,7 @@ if (tavg_calc) then
 
                 call tavg_init()
             else
-                call tavg_compute ()
+                call tavg_compute()
             end if
 
             if (fourier) then
@@ -1635,6 +1636,7 @@ character (64) :: fname
 integer :: n, i, j, k
 real(rprec), allocatable, dimension(:,:,:) :: ui, vi, wi, w_uv, wF_uv
 real(rprec), pointer, dimension(:) :: x, y, z, zw
+
 #ifndef PPCGNS
 character(64) :: bin_ext
 
@@ -2286,7 +2288,7 @@ subroutine output_init ()
 !  This subroutine allocates the memory for arrays used for statistical
 !  calculations
 !
-use param, only : dx, dy, dz, nx, ny, nz, lbz
+use param, only : dx, dy, dz, nz, lbz
 use param, only : point_calc, point_nloc, point_loc
 use param, only : xplane_calc, xplane_nloc, xplane_loc
 use param, only : yplane_calc, yplane_nloc, yplane_loc
@@ -2304,9 +2306,6 @@ use stat_defs, only : tavg_budget
 #endif
 #ifdef PPOUTPUT_TURBSPEC
 use stat_defs, only : tavg_turbspecx, tavg_turbspecy
-#endif
-#ifdef PPOUTPUT_CORR
-use stat_defs, only : tavg_corr
 #endif
 
 implicit none
@@ -2347,9 +2346,6 @@ if( tavg_calc ) then
 #ifdef PPOUTPUT_TURBSPEC
     allocate(tavg_turbspecx(nx/2+1,ny,lbz:nz))
     allocate(tavg_turbspecy(nx,ny/2+1,lbz:nz))
-#endif
-#ifdef PPOUTPUT_CORR
-    allocate(tavg_corr(nx,ny,lbz:nz))
 #endif
 
   ! Initialize the derived types tavg and tavg_zplane
@@ -2639,18 +2635,6 @@ if( tavg_calc ) then
     end do
 #endif
 
-#ifdef PPOUTPUT_CORR
-    do k = 1, Nz
-    do j = 1, Ny
-    do i = 1, Nx
-        tavg_corr(i,j,k) % ycorruu = 0._rprec
-        tavg_corr(i,j,k) % ycorrvv = 0._rprec
-        tavg_corr(i,j,k) % ycorrww = 0._rprec
-    end do
-    end do
-    end do
-#endif
-
 end if
 
 ! Initialize information for x-planar stats/data
@@ -2758,9 +2742,6 @@ use stat_defs, only : tavg_budget
 #ifdef PPOUTPUT_TURBSPEC
 use stat_defs, only : tavg_turbspecx, tavg_turbspecy
 #endif
-#ifdef PPOUTPUT_CORR
-use stat_defs, only : tavg_corr
-#endif
 
 implicit none
 
@@ -2773,9 +2754,6 @@ character (*), parameter :: ftavg_budget_in = path // 'tavg_budget.out'
 #endif
 #ifdef PPOUTPUT_TURBSPEC
 character (*), parameter :: ftavg_turbspec_in = path // 'tavg_turbspec.out'
-#endif
-#ifdef PPOUTPUT_CORR
-character (*), parameter :: ftavg_corr_in = path // 'tavg_corr.out'
 #endif
 #ifdef PPMPI
 character (*), parameter :: MPI_suffix = '.c'
@@ -2839,18 +2817,6 @@ else
     read(1) tavg_total_time
     read(1) tavg_turbspecx
     read(1) tavg_turbspecy
-    close(1)
-#endif
-
-#ifdef PPOUTPUT_CORR
-    fname = ftavg_corr_in
-#ifdef PPMPI
-    call string_concat( fname, MPI_suffix, coord )
-#endif
-    open(1, file=fname, action='read', position='rewind', form='unformatted',  &
-        convert=read_endian)
-    read(1) tavg_total_time
-    read(1) tavg_corr
     close(1)
 #endif
 
@@ -2991,10 +2957,6 @@ call tavg_budget_compute
 
 #ifdef PPOUTPUT_TURBSPEC
 call tavg_turbspec_compute
-#endif
-
-#ifdef PPOUTPUT_CORR
-call tavg_corr_compute
 #endif
 
 #ifdef PPTURBINES
@@ -3547,43 +3509,6 @@ end do
 end subroutine tavg_turbspec_compute
 #endif
 
-#ifdef PPOUTPUT_CORR
-!*******************************************************************************
-subroutine tavg_corr_compute
-!*******************************************************************************
-use types, only : rprec
-use param, only : nx, ny, nz, jzmax
-use sim_param, only : u, v, w
-use stat_defs, only: tavg_dt, tavg_corr
-use functions, only : interp_to_uv_grid
-
-implicit none
-
-integer :: jx, jy, jz, yc
-real(rprec), dimension(nx,ny,lbz:nz) :: w_uv
-
-! Interpolate variables to uv grid
-w_uv(1:nx,1:ny,lbz:nz) = interp_to_uv_grid(w(1:nx,1:ny,lbz:nz), lbz)
-
-! User can specify sampling center location here
-yc = ny/2
-
-do jz = lbz, jzmax
-do jx = 1, nx
-    do jy = 1, ny
-        tavg_corr(jx,jy,jz) % ycorruu = tavg_corr(jx,jy,jz) % ycorruu       &
-            + u(jx,yc,jz)*u(jx,jy,jz)*tavg_dt
-        tavg_corr(jx,jy,jz) % ycorrvv = tavg_corr(jx,jy,jz) % ycorrvv       &
-            + v(jx,yc,jz)*v(jx,jy,jz)*tavg_dt
-        tavg_corr(jx,jy,jz) % ycorrww = tavg_corr(jx,jy,jz) % ycorrww       &
-            + w_uv(jx,yc,jz)*w_uv(jx,jy,jz)*tavg_dt
-    end do
-end do
-end do
-
-end subroutine tavg_corr_compute
-#endif
-
 !*******************************************************************************
 subroutine tavg_finalize()
 !*******************************************************************************
@@ -3605,10 +3530,6 @@ use stat_defs, only : tavg_budget, budget_compute, budget
 #ifdef PPOUTPUT_TURBSPEC
 use stat_defs, only : tavg_turbspecx, tavg_turbspecy, turbspecx, turbspecy
 use stat_defs, only : turbspec_compute
-#endif
-
-#ifdef PPOUTPUT_CORR
-use stat_defs, only : tavg_corr, correl_compute, correl
 #endif
 
 #ifdef PPMPI
@@ -3636,10 +3557,6 @@ character(64) :: fname_rxx, fname_ryy, fname_rzz, fname_rxy, fname_rxz, fname_ry
 
 #ifdef PPOUTPUT_TURBSPEC
 character(64) :: fname_sxvel, fname_syvel, fname_sxvort, fname_syvort
-#endif
-
-#ifdef PPOUTPUT_CORR
-character(64) :: fname_ycorr
 #endif
 
 integer :: i,j,k
@@ -3680,9 +3597,6 @@ fname_syvel = path // 'output/syvel'
 fname_sxvort = path // 'output/sxvort'
 fname_syvort = path // 'output/syvort'
 #endif
-#ifdef PPOUTPUT_CORR
-fname_ycorr = path // 'output/ycorr'
-#endif
 
 ! CGNS
 #ifdef PPCGNS
@@ -3711,9 +3625,6 @@ call string_concat(fname_sxvel, '.cgns')
 call string_concat(fname_syvel, '.cgns')
 call string_concat(fname_sxvort, '.cgns')
 call string_concat(fname_syvort, '.cgns')
-#endif
-#ifdef PPOUTPUT_CORR
-call string_concat(fname,ycorr, '.cgns')
 #endif
 ! Binary
 #else
@@ -3747,9 +3658,6 @@ call string_concat(fname_sxvel, bin_ext)
 call string_concat(fname_syvel, bin_ext)
 call string_concat(fname_sxvort, bin_ext)
 call string_concat(fname_syvort, bin_ext)
-#endif
-#ifdef PPOUTPUT_CORR
-call string_concat(fname_ycorr, bin_ext)
 #endif
 #endif
 
@@ -4040,18 +3948,6 @@ end do
 end do
 #endif
 
-#ifdef PPOUTPUT_CORR
-do k = jzmin, jzmax
-do j = 1, ny
-do i = 1, nx
-    tavg_corr(i,j,k) % ycorruu = tavg_corr(i,j,k) % ycorruu / tavg_total_time
-    tavg_corr(i,j,k) % ycorrvv = tavg_corr(i,j,k) % ycorrvv / tavg_total_time
-    tavg_corr(i,j,k) % ycorrww = tavg_corr(i,j,k) % ycorrww / tavg_total_time
-end do
-end do
-end do
-#endif
-
 #ifdef PPMPI
 call mpi_barrier( comm, ierr )
 #endif
@@ -4241,11 +4137,6 @@ call mpi_sync_real_array( tavg_budget(1:nx,1:ny,lbz:nz)%wlapu, 0, MPI_SYNC_DOWNU
 call mpi_sync_real_array( tavg_budget(1:nx,1:ny,lbz:nz)%wlapv, 0, MPI_SYNC_DOWNUP )
 call mpi_sync_real_array( tavg_budget(1:nx,1:ny,lbz:nz)%wlapw, 0, MPI_SYNC_DOWNUP )
 
-#endif
-#ifdef PPOUTPUT_CORR
-call mpi_sync_real_array( tavg_corr(1:nx,1:ny,lbz:nz)%ycorruu, 0, MPI_SYNC_DOWNUP )
-call mpi_sync_real_array( tavg_corr(1:nx,1:ny,lbz:nz)%ycorrvv, 0, MPI_SYNC_DOWNUP )
-call mpi_sync_real_array( tavg_corr(1:nx,1:ny,lbz:nz)%ycorrww, 0, MPI_SYNC_DOWNUP )
 #endif
 
 #endif
@@ -4727,37 +4618,6 @@ deallocate(turbspecy)
 
 #endif
 
-#ifdef PPOUTPUT_CORR
-! Correlation computations after time-averaging
-allocate(correl(nx,ny,lbz:nz))
-correl = correl_compute(tavg_corr, tavg, lbz)
-
-#ifdef PPCGNS
-
-call write_parallel_cgns(fname_ycorr,nx,ny,nz- nz_end,nz_tot,                  &
-    (/ 1, 1,   (nz-1)*coord + 1 /),                                            &
-    (/ nx, ny, (nz-1)*(coord+1) + 1 - nz_end /),                               &
-    x(1:nx) , y(1:ny) , z(1:(nz-nz_end) ), 3,                                  &
-    (/ 'ycorruu', 'ycorrvv', 'ycorrww'/),                                      &
-    (/ correl(1:nx,1:ny,1:nz- nz_end) % ycorruu,                               &
-    correl(1:nx,1:ny,1:nz- nz_end) % ycorrvv,                                  &
-    correl(1:nx,1:ny,1:nz- nz_end) % ycorrww /) )
-
-#else
-
-open(unit=13, file=fname_ycorr, form='unformatted', convert=write_endian,     &
-    access='direct', recl=nx*ny*nz*rprec)
-write(13,rec=1) correl(:nx,:ny,1:nz)%ycorruu
-write(13,rec=2) correl(:nx,:ny,1:nz)%ycorrvv
-write(13,rec=3) correl(:nx,:ny,1:nz)%ycorrww
-close(13)
-
-#endif
-
-deallocate(correl)
-
-#endif 
-
 #ifdef PPMPI
 ! Ensure all writes complete before preceeding
 call mpi_barrier( comm, ierr )
@@ -4786,10 +4646,6 @@ use stat_defs, only : tavg_budget
 #ifdef PPOUTPUT_TURBSPEC
 use param, only : checkpoint_tavg_turbspec_file
 use stat_defs, only : tavg_turbspecx, tavg_turbspecy
-#endif
-#ifdef PPOUTPUT_CORR
-use param, only : checkpoint_tavg_corr_file
-use stat_defs, only : tavg_corr
 #endif
 
 implicit none
@@ -4845,19 +4701,6 @@ open(1, file=fname, action='write', position='rewind',form='unformatted',      &
 write(1) tavg_total_time
 write(1) tavg_turbspecx
 write(1) tavg_turbspecy
-close(1)
-#endif
-
-#ifdef PPOUTPUT_CORR
-fname = checkpoint_tavg_corr_file
-#ifdef PPMPI
-call string_concat( fname, '.c', coord)
-#endif
-!  Write data to tavg_corr.out
-open(1, file=fname, action='write', position='rewind',form='unformatted',      &
-    convert=write_endian)
-write(1) tavg_total_time
-write(1) tavg_corr
 close(1)
 #endif
 

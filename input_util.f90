@@ -462,8 +462,10 @@ do
                 read (buff(equal_pos+1:), *) use_mean_p_force
             case ('EVAL_MEAN_P_FORCE')
                 read (buff(equal_pos+1:), *) eval_mean_p_force
-            case ('MEAN_P_FORCE')
-                read (buff(equal_pos+1:), *) mean_p_force
+            case ('MEAN_P_FORCE_X')
+                read (buff(equal_pos+1:), *) mean_p_force_x
+            case ('MEAN_P_FORCE_Y')
+                read (buff(equal_pos+1:), *) mean_p_force_y
             case ('USE_RANDOM_FORCE')
                 read (buff(equal_pos+1:), *) use_random_force
             case ('STOP_RANDOM_FORCE')
@@ -511,11 +513,11 @@ do
         end select
     elseif (block_exit_pos == 1) then
         if( use_mean_p_force .AND. eval_mean_p_force ) then
-            val_read = mean_p_force
+            val_read = mean_p_force_x
             ! Evaluate the mean pressure force
-            mean_p_force = 1.0_rprec / L_z
-            if (coord == 0 .AND. abs( val_read - mean_p_force ) >= thresh)     &
-                call mesg(sub_name, 'Reseting mean_p_force to: ', mean_p_force)
+            mean_p_force_x = 1.0_rprec / L_z
+            if (coord == 0 .AND. abs( val_read - mean_p_force_x ) >= thresh)     &
+                call mesg(sub_name, 'Reseting mean_p_force_x to: ', mean_p_force_x)
         endif
         return
     else
@@ -764,10 +766,14 @@ do
                 read (buff(equal_pos+1:), *) dyn_Ct_prime
             case ('T_AVG_DIM')
                 read (buff(equal_pos+1:), *) T_avg_dim
-            case ('ALPHA')
-                read (buff(equal_pos+1:), *) alpha
+            case ('ALPHA1')
+                read (buff(equal_pos+1:), *) alpha1
+            case ('ALPHA2')
+                read (buff(equal_pos+1:), *) alpha2
             case ('FILTER_CUTOFF')
                 read (buff(equal_pos+1:), *) filter_cutoff
+            case ('ADM_CORRECTION')
+                read (buff(equal_pos+1:), *) adm_correction
             case ('TBASE')
                 read (buff(equal_pos+1:), *) tbase
             case default

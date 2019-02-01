@@ -50,9 +50,6 @@ character(*), parameter :: checkpoint_tavg_budget_file = path // 'tavg_budget.ou
 #ifdef PPOUTPUT_TURBSPEC
 character(*), parameter :: checkpoint_tavg_turbspec_file = path // 'tavg_turbspec.out'
 #endif
-#ifdef PPOUTPUT_CORR
-character(*), parameter :: checkpoint_tavg_corr_file = path // 'tavg_corr.out'
-#endif
 #ifdef PPOUTPUT_WMLES
 character(*), parameter :: checkpoint_tavg_wmles_file = path // 'tavg_wmles.out'
 #endif
@@ -240,7 +237,8 @@ real(rprec) :: inflow_velocity = 1.0_rprec
 logical :: use_mean_p_force = .true.
 ! Specify whether mean_p_force should be evaluated as 1/L_z
 logical :: eval_mean_p_force = .false.
-real(rprec) :: mean_p_force = 1.0_rprec
+real(rprec) :: mean_p_force_x = 1.0_rprec
+real(rprec) :: mean_p_force_y = 0.0_rprec
 
 ! if true, provides random forcing for v & w until certain number of time steps
 logical :: use_random_force = .false.

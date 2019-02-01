@@ -22,6 +22,9 @@ module stat_defs
 !*******************************************************************************
 use types, only : rprec
 use param, only : nx, ny, nz, lh
+#ifdef PPTURBINES
+use turbine_indicator
+#endif
 
 save
 public
@@ -121,16 +124,6 @@ end type turbspec_t
 
 #endif
 
-#ifdef PPOUTPUT_CORR
-type tavg_corr_t
-    real(rprec) :: ycorruu, ycorrvv, ycorrww
-end type tavg_corr_t
-
-type correl_t
-    real(rprec) :: ycorruu, ycorrvv, ycorrww
-end type correl_t
-#endif
-
 #ifdef PPOUTPUT_WMLES
 real(rprec) :: tavg_wmles_total_time, tavg_wmles_dt
 type tavg_wmles_t
@@ -140,22 +133,11 @@ end type tavg_wmles_t
 
 ! Types for including wind turbines as drag disks
 #ifdef PPTURBINES
-
-! Indicator function calculator
-type turb_ind_func_t
-    real(rprec), dimension(:), allocatable :: r
-    real(rprec), dimension(:), allocatable :: R23
-    real(rprec) :: sqrt6overdelta, t_half
-contains
-    procedure, public :: init
-    procedure, public :: val
-end type turb_ind_func_t
-
 ! Single turbines
 type turbine_t
     real(rprec) :: xloc, yloc, height, dia, thk
     ! term used for volume correction
-    real(rprec) :: vol_c
+    ! real(rprec) :: vol_c
     ! angle CCW(from above) from -x direction [degrees]
     real(rprec) :: theta1
     ! angle above the horizontal, from -x dir [degrees]
@@ -175,11 +157,11 @@ type turbine_t
     ! (nx,ny,nz) of unit normal for each turbine
     real(rprec), dimension(3) :: nhat
     ! indicator function - weighting of each node
-    real(rprec), dimension(5000) :: ind
+    real(rprec), dimension(50000) :: ind
     ! object to calculate indicator function
     type(turb_ind_func_t) :: turb_ind_func
     ! (i,j,k) of each included node
-    integer, dimension(5000,3) :: nodes
+    integer, dimension(50000,3) :: nodes
     ! search area for nearby nodes
     integer, dimension(6) :: nodes_max
 end type turbine_t
@@ -191,7 +173,6 @@ end type wind_farm_t
 
 ! The wind farm
 type(wind_farm_t) :: wind_farm
-
 #endif
 
 ! Create types for outputting data (instantaneous or averaged)
@@ -219,11 +200,6 @@ type(tavg_turbspec_t), allocatable, dimension(:,:,:) :: tavg_turbspecx
 type(tavg_turbspec_t), allocatable, dimension(:,:,:) :: tavg_turbspecy
 type(turbspec_t), allocatable, dimension(:,:,:) :: turbspecx
 type(turbspec_t), allocatable, dimension(:,:,:) :: turbspecy
-#endif
-
-#ifdef PPOUTPUT_CORR
-type(tavg_corr_t), allocatable, dimension(:,:,:) :: tavg_corr
-type(correl_t), allocatable, dimension(:,:,:) :: correl
 #endif
 
 #ifdef PPOUTPUT_WMLES
@@ -770,31 +746,6 @@ c % vortyp2 = a % vorty2 - real( a % vortyf * conjg( a % vortyf ) )
 c % vortzp2 = a % vortz2 - real( a % vortzf * conjg( a % vortzf ) )
 
 end function turbspec_compute
-#endif
-
-#ifdef PPOUTPUT_CORR
-!*******************************************************************************
-function correl_compute( a , b, lbz2 ) result( c )
-!*******************************************************************************
-implicit none
-integer, intent(in) :: lbz2
-type(tavg_corr_t), dimension(:,:,lbz2:), intent(in) :: a
-type(tavg_t), dimension(:,:,lbz2:), intent(in) :: b
-type(correl_t), allocatable, dimension(:,:,:) :: c
-
-integer :: ubx, uby, ubz
-
-ubx=ubound(a,1)
-uby=ubound(a,2)
-ubz=ubound(a,3)
-
-allocate(c(ubx,uby,lbz2:ubz))
-
-c % ycorruu = a % ycorruu - b % u * b % u
-c % ycorrvv = a % ycorrvv - b % v * b % v
-c % ycorrww = a % ycorrww - b % w_uv * b % w_uv
-
-end function correl_compute
 #endif
 
 end module stat_defs

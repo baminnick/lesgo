@@ -354,9 +354,11 @@ time_loop: do jt_step = nstart, nsteps
         if (fourier) then
             ! only add to the mean (kx=0) mode
             ! no need to transform mean_p_force to kx space
-            RHSx(1,1,1:nz-1) = RHSx(1,1,1:nz-1) + mean_p_force
+            RHSx(1,1,1:nz-1) = RHSx(1,1,1:nz-1) + mean_p_force_x
+            RHSy(1,1,1:nz-1) = RHSy(1,1,1:nz-1) + mean_p_force_y
         else
-            RHSx(:,:,1:nz-1) = RHSx(:,:,1:nz-1) + mean_p_force
+            RHSx(:,:,1:nz-1) = RHSx(:,:,1:nz-1) + mean_p_force_x
+            RHSy(:,:,1:nz-1) = RHSy(:,:,1:nz-1) + mean_p_force_y
         endif
     end if
 

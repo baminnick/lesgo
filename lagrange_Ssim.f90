@@ -83,6 +83,7 @@ call interpolag_Ssim()
 !   the running averages, F_LM(:,:,jz) and F_MM(:,:,jz), which are used to
 !   calculate Cs_opt2(:,:,jz).
 do jz = 1,nz
+
 #ifdef PPOUTPUT_SGS
     ! Reset counting variables for Cs clipping stats
     count_all = 0
@@ -315,6 +316,9 @@ do jz = 1,nz
     write(2,*) jt_total,real(count_clip)/real(count_all)
     close(2)
 #endif
+
+    ! Clip Cs if necessary
+    Cs_opt2(:,:,jz)= max (eps, Cs_opt2(:,:,jz))
 
     ! Save Tn to 3D array for use with tavg_sgs
     Tn_all(:,:,jz) = Tn(:,:)
