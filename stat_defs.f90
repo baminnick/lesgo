@@ -330,63 +330,6 @@ this%R23 = this%R23 / this%R23(1)
 end subroutine init
 #endif
 
-!*******************************************************************************
-function tavg_interp_to_uv_grid( a ) result(c)
-!*******************************************************************************
-use param, only: lbz
-use functions, only : interp_to_uv_grid
-implicit none
-
-type(tavg_t), dimension(:,:,lbz:), intent(in) :: a
-type(tavg_t), allocatable, dimension(:,:,:) :: c
-
-integer :: ubx, uby, ubz
-
-ubx = ubound(a,1)
-uby = ubound(a,2)
-ubz = ubound(a,3)
-
-allocate(c(ubx,uby,lbz:ubz))
-
-c = a
-
-c % fz = interp_to_uv_grid(a % fz, lbz )
-c % w  = interp_to_uv_grid(a % w,lbz)
-c % w2 = interp_to_uv_grid(a % w2,lbz)
-
-end function tavg_interp_to_uv_grid
-
-!*******************************************************************************
-function tavg_interp_to_w_grid( a ) result(c)
-!*******************************************************************************
-use param, only: lbz
-use functions, only : interp_to_w_grid
-implicit none
-
-type(tavg_t), dimension(:,:,lbz:), intent(in) :: a
-type(tavg_t), allocatable, dimension(:,:,:) :: c
-
-integer :: ubx, uby, ubz
-
-ubx = ubound(a,1)
-uby = ubound(a,2)
-ubz = ubound(a,3)
-
-allocate(c(ubx,uby,lbz:ubz))
-
-c = a
-
-c % txx =  interp_to_w_grid( a % txx, lbz )
-c % tyy =  interp_to_w_grid( a % tyy, lbz )
-c % tzz =  interp_to_w_grid( a % tzz, lbz )
-c % txy =  interp_to_w_grid( a % txy, lbz )
-
-c % p = interp_to_w_grid( a % p, lbz )
-c % fx = interp_to_w_grid( a % fx, lbz )
-c % fy = interp_to_w_grid( a % fy, lbz )
-
-end function tavg_interp_to_w_grid
-
 !///////////////////////////////////////////////////////////////////////////////
 !/// Spectral RS operators
 !///////////////////////////////////////////////////////////////////////////////
