@@ -52,37 +52,20 @@ use param, only : ierr, MPI_RPREC
 implicit none
 real(rprec) :: cfl
 real(rprec) :: cfl_u, cfl_v, cfl_w
-real(rprec), dimension(1:nz-1) :: cfl_w_temp
-real(rprec), pointer, dimension(:) :: zw
-integer :: jz
 
 #ifdef PPMPI
 real(rprec) :: cfl_buf
 #endif
 
-! Nullify pointers
-nullify(zw)
-
-zw => grid % zw
-
 if (fourier) then !! remember dx = L_x / nxp (if fourier=true)
     cfl_u = maxval( abs(uF(1:nxp,1:ny,1:nz-1)) ) / dx
     cfl_v = maxval( abs(vF(1:nxp,1:ny,1:nz-1)) ) / dy
-
-    do jz = 1, (nz-1)
-        cfl_w_temp(jz) = maxval( abs(wF(1:nxp,1:ny,jz)) ) / (zw(jz+1) - zw(jz))
-    end do
+    cfl_w = maxval( abs(wF(1:nxp,1:ny,1:nz-1)) ) / dz
 else
     cfl_u = maxval( abs(u(1:nx,1:ny,1:nz-1)) ) / dx
     cfl_v = maxval( abs(v(1:nx,1:ny,1:nz-1)) ) / dy
-
-    do jz = 1, (nz-1)
-        cfl_w_temp(jz) = maxval( abs(w(1:nx,1:ny,jz)) ) / (zw(jz+1) - zw(jz))
-    end do
+    cfl_w = maxval( abs(w(1:nx,1:ny,1:nz-1)) ) / dz
 endif
-
-nullify(zw)
-cfl_w = maxval( cfl_w_temp(1:nz-1) )
 
 cfl = dt * maxval( (/ cfl_u, cfl_v, cfl_w /) )
 
@@ -114,9 +97,6 @@ use param, only : ierr, MPI_RPREC
 implicit none
 
 real(rprec) :: dt
-real(rprec), pointer, dimension(:) :: zw
-real(rprec), dimension(1:nz-1) :: dt_inv_w_temp
-integer :: jz
 
 ! dt inverse
 real(rprec) :: dt_inv_u, dt_inv_v, dt_inv_w
@@ -125,31 +105,16 @@ real(rprec) :: dt_inv_u, dt_inv_v, dt_inv_w
 real(rprec) :: dt_buf
 #endif
 
-! Nullify pointer
-nullify(zw)
-
-zw => grid % zw
-
 ! Avoid division by computing max dt^-1
 if (fourier) then
     dt_inv_u = maxval( abs(uF(1:nxp,1:ny,1:nz-1)) ) / dx
     dt_inv_v = maxval( abs(vF(1:nxp,1:ny,1:nz-1)) ) / dy
-
-    do jz = 1, (nz-1)
-        dt_inv_w_temp(jz) = maxval( abs(wF(1:nxp,1:ny,jz)) ) / (zw(jz+1) - zw(jz))
-    end do
+    dt_inv_w = maxval( abs(wF(1:nxp,1:ny,1:nz-1)) ) / dz
 else
     dt_inv_u = maxval( abs(u(1:nx,1:ny,1:nz-1)) ) / dx
     dt_inv_v = maxval( abs(v(1:nx,1:ny,1:nz-1)) ) / dy
-
-    do jz = 1, (nz-1)
-        dt_inv_w_temp(jz) = maxval( abs(w(1:nx,1:ny,jz)) ) / (zw(jz+1) - zw(jz))
-    end do
+    dt_inv_w = maxval( abs(w(1:nx,1:ny,1:nz-1)) ) / dz
 endif
-
-nullify(zw)
-
-dt_inv_w = maxval( dt_inv_w_temp(1:nz-1) )
 
 dt = cfl / maxval( (/ dt_inv_u, dt_inv_v, dt_inv_w /) )
 
