@@ -39,7 +39,7 @@ function get_max_cfl() result(cfl)
 ! domain
 !
 use types, only : rprec
-use param, only : dt, dx, dy, nx, ny, nz, fourier, nxp
+use param, only : dt, dx, dy, dz, nx, ny, nz, fourier, nxp
 use sim_param, only : u,v,w
 use sim_param, only : uF, vF, wF
 use grid_m
@@ -84,7 +84,7 @@ function get_cfl_dt() result(dt)
 ! value specified in the param module
 !
 use types, only : rprec
-use param, only : cfl, dx, dy, nx, ny, nz, fourier, nxp
+use param, only : cfl, dx, dy, dz, nx, ny, nz, fourier, nxp
 use sim_param, only : u,v,w
 use sim_param, only : uF, vF, wF
 use grid_m
