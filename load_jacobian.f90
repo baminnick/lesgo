@@ -1,4 +1,9 @@
 subroutine load_jacobian()
+! 
+! This subroutine gives the variables necessary to run LESGO with 
+! a stretched grid in the wall-normal direction. Based on user
+! input, the grid may be loaded via external files or created.
+! 
 use sim_param
 use param
 use types
