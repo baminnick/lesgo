@@ -55,7 +55,6 @@ real(rprec), target, dimension(:,:,:), allocatable :: p
 
 real(rprec), dimension(:), allocatable :: JACO1, JACO2
 real(rprec), dimension(:), allocatable :: mesh_stretch, dj_dzeta
-real(rprec), dimension(:), allocatable :: dz_stretch
 
 real(rprec), dimension(:,:,:), allocatable :: uF, vF, wF
 real(rprec), target, dimension(:,:,:), allocatable :: pF
@@ -179,7 +178,6 @@ allocate ( JACO1(lbz:nz) ); JACO1 = 1/BOGUS
 allocate ( JACO2(lbz:nz) ); JACO2 = 1/BOGUS
 allocate ( dj_dzeta(lbz:nz)); dj_dzeta = BOGUS
 allocate ( mesh_stretch(lbz:nz)); mesh_stretch = BOGUS
-allocate ( dz_stretch(lbz:nz)); dz_stretch = BOGUS
 
 sim_param_initialized = .true.
 
