@@ -47,6 +47,7 @@ subroutine sgs_stag ()
 use types, only : rprec
 use param
 use sim_param, only : txx, txy, txz, tyy, tyz, tzz
+use sim_param, only : dudx, dudy, dudz, dvdx, dvdy, dvdz, dwdx, dwdy, dwdz
 use sgs_param
 use messages
 
@@ -251,21 +252,21 @@ if (coord == 0) then
                 do jy = 1, ny
                 do jx = 1, nx
                    ! Total viscosity
-                    const = 0.5_rprec*(Nu_t(jx,jy,1) + Nu_t(jx,jy,2)) + nu
-                    txx(jx,jy,1) = -const*(S11(jx,jy,1) + S11(jx,jy,2))
-                    txy(jx,jy,1) = -const*(S12(jx,jy,1) + S12(jx,jy,2))
-                    tyy(jx,jy,1) = -const*(S22(jx,jy,1) + S22(jx,jy,2))
-                    tzz(jx,jy,1) = -const*(S33(jx,jy,1) + S33(jx,jy,2))
+                    const = 2.0_rprec*0.5_rprec*(Nu_t(jx,jy,1) + Nu_t(jx,jy,2)) + nu
+                    txx(jx,jy,1) = -const*dudx(jx,jy,1) !! uvp-node(1)
+                    txy(jx,jy,1) = -const*(0.5_rprec*(dudy(jx,jy,1)+dvdx(jx,jy,1))) !! uvp-node(1)
+                    tyy(jx,jy,1) = -const*dvdy(jx,jy,1) !! uvp-node(1)
+                    tzz(jx,jy,1) = -const*dwdz(jx,jy,1) !! uvp-node(1)
                 end do
                 end do
             else
                 const = 0._rprec
                 do jy = 1, ny
                 do jx = 1, nx
-                    txx(jx,jy,1) = -(nu)*(S11(jx,jy,1) + S11(jx,jy,2))
-                    txy(jx,jy,1) = -(nu)*(S12(jx,jy,1) + S12(jx,jy,2))
-                    tyy(jx,jy,1) = -(nu)*(S22(jx,jy,1) + S22(jx,jy,2))
-                    tzz(jx,jy,1) = -(nu)*(S33(jx,jy,1) + S33(jx,jy,2))
+                    txx(jx,jy,1) = -2.0_rprec*(nu)*dudx(jx,jy,1) !! uvp-node(1)
+                    txy(jx,jy,1) = -2.0_rprec*(nu)*(0.5_rprec*(dudy(jx,jy,1)+dvdx(jx,jy,1))) !! uvp-node(1)
+                    tyy(jx,jy,1) = -2.0_rprec*(nu)*dvdy(jx,jy,1) !! uvp-node(1)
+                    tzz(jx,jy,1) = -2.0_rprec*(nu)*dwdz(jx,jy,1) !! uvp-node(1)
                 end do
                 end do
             end if
@@ -278,10 +279,6 @@ if (coord == 0) then
                 do jy = 1, ny
                 do jx = 1, nx
                     const = -2._rprec*(Nu_t(jx,jy,1)+nu) !! Nu_t on uvp-node(1) here
-                    ! txx(jx,jy,1) = const*S11(jx,jy,1)
-                    ! txy(jx,jy,1) = const*S12(jx,jy,1)
-                    ! tyy(jx,jy,1) = const*S22(jx,jy,1)
-                    ! tzz(jx,jy,1) = const*S33(jx,jy,1)
                     txx(jx,jy,1) = const*dudx(jx,jy,1) !! uvp-node(1)
                     txy(jx,jy,1) = const*(0.5_rprec*(dudy(jx,jy,1)+dvdx(jx,jy,1))) !! uvp-node(1)
                     tyy(jx,jy,1) = const*dvdy(jx,jy,1) !! uvp-node(1)
@@ -292,10 +289,6 @@ if (coord == 0) then
                 const = 0._rprec
                 do jy = 1, ny
                 do jx = 1, nx
-                    ! txx(jx,jy,1) = -2._rprec*(nu)*S11(jx,jy,1)
-                    ! txy(jx,jy,1) = -2._rprec*(nu)*S12(jx,jy,1)
-                    ! tyy(jx,jy,1) = -2._rprec*(nu)*S22(jx,jy,1)
-                    ! tzz(jx,jy,1) = -2._rprec*(nu)*S33(jx,jy,1)
                     txx(jx,jy,1) = -2._rprec*(nu)*dudx(jx,jy,1) !! uvp-node(1)
                     txy(jx,jy,1) = -2._rprec*(nu)*(0.5_rprec*(dudy(jx,jy,1)+dvdx(jx,jy,1))) !! uvp-node(1)
                     tyy(jx,jy,1) = -2._rprec*(nu)*dvdy(jx,jy,1) !! uvp-node(1)
@@ -326,7 +319,7 @@ if (coord == nproc-1) then
                 do jy = 1, ny
                 do jx = 1, nx
                     ! Total viscosity
-                    const = 2._rprec*(0.5_rprec*(Nu_t(jx,jy,nz-1) + Nu_t(jx,jy,nz)) + nu) !! uvp-node(nz-1)
+                    const  = 2._rprec*(0.5_rprec*(Nu_t(jx,jy,nz-1) + Nu_t(jx,jy,nz)) + nu) !! uvp-node(nz-1)
                     const2 = 2._rprec*(Nu_t(jx,jy,nz-1) + nu) !! w-node(nz-1)
 
                     ! for top wall, it is nz-1 on the uv-grid
@@ -361,30 +354,30 @@ if (coord == nproc-1) then
             if (sgs) then
                 do jy = 1, ny
                 do jx = 1, nx
-                    const = -2._rprec*(Nu_t(jx,jy,nz)+nu)
-                    const2 = -2._rprec*(Nu_t(jx,jy,nz-1) + nu)
+                    const  = -2._rprec*(Nu_t(jx,jy,nz) + nu) !! uvp-node
+                    const2 = -2._rprec*(Nu_t(jx,jy,nz-1) + nu) !! w-node
 
                     ! Note: Sij(nz) is on uvp-node at nz-1
-                    txx(jx,jy,nz-1) = const*S11(jx,jy,nz)
-                    txy(jx,jy,nz-1) = const*S12(jx,jy,nz)
-                    tyy(jx,jy,nz-1) = const*S22(jx,jy,nz)
-                    tzz(jx,jy,nz-1) = const*S33(jx,jy,nz)
+                    txx(jx,jy,nz-1) = const*dudx(jx,jy,nz-1) !! uvp-node(nz-1)
+                    txy(jx,jy,nz-1) = const*(0.5_rprec*(dudy(jx,jy,nz-1)+dvdy(jx,jy,nz-1))) !! uvp-node(nz-1)
+                    tyy(jx,jy,nz-1) = const*dvdy(jx,jy,nz-1) !! uvp-node(nz-1)
+                    tzz(jx,jy,nz-1) = const*dwdz(jx,jy,nz-1) !! uvp-node(nz-1)
                     ! for top wall, include w-grid stress since we touched nz-1
-                    txz(jx,jy,nz-1)= const2*S13(jx,jy,nz-1)
-                    tyz(jx,jy,nz-1)= const2*S23(jx,jy,nz-1)
+                    txz(jx,jy,nz-1)= const2*(0.5_rprec*(dudz(jx,jy,nz-1)+dwdx(jx,jy,nz-1))) !! w-node(nz-1)
+                    tyz(jx,jy,nz-1)= const2*(0.5_rprec*(dvdz(jx,jy,nz-1)+dwdy(jx,jy,nz-1))) !! w-node(nz-1)
                 end do
                 end do
             else
                 const = 0._rprec
                 do jy = 1, ny
                 do jx = 1, nx
-                    txx(jx,jy,nz-1) = -2._rprec*(nu)*S11(jx,jy,nz-1)
-                    txy(jx,jy,nz-1) = -2._rprec*(nu)*S12(jx,jy,nz-1)
-                    tyy(jx,jy,nz-1) = -2._rprec*(nu)*S22(jx,jy,nz-1)
-                    tzz(jx,jy,nz-1) = -2._rprec*(nu)*S33(jx,jy,nz-1)
+                    txx(jx,jy,nz-1) = -2._rprec*(nu)*dudx(jx,jy,nz-1) !! uvp-node(nz-1)
+                    txy(jx,jy,nz-1) = -2._rprec*(nu)*(0.5_rprec*(dudy(jx,jy,nz-1)+dvdx(jx,jy,nz-1))) !! uvp-node(nz-1)
+                    tyy(jx,jy,nz-1) = -2._rprec*(nu)*dvdy(jx,jy,nz-1) !! uvp-node(nz-1)
+                    tzz(jx,jy,nz-1) = -2._rprec*(nu)*dwdz(jx,jy,nz-1) !! uvp-node(nz-1)
                     ! for top wall, include w-grid stress since we touched nz-1
-                    txz(jx,jy,nz-1)=-2._rprec*(nu)*S13(jx,jy,nz-1)
-                    tyz(jx,jy,nz-1)=-2._rprec*(nu)*S23(jx,jy,nz-1)
+                    txz(jx,jy,nz-1)=-2._rprec*(nu)*(0.5_rprec*(dudz(jx,jy,nz-1)+dwdx(jx,jy,nz-1))) !! w-node(nz-1)
+                    tyz(jx,jy,nz-1)=-2._rprec*(nu)*(0.5_rprec*(dvdz(jx,jy,nz-1)+dwdy(jx,jy,nz-1))) !! w-node(nz-1)
                 end do
                 end do
             end if
