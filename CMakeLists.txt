@@ -18,9 +18,6 @@ set(hostname "default")
 set(WRITE_ENDIAN "DEFAULT")
 set(READ_ENDIAN "DEFAULT")
 
-# Compiling options for linking
-option(USE_MKL "Enable MKL for FFTs." OFF)
-
 # Options to enable various features in the code
 option(USE_MPI "Enable parallelization support." ON)
 option(USE_CPS "Enable concurrent precursor simulations." OFF)
