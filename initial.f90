@@ -24,6 +24,8 @@ use iwmles
 use types,only:rprec
 use param
 use sim_param, only : u, v, w, RHSx, RHSy, RHSz
+use sim_param, only : delta_stretch, JACO1
+use test_filtermodule, only : filter_size
 use sgs_param, only : Cs_opt2, F_LM, F_MM, F_QN, F_NN
 #ifdef PPDYN_TN
 use sgs_param, only : F_ee2, F_deedt2, ee_past
@@ -51,6 +53,7 @@ character (64) :: fname_dyn_tn
 #endif
 
 ! integer::jz !! used to output initial profile
+integer :: jz !! now used for delta_stretch
 
 ! Flag to identify if file exists
 logical :: file_flag
@@ -58,6 +61,10 @@ logical :: interp_flag
 logical :: iwm_file_flag !xiang: for iwm restart
 
 call load_jacobian ()
+! Initialize delta_stretch for SGS
+do jz = 1, nz
+    delta_stretch(jz) = filter_size*(dx*dy*(JACO1(jz))*dz)**(1._rprec/3._rprec)
+enddo
 
 #ifdef PPTURBINES
 fxa = 0._rprec

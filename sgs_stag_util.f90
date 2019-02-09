@@ -48,6 +48,7 @@ use types, only : rprec
 use param
 use sim_param, only : txx, txy, txz, tyy, tyz, tzz
 use sim_param, only : dudx, dudy, dudz, dvdx, dvdy, dvdz, dwdx, dwdy, dwdz
+use sim_param, only : JACO2, mesh_stretch, delta_stretch
 use sgs_param
 use messages
 
@@ -105,9 +106,12 @@ if (sgs) then
             ! l_sgs is from JDA eqn(2.30)
             if (coord == 0) then
                 ! z's nondimensional, l here is on uv-nodes
-                zz(1) = 0.5_rprec * dz
+                ! zz(1) = 0.5_rprec * dz
+                ! l(1) = ( Co**(wall_damp_exp)*(vonk*zz(1))**(-wall_damp_exp)    &
+                !     + (delta)**(-wall_damp_exp) )**(-1._rprec/wall_damp_exp)
+                zz(1) = mesh_stretch(1)
                 l(1) = ( Co**(wall_damp_exp)*(vonk*zz(1))**(-wall_damp_exp)    &
-                    + (delta)**(-wall_damp_exp) )**(-1._rprec/wall_damp_exp)
+                    + (delta_stretch(1))**(-wall_damp_exp) )**(-1._rprec/wall_damp_exp)
                 jz_min = 2
             else
                 jz_min = 1
@@ -115,9 +119,12 @@ if (sgs) then
 
             do jz = jz_min, nz
                 ! z's nondimensional, l here is on w-nodes
-                zz(jz) = ((jz - 1) + coord * (nz - 1)) * dz
+                ! zz(jz) = ((jz - 1) + coord * (nz - 1)) * dz
+                ! l(jz) = ( Co**(wall_damp_exp)*(vonk*zz(jz))**(-wall_damp_exp)  &
+                !     + (delta)**(-wall_damp_exp) )**(-1._rprec/wall_damp_exp)
+                zz(jz) = mesh_stretch(jz)-0.5*JACO2(jz)*dz
                 l(jz) = ( Co**(wall_damp_exp)*(vonk*zz(jz))**(-wall_damp_exp)  &
-                    + (delta)**(-wall_damp_exp) )**(-1._rprec/wall_damp_exp)
+                    + (delta_stretch(jz))**(-wall_damp_exp) )**(-1._rprec/wall_damp_exp)
             end do
 
         ! both top and bottom walls, zz is distance to nearest wall
