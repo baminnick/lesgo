@@ -4,6 +4,10 @@ subroutine load_jacobian()
 ! a stretched grid in the wall-normal direction. Based on user
 ! input, the grid may be loaded via external files or created.
 ! 
+! JACO1 - Jacobian on the w-grid
+! JACO2 - Jacobian on the uv-grid
+! mesh_stretch - z-locations on the uv-grid
+! dj_dzeta - Derivative involving Jacobian for PPE
 use sim_param
 use param
 use types
