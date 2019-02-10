@@ -119,6 +119,10 @@ real(rprec) :: L_x = 2.0*pi, L_y=2.0*pi, L_z=1.0_rprec
 ! these values are also non-dimensionalized by z_i:
 real(rprec) :: dx, dy, dz
 
+! For stretched grid
+logical :: stretch = .false., load_stretch = .false.
+real(rprec) :: str_factor = 1.25
+
 !---------------------------------------------------
 ! MODEL PARAMETERS
 !---------------------------------------------------

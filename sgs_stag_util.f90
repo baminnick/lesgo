@@ -47,6 +47,8 @@ subroutine sgs_stag ()
 use types, only : rprec
 use param
 use sim_param, only : txx, txy, txz, tyy, tyz, tzz
+use sim_param, only : dudx, dudy, dudz, dvdx, dvdy, dvdz, dwdx, dwdy, dwdz
+use sim_param, only : JACO2, mesh_stretch, delta_stretch
 use sgs_param
 use messages
 
@@ -63,7 +65,7 @@ implicit none
 character (*), parameter :: sub_name = 'sgs_stag'
 
 real(rprec), dimension(nz) :: l, ziko, zz
-real(rprec) :: const, const2, const3, const4
+real(rprec) :: const, const2, const3
 integer :: jx, jy, jz
 integer :: jz_min, jz_max
 
@@ -104,9 +106,12 @@ if (sgs) then
             ! l_sgs is from JDA eqn(2.30)
             if (coord == 0) then
                 ! z's nondimensional, l here is on uv-nodes
-                zz(1) = 0.5_rprec * dz
+                ! zz(1) = 0.5_rprec * dz
+                ! l(1) = ( Co**(wall_damp_exp)*(vonk*zz(1))**(-wall_damp_exp)    &
+                !     + (delta)**(-wall_damp_exp) )**(-1._rprec/wall_damp_exp)
+                zz(1) = mesh_stretch(1)
                 l(1) = ( Co**(wall_damp_exp)*(vonk*zz(1))**(-wall_damp_exp)    &
-                    + (delta)**(-wall_damp_exp) )**(-1._rprec/wall_damp_exp)
+                    + (delta_stretch(1))**(-wall_damp_exp) )**(-1._rprec/wall_damp_exp)
                 jz_min = 2
             else
                 jz_min = 1
@@ -114,9 +119,12 @@ if (sgs) then
 
             do jz = jz_min, nz
                 ! z's nondimensional, l here is on w-nodes
-                zz(jz) = ((jz - 1) + coord * (nz - 1)) * dz
+                ! zz(jz) = ((jz - 1) + coord * (nz - 1)) * dz
+                ! l(jz) = ( Co**(wall_damp_exp)*(vonk*zz(jz))**(-wall_damp_exp)  &
+                !     + (delta)**(-wall_damp_exp) )**(-1._rprec/wall_damp_exp)
+                zz(jz) = mesh_stretch(jz)-0.5*JACO2(jz)*dz
                 l(jz) = ( Co**(wall_damp_exp)*(vonk*zz(jz))**(-wall_damp_exp)  &
-                    + (delta)**(-wall_damp_exp) )**(-1._rprec/wall_damp_exp)
+                    + (delta_stretch(jz))**(-wall_damp_exp) )**(-1._rprec/wall_damp_exp)
             end do
 
         ! both top and bottom walls, zz is distance to nearest wall
@@ -251,21 +259,21 @@ if (coord == 0) then
                 do jy = 1, ny
                 do jx = 1, nx
                    ! Total viscosity
-                    const = 0.5_rprec*(Nu_t(jx,jy,1) + Nu_t(jx,jy,2)) + nu
-                    txx(jx,jy,1) = -const*(S11(jx,jy,1) + S11(jx,jy,2))
-                    txy(jx,jy,1) = -const*(S12(jx,jy,1) + S12(jx,jy,2))
-                    tyy(jx,jy,1) = -const*(S22(jx,jy,1) + S22(jx,jy,2))
-                    tzz(jx,jy,1) = -const*(S33(jx,jy,1) + S33(jx,jy,2))
+                    const = 2.0_rprec*0.5_rprec*(Nu_t(jx,jy,1) + Nu_t(jx,jy,2)) + nu
+                    txx(jx,jy,1) = -const*dudx(jx,jy,1) !! uvp-node(1)
+                    txy(jx,jy,1) = -const*(0.5_rprec*(dudy(jx,jy,1)+dvdx(jx,jy,1))) !! uvp-node(1)
+                    tyy(jx,jy,1) = -const*dvdy(jx,jy,1) !! uvp-node(1)
+                    tzz(jx,jy,1) = -const*dwdz(jx,jy,1) !! uvp-node(1)
                 end do
                 end do
             else
                 const = 0._rprec
                 do jy = 1, ny
                 do jx = 1, nx
-                    txx(jx,jy,1) = -(nu)*(S11(jx,jy,1) + S11(jx,jy,2))
-                    txy(jx,jy,1) = -(nu)*(S12(jx,jy,1) + S12(jx,jy,2))
-                    tyy(jx,jy,1) = -(nu)*(S22(jx,jy,1) + S22(jx,jy,2))
-                    tzz(jx,jy,1) = -(nu)*(S33(jx,jy,1) + S33(jx,jy,2))
+                    txx(jx,jy,1) = -2.0_rprec*(nu)*dudx(jx,jy,1) !! uvp-node(1)
+                    txy(jx,jy,1) = -2.0_rprec*(nu)*(0.5_rprec*(dudy(jx,jy,1)+dvdx(jx,jy,1))) !! uvp-node(1)
+                    tyy(jx,jy,1) = -2.0_rprec*(nu)*dvdy(jx,jy,1) !! uvp-node(1)
+                    tzz(jx,jy,1) = -2.0_rprec*(nu)*dwdz(jx,jy,1) !! uvp-node(1)
                 end do
                 end do
             end if
@@ -277,21 +285,21 @@ if (coord == 0) then
             if (sgs) then
                 do jy = 1, ny
                 do jx = 1, nx
-                    const = -2._rprec*(Nu_t(jx,jy,1)+nu)
-                    txx(jx,jy,1) = const*S11(jx,jy,1)
-                    txy(jx,jy,1) = const*S12(jx,jy,1)
-                    tyy(jx,jy,1) = const*S22(jx,jy,1)
-                    tzz(jx,jy,1) = const*S33(jx,jy,1)
+                    const = -2._rprec*(Nu_t(jx,jy,1)+nu) !! Nu_t on uvp-node(1) here
+                    txx(jx,jy,1) = const*dudx(jx,jy,1) !! uvp-node(1)
+                    txy(jx,jy,1) = const*(0.5_rprec*(dudy(jx,jy,1)+dvdx(jx,jy,1))) !! uvp-node(1)
+                    tyy(jx,jy,1) = const*dvdy(jx,jy,1) !! uvp-node(1)
+                    tzz(jx,jy,1) = const*dwdz(jx,jy,1) !! uvp-node(1)
                 end do
                 end do
             else
                 const = 0._rprec
                 do jy = 1, ny
                 do jx = 1, nx
-                    txx(jx,jy,1) = -2._rprec*(nu)*S11(jx,jy,1)
-                    txy(jx,jy,1) = -2._rprec*(nu)*S12(jx,jy,1)
-                    tyy(jx,jy,1) = -2._rprec*(nu)*S22(jx,jy,1)
-                    tzz(jx,jy,1) = -2._rprec*(nu)*S33(jx,jy,1)
+                    txx(jx,jy,1) = -2._rprec*(nu)*dudx(jx,jy,1) !! uvp-node(1)
+                    txy(jx,jy,1) = -2._rprec*(nu)*(0.5_rprec*(dudy(jx,jy,1)+dvdx(jx,jy,1))) !! uvp-node(1)
+                    tyy(jx,jy,1) = -2._rprec*(nu)*dvdy(jx,jy,1) !! uvp-node(1)
+                    tzz(jx,jy,1) = -2._rprec*(nu)*dwdz(jx,jy,1) !! uvp-node(1)
                 end do
                 end do
             end if
@@ -318,29 +326,30 @@ if (coord == nproc-1) then
                 do jy = 1, ny
                 do jx = 1, nx
                     ! Total viscosity
-                    const = 0.5_rprec*(Nu_t(jx,jy,nz-1) + Nu_t(jx,jy,nz)) + nu
-                    const2 = 2._rprec*(Nu_t(jx,jy,nz-1) + nu)
+                    const  = 2._rprec*(0.5_rprec*(Nu_t(jx,jy,nz-1) + Nu_t(jx,jy,nz)) + nu) !! uvp-node(nz-1)
+                    const2 = 2._rprec*(Nu_t(jx,jy,nz-1) + nu) !! w-node(nz-1)
 
                     ! for top wall, it is nz-1 on the uv-grid
-                    txx(jx,jy,nz-1) = -const*(S11(jx,jy,nz-1) + S11(jx,jy,nz))
-                    txy(jx,jy,nz-1) = -const*(S12(jx,jy,nz-1) + S12(jx,jy,nz))
-                    tyy(jx,jy,nz-1) = -const*(S22(jx,jy,nz-1) + S22(jx,jy,nz))
-                    tzz(jx,jy,nz-1) = -const*(S33(jx,jy,nz-1) + S33(jx,jy,nz))
+                    txx(jx,jy,nz-1) = -const*dudx(jx,jy,nz-1) !! uvp-node(nz-1)
+                    txy(jx,jy,nz-1) = -const*(0.5_rprec*(dudy(jx,jy,nz-1)+dvdx(jx,jy,nz-1))) !! uvp-node(nz-1)
+                    tyy(jx,jy,nz-1) = -const*dvdy(jx,jy,nz-1) !! uvp-node(nz-1)
+                    tzz(jx,jy,nz-1) = -const*dwdz(jx,jy,nz-1) !! uvp-node(nz-1)
                     ! for top wall, include w-grid stress since we touched nz-1
-                    txz(jx,jy,nz-1) = -const2*S13(jx,jy,nz-1)
-                    tyz(jx,jy,nz-1) = -const2*S23(jx,jy,nz-1)
+                    txz(jx,jy,nz-1) = -const2*(0.5_rprec*(dudz(jx,jy,nz-1)+dwdx(jx,jy,nz-1))) !! w-node(nz-1)
+                    tyz(jx,jy,nz-1) = -const2*(0.5_rprec*(dvdz(jx,jy,nz-1)+dwdy(jx,jy,nz-1))) !! w-node(nz-1)
                 end do
                 end do
             else
                 const = 0._rprec
                 do jy = 1, ny
                 do jx = 1, nx
-                    txx(jx,jy,nz-1) = -2._rprec*(nu)*S11(jx,jy,nz-1)
-                    txy(jx,jy,nz-1) = -2._rprec*(nu)*S12(jx,jy,nz-1)
-                    tyy(jx,jy,nz-1) = -2._rprec*(nu)*S22(jx,jy,nz-1)
-                    tzz(jx,jy,nz-1) = -2._rprec*(nu)*S33(jx,jy,nz-1)
-                    txz(jx,jy,nz-1) = -2._rprec*(nu)*S13(jx,jy,nz-1)
-                    tyz(jx,jy,nz-1) = -2._rprec*(nu)*S23(jx,jy,nz-1)
+                    txx(jx,jy,nz-1) = -2._rprec*(nu)*dudx(jx,jy,nz-1) !! uvp-node(nz-1)
+                    txy(jx,jy,nz-1) = -2._rprec*(nu)*(0.5_rprec*(dudy(jx,jy,nz-1)+dvdx(jx,jy,nz-1))) !! uvp-node(nz-1)
+                    tyy(jx,jy,nz-1) = -2._rprec*(nu)*dvdy(jx,jy,nz-1) !! uvp-node(nz-1)
+                    tzz(jx,jy,nz-1) = -2._rprec*(nu)*dwdz(jx,jy,nz-1) !! uvp-node(nz-1)
+                    ! for top wall, include w-grid stress since we touched nz-1
+                    txz(jx,jy,nz-1) = -2._rprec*(nu)*(0.5_rprec*(dudz(jx,jy,nz-1)+dwdx(jx,jy,nz-1))) !! w-node(nz-1)
+                    tyz(jx,jy,nz-1) = -2._rprec*(nu)*(0.5_rprec*(dvdz(jx,jy,nz-1)+dwdy(jx,jy,nz-1))) !! w-node(nz-1)
                 end do
                 end do
             end if
@@ -352,30 +361,30 @@ if (coord == nproc-1) then
             if (sgs) then
                 do jy = 1, ny
                 do jx = 1, nx
-                    const = -2._rprec*(Nu_t(jx,jy,nz)+nu)
-                    const2 = -2._rprec*(Nu_t(jx,jy,nz-1) + nu)
+                    const  = -2._rprec*(Nu_t(jx,jy,nz) + nu) !! uvp-node
+                    const2 = -2._rprec*(Nu_t(jx,jy,nz-1) + nu) !! w-node
 
                     ! Note: Sij(nz) is on uvp-node at nz-1
-                    txx(jx,jy,nz-1) = const*S11(jx,jy,nz)
-                    txy(jx,jy,nz-1) = const*S12(jx,jy,nz)
-                    tyy(jx,jy,nz-1) = const*S22(jx,jy,nz)
-                    tzz(jx,jy,nz-1) = const*S33(jx,jy,nz)
+                    txx(jx,jy,nz-1) = const*dudx(jx,jy,nz-1) !! uvp-node(nz-1)
+                    txy(jx,jy,nz-1) = const*(0.5_rprec*(dudy(jx,jy,nz-1)+dvdy(jx,jy,nz-1))) !! uvp-node(nz-1)
+                    tyy(jx,jy,nz-1) = const*dvdy(jx,jy,nz-1) !! uvp-node(nz-1)
+                    tzz(jx,jy,nz-1) = const*dwdz(jx,jy,nz-1) !! uvp-node(nz-1)
                     ! for top wall, include w-grid stress since we touched nz-1
-                    txz(jx,jy,nz-1)= const2*S13(jx,jy,nz-1)
-                    tyz(jx,jy,nz-1)= const2*S23(jx,jy,nz-1)
+                    txz(jx,jy,nz-1)= const2*(0.5_rprec*(dudz(jx,jy,nz-1)+dwdx(jx,jy,nz-1))) !! w-node(nz-1)
+                    tyz(jx,jy,nz-1)= const2*(0.5_rprec*(dvdz(jx,jy,nz-1)+dwdy(jx,jy,nz-1))) !! w-node(nz-1)
                 end do
                 end do
             else
                 const = 0._rprec
                 do jy = 1, ny
                 do jx = 1, nx
-                    txx(jx,jy,nz-1) = -2._rprec*(nu)*S11(jx,jy,nz-1)
-                    txy(jx,jy,nz-1) = -2._rprec*(nu)*S12(jx,jy,nz-1)
-                    tyy(jx,jy,nz-1) = -2._rprec*(nu)*S22(jx,jy,nz-1)
-                    tzz(jx,jy,nz-1) = -2._rprec*(nu)*S33(jx,jy,nz-1)
+                    txx(jx,jy,nz-1) = -2._rprec*(nu)*dudx(jx,jy,nz-1) !! uvp-node(nz-1)
+                    txy(jx,jy,nz-1) = -2._rprec*(nu)*(0.5_rprec*(dudy(jx,jy,nz-1)+dvdx(jx,jy,nz-1))) !! uvp-node(nz-1)
+                    tyy(jx,jy,nz-1) = -2._rprec*(nu)*dvdy(jx,jy,nz-1) !! uvp-node(nz-1)
+                    tzz(jx,jy,nz-1) = -2._rprec*(nu)*dwdz(jx,jy,nz-1) !! uvp-node(nz-1)
                     ! for top wall, include w-grid stress since we touched nz-1
-                    txz(jx,jy,nz-1)=-2._rprec*(nu)*S13(jx,jy,nz-1)
-                    tyz(jx,jy,nz-1)=-2._rprec*(nu)*S23(jx,jy,nz-1)
+                    txz(jx,jy,nz-1)=-2._rprec*(nu)*(0.5_rprec*(dudz(jx,jy,nz-1)+dwdx(jx,jy,nz-1))) !! w-node(nz-1)
+                    tyz(jx,jy,nz-1)=-2._rprec*(nu)*(0.5_rprec*(dvdz(jx,jy,nz-1)+dwdy(jx,jy,nz-1))) !! w-node(nz-1)
                 end do
                 end do
             end if
@@ -394,21 +403,20 @@ end if
 !   txx, txy, tyy, tzz (uvp-nodes) and txz, tyz (w-nodes)
 
 if (sgs) then
-    const3=-2._rprec*(nu)*0.5_rprec
-    const4=-2._rprec*(nu)
+    const3=-2._rprec*nu
     do jz=jz_min, jz_max
     do jy=1,ny
     do jx=1,nx
 
-       const =-0.5_rprec*(Nu_t(jx,jy,jz) + Nu_t(jx,jy,jz+1))
+       const =-2._rprec*0.5_rprec*(Nu_t(jx,jy,jz) + Nu_t(jx,jy,jz+1))
        const2=-2._rprec*Nu_t(jx,jy,jz)
 
-       txx(jx,jy,jz)=(const+const3)*(S11(jx,jy,jz) + S11(jx,jy,jz+1))
-       txy(jx,jy,jz)=(const+const3)*(S12(jx,jy,jz) + S12(jx,jy,jz+1))
-       tyy(jx,jy,jz)=(const+const3)*(S22(jx,jy,jz) + S22(jx,jy,jz+1))
-       tzz(jx,jy,jz)=(const+const3)*(S33(jx,jy,jz) + S33(jx,jy,jz+1))
-       txz(jx,jy,jz)=(const2+const4)* S13(jx,jy,jz)
-       tyz(jx,jy,jz)=(const2+const4)* S23(jx,jy,jz)
+       txx(jx,jy,jz)=(const+const3)*dudx(jx,jy,jz) !! uvp-node(jz)
+       txy(jx,jy,jz)=(const+const3)*(0.5_rprec*(dudy(jx,jy,jz)+dvdx(jx,jy,jz))) !! uvp-node(jz)
+       tyy(jx,jy,jz)=(const+const3)*dvdy(jx,jy,jz) !! uvp-node(jz)
+       tzz(jx,jy,jz)=(const+const3)*dwdz(jx,jy,jz) !! uvp-node(jz)
+       txz(jx,jy,jz)=(const2+const3)*(0.5_rprec*(dudz(jx,jy,jz)+dwdx(jx,jy,jz))) !! w-node(jz)
+       tyz(jx,jy,jz)=(const2+const3)*(0.5_rprec*(dvdz(jx,jy,jz)+dwdy(jx,jy,jz))) !! w-node(jz)
 
     end do
     end do
@@ -420,12 +428,12 @@ else
     do jz = jz_min, jz_max
     do jy = 1, ny
     do jx = 1, nx
-        txx(jx,jy,jz)=-2._rprec*(nu) * S11(jx,jy,jz)
-        txy(jx,jy,jz)=-2._rprec*(nu) * S12(jx,jy,jz)
-        tyy(jx,jy,jz)=-2._rprec*(nu) * S22(jx,jy,jz)
-        tzz(jx,jy,jz)=-2._rprec*(nu) * S33(jx,jy,jz)
-        txz(jx,jy,jz)=-2._rprec*(nu) * S13(jx,jy,jz)
-        tyz(jx,jy,jz)=-2._rprec*(nu) * S23(jx,jy,jz)
+        txx(jx,jy,jz)=-2._rprec*(nu)*dudx(jx,jy,jz) !! uvp-node(jz)
+        txy(jx,jy,jz)=-2._rprec*(nu)*(0.5_rprec*(dudy(jx,jy,jz)+dvdx(jx,jy,jz))) !! uvp-node(jz)
+        tyy(jx,jy,jz)=-2._rprec*(nu)*dvdy(jx,jy,jz) !! uvp-node(jz)
+        tzz(jx,jy,jz)=-2._rprec*(nu)*dwdz(jx,jy,jz) !! uvp-node(jz)
+        txz(jx,jy,jz)=-2._rprec*(nu)*(0.5_rprec*(dudz(jx,jy,jz)+dwdx(jx,jy,jz))) !! w-node(jz)
+        tyz(jx,jy,jz)=-2._rprec*(nu)*(0.5_rprec*(dvdz(jx,jy,jz)+dwdy(jx,jy,jz))) !! w-node(jz)
     end do
     end do
     end do
@@ -470,8 +478,12 @@ end subroutine sgs_stag
 !*******************************************************************************
 subroutine calc_Sij()
 !*******************************************************************************
-! Calculate the resolved strain rate tensor, Sij = 0.5(djui - diuj)
-!   values are stored on w-nodes (1:nz)
+! Calculate the resolved strain rate tensor, Sij = 0.5(djui + diuj)
+!   values are stored on w-nodes (1:nz) except for near the wall, then stored
+!   on uv1 node
+! 
+! Sij is only used to calculated nu_t, not tau_ij
+! 
 
 use types, only : rprec
 use param
@@ -485,7 +497,6 @@ implicit none
 real(rprec) :: ux, uy, uz, vx, vy, vz, wx, wy, wz
 integer :: jx, jy, jz
 integer :: jz_min, jz_max
-
 
 ! Calculate Sij for jz=1 (coord==0 only)
 !   stored on uvp-nodes (this level only) for 'wall'
@@ -524,15 +535,19 @@ if (coord == 0) then
         ! recall dudz and dvdz are stored on uvp-nodes for first level only,
         !   'wall' only
         ! recall dwdx and dwdy are stored on w-nodes (always)
+        ! All Sij near wall are put on uv1 node
         case (1:)
             do jy=1,ny
             do jx=1,nx
-                S11(jx,jy,1) = dudx(jx,jy,1) !! uv1 node
-                S12(jx,jy,1) = 0.5_rprec*(dudy(jx,jy,1)+dvdx(jx,jy,1)) !! uv1 node
-                S13(jx,jy,1) = 0.5_rprec*(dudz(jx,jy,1)+dwdx(jx,jy,1)) !! w1 node
-                S22(jx,jy,1) = dvdy(jx,jy,1) !! uv1 node
-                S23(jx,jy,1) = 0.5_rprec*(dvdz(jx,jy,1)+dwdy(jx,jy,1)) !! w1 node
-                S33(jx,jy,1) = dwdz(jx,jy,1) !! uv1 node
+                ! these values stored on uvp-nodes
+                S11(jx,jy,1) = dudx(jx,jy,1) !! uvp_node(1)
+                S12(jx,jy,1) = 0.5_rprec*(dudy(jx,jy,1)+dvdx(jx,jy,1)) !! uvp_node(1)
+                wx = 0.5_rprec*(dwdx(jx,jy,1)+dwdx(jx,jy,2)) !! uvp_node(1)
+                S13(jx,jy,1) = 0.5_rprec*(dudz(jx,jy,1)+wx) !! uvp_node(1)
+                S22(jx,jy,1) = dvdy(jx,jy,1) !! uvp_node(1)
+                wy = 0.5_rprec*(dwdy(jx,jy,1)+dwdy(jx,jy,2)) !! uvp_node(1)
+                S23(jx,jy,1) = 0.5_rprec*(dvdz(jx,jy,1)+wy) !! uvp_node(1)
+                S33(jx,jy,1) = dwdz(jx,jy,1) !! uvp_node(1)
             end do
             end do
 
@@ -556,12 +571,27 @@ if (coord == nproc-1) then
 
             do jy=1,ny
             do jx=1,nx
-                S11(jx,jy,nz) = dudx(jx,jy,nz-1) !! uv, because u(nz) = u(nz-1) and taking x-derivative
-                S12(jx,jy,nz) = 0.5_rprec*(dudy(jx,jy,nz-1) + dvdx(jx,jy,nz-1)) !!  uv
-                S13(jx,jy,nz) = 0.5_rprec*(dudz(jx,jy,nz)+dwdx(jx,jy,nz)) !! w
-                S22(jx,jy,nz) = dvdy(jx,jy,nz-1) !! uv
-                S23(jx,jy,nz) = 0.5_rprec*(dvdz(jx,jy,nz)+dwdy(jx,jy,nz)) !! w
-                S33(jx,jy,nz) = dwdz(jx,jy,nz-1) !! uv
+                ! Sij values are supposed to be on w-nodes for this case
+                !   does that mean they (Sij) should all be zero?
+                ux = dudx(jx,jy,nz-1) ! uvp_node(nz-1)
+                uy = dudy(jx,jy,nz-1) ! uvp_node(nz-1)
+                uz = dudz(jx,jy,nz)   ! this comes from wallstress() i.e. zero
+                                      ! w_node(nz)
+                vx = dvdx(jx,jy,nz-1) ! uvp_node(nz-1)
+                vy = dvdy(jx,jy,nz-1) ! uvp_node(nz-1)
+                vz = dvdz(jx,jy,nz)   ! this comes from wallstress() i.e. zero
+                                      ! w_node(nz)
+                wx = dwdx(jx,jy,nz)   ! uvp_node(nz-1)
+                wy = dwdy(jx,jy,nz)   ! uvp_node(nz-1)
+                wz = 0.5_rprec*(dwdz(jx,jy,nz-1) + 0._rprec) ! w_node(nz)
+
+                ! these values are stored on w-nodes
+                S11(jx,jy,nz) = ux                ! w_node(nz)
+                S12(jx,jy,nz) = 0.5_rprec*(uy+vx) ! w_node(nz)
+                S13(jx,jy,nz) = 0.5_rprec*(uz+wx) ! w_node(nz)
+                S22(jx,jy,nz) = vy                ! w_node(nz)
+                S23(jx,jy,nz) = 0.5_rprec*(vz+wy) ! w_node(nz)
+                S33(jx,jy,nz) = wz                ! w_node(nz)
             end do
             end do
 
@@ -573,16 +603,16 @@ if (coord == nproc-1) then
             do jy = 1, ny
             do jx = 1, nx
                 ! these values stored on uvp-nodes
-                S11(jx,jy,nz) = dudx(jx,jy,nz-1)
-                S12(jx,jy,nz) = 0.5_rprec*(dudy(jx,jy,nz-1)+dvdx(jx,jy,nz-1))
-                wx = 0.5_rprec*(dwdx(jx,jy,nz-1)+dwdx(jx,jy,nz))
+                S11(jx,jy,nz) = dudx(jx,jy,nz-1) !! uvp_node(nz-1)
+                S12(jx,jy,nz) = 0.5_rprec*(dudy(jx,jy,nz-1)+dvdx(jx,jy,nz-1)) !! uvp_node(nz-1)
+                wx = 0.5_rprec*(dwdx(jx,jy,nz-1)+dwdx(jx,jy,nz)) !! uvp_node(nz-1)
                 ! dudz from wallstress()
-                S13(jx,jy,nz) = 0.5_rprec*(dudz(jx,jy,nz)+wx)
-                S22(jx,jy,nz) = dvdy(jx,jy,nz-1)
-                wy = 0.5_rprec*(dwdy(jx,jy,nz-1)+dwdy(jx,jy,nz))
+                S13(jx,jy,nz) = 0.5_rprec*(dudz(jx,jy,nz)+wx) !! uvp_node(nz-1)
+                S22(jx,jy,nz) = dvdy(jx,jy,nz-1) !! uvp_node(nz-1)
+                wy = 0.5_rprec*(dwdy(jx,jy,nz-1)+dwdy(jx,jy,nz)) !! uvp_node(nz-1)
                 ! dvdz from wallstress()
-                S23(jx,jy,nz) = 0.5_rprec*(dvdz(jx,jy,nz)+wy)
-                S33(jx,jy,nz) = dwdz(jx,jy,nz-1)
+                S23(jx,jy,nz) = 0.5_rprec*(dvdz(jx,jy,nz)+wy) !! uvp_node(nz-1)
+                S33(jx,jy,nz) = dwdz(jx,jy,nz-1) !! uvp_node(nz-1)
             end do
             end do
 
@@ -607,12 +637,14 @@ call mpi_sync_real_array( dwdz(:,:,1:), 1, MPI_SYNC_DOWN )
 do jz = jz_min, jz_max
 do jy = 1, ny
 do jx = 1, nx
-    S11(jx,jy,jz) = dudx(jx,jy,jz) !! uv
-    S12(jx,jy,jz) = 0.5_rprec*(dudy(jx,jy,jz) + dvdx(jx,jy,jz)) !! uv
-    S13(jx,jy,jz) = 0.5_rprec*(dudz(jx,jy,jz) + dwdx(jx,jy,jz)) !! w
-    S22(jx,jy,jz) = dvdy(jx,jy,jz) !! uv
-    S23(jx,jy,jz) = 0.5_rprec*(dvdz(jx,jy,jz) + dwdy(jx,jy,jz)) !! w
-    S33(jx,jy,jz) = dwdz(jx,jy,jz) !! uv
+    S11(jx,jy,jz) = 0.5_rprec*(dudx(jx,jy,jz) + dudx(jx,jy,jz-1)) !! w-node(jz)
+    uy = dudy(jx,jy,jz) + dudy(jx,jy,jz-1)                        !! w-node(jz)
+    vx = dvdx(jx,jy,jz) + dvdx(jx,jy,jz-1)                        !! w-node(jz)
+    S12(jx,jy,jz) = 0.25_rprec*(uy+vx)                            !! w-node(jz)
+    S13(jx,jy,jz) = 0.5_rprec*(dudz(jx,jy,jz) + dwdx(jx,jy,jz))   !! w-node(jz)
+    S22(jx,jy,jz) = 0.5_rprec*(dvdy(jx,jy,jz) + dvdy(jx,jy,jz-1)) !! w-node(jz)
+    S23(jx,jy,jz) = 0.5_rprec*(dvdz(jx,jy,jz) + dwdy(jx,jy,jz))   !! w-node(jz)
+    S33(jx,jy,jz) = 0.5_rprec*(dwdz(jx,jy,jz) + dwdz(jx,jy,jz-1)) !! w-node(jz)
 end do
 end do
 end do
