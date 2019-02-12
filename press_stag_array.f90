@@ -29,7 +29,9 @@ use param
 use messages
 use sim_param, only : u, v, w, divtz, p, dpdx, dpdy, dpdz
 use fft
+#ifdef PPMAPPING
 use sim_param, only : JACO1, JACO2, dj_dzeta
+#endif
 
 implicit none
 
@@ -177,8 +179,11 @@ if (coord == 0) then
 #endif
     b(:,:,1) = -1._rprec
     c(:,:,1) = 1._rprec
-    ! RHS_col(:,:,1) = -dz * rbottomw(:,:)
+#ifdef PPMAPPING
     RHS_col(:,:,1) = - JACO1(1)*dz* rbottomw(:,:)
+#else
+    RHS_col(:,:,1) = -dz * rbottomw(:,:)
+#endif
     jz_min = 2
 else
   jz_min = 1
@@ -193,8 +198,11 @@ if (coord == nproc-1) then
 #ifdef PPSAFETYMODE
     c(:,:,nz+1) = BOGUS
 #endif
-    ! RHS_col(:,:,nz+1) = -dz * rtopw(:,:)
+#ifdef PPMAPPING
     RHS_col(:,:,nz+1) = -JACO1(nz)*dz * rtopw(:,:)
+#else
+    RHS_col(:,:,nz+1) = -dz * rtopw(:,:)
+#endif
 #ifdef PPMPI
 endif
 #endif
@@ -230,15 +238,18 @@ do jy = 1, ny
         ir = ii - 1 ! real index
 
         ! JDA dissertation, eqn(2.85) a,b,c=coefficients and RHS_col=r_m
-        ! a(jx, jy, jz) = const3
-        ! b(jx, jy, jz) = -(kx(jx, jy)**2 + ky(jx, jy)**2 + 2._rprec*const3)
-        ! c(jx, jy, jz) = const3
+#ifdef PPMAPPING
         a(jx, jy, jz) = const3*(1._rprec/(JACO2(jz-1)**2)) -                   &
             0.5_rprec*(1/JACO2(jz-1))*dj_dzeta(jz-1)*const4
         b(jx, jy, jz) = -(kx(jx, jy)**2 + ky(jx, jy)**2 +                      &
             2._rprec*const3*(1._rprec/(JACO2(jz-1)**2)))
         c(jx, jy, jz) = const3*(1._rprec/(JACO2(jz-1)**2)) +                   &
             0.5_rprec*(1/JACO2(jz-1))*dj_dzeta(jz-1)*const4
+#else
+        a(jx, jy, jz) = const3
+        b(jx, jy, jz) = -(kx(jx, jy)**2 + ky(jx, jy)**2 + 2._rprec*const3)
+        c(jx, jy, jz) = const3
+#endif
 
         !  Compute eye * kx * H_x
         aH_x(1) = -rH_x(ii,jy,jz-1) * kx(jx,jy)
@@ -246,10 +257,13 @@ do jy = 1, ny
         aH_y(1) = -rH_y(ii,jy,jz-1) * ky(jx,jy)
         aH_y(2) =  rH_y(ir,jy,jz-1) * ky(jx,jy)
 
-        ! RHS_col(ir:ii,jy,jz) =  aH_x + aH_y + (rH_z(ir:ii, jy, jz) -           &
-        !     rH_z(ir:ii, jy, jz-1))*const4
+#ifdef PPMAPPING
         RHS_col(ir:ii,jy,jz) = aH_x + aH_y + (rH_z(ir:ii, jy, jz) -            &
             rH_z(ir:ii, jy, jz-1))*const4/JACO2(jz-1)
+#else
+        RHS_col(ir:ii,jy,jz) =  aH_x + aH_y + (rH_z(ir:ii, jy, jz) -           &
+            rH_z(ir:ii, jy, jz-1))*const4
+#endif
 
         else !! fourier
 
@@ -259,15 +273,18 @@ do jy = 1, ny
         ir = ii - 1 ! real index
 
         ! JDA dissertation, eqn(2.85) a,b,c=coefficients and RHS_col=r_m
-        ! a(jx_s, jy, jz) = const3
-        ! b(jx_s, jy, jz) = -(kx(jx_s, jy)**2 + ky(jx_s, jy)**2 + 2._rprec*const3)
-        ! c(jx_s, jy, jz) = const3
+#ifdef PPMAPPING
         a(jx_s, jy, jz) = const3*(1._rprec/(JACO2(jz-1)**2)) -                   &
             0.5_rprec*(1/JACO2(jz-1))*dj_dzeta(jz-1)*const4
         b(jx_s, jy, jz) = -(kx(jx_s, jy)**2 + ky(jx_s, jy)**2 +                  &
             2._rprec*const3*(1._rprec/(JACO2(jz-1)**2)))
         c(jx_s, jy, jz) = const3*(1._rprec/(JACO2(jz-1)**2)) +                   &
             0.5_rprec*(1/JACO2(jz-1))*dj_dzeta(jz-1)*const4
+#else
+        a(jx_s, jy, jz) = const3
+        b(jx_s, jy, jz) = -(kx(jx_s, jy)**2 + ky(jx_s, jy)**2 + 2._rprec*const3)
+        c(jx_s, jy, jz) = const3
+#endif
 
         !  Compute eye * kx * H_x
         aH_x(1) = -rH_x(ii,jy,jz-1) * kx(jx_s,jy)
@@ -275,10 +292,13 @@ do jy = 1, ny
         aH_y(1) = -rH_y(ii,jy,jz-1) * ky(jx_s,jy)
         aH_y(2) =  rH_y(ir,jy,jz-1) * ky(jx_s,jy)
 
-        ! RHS_col(ir:ii,jy,jz) =  aH_x + aH_y + (rH_z(ir:ii, jy, jz) -           &
-        !     rH_z(ir:ii, jy, jz-1))*const4
+#ifdef PPMAPPING
         RHS_col(ir:ii,jy,jz) = aH_x + aH_y + (rH_z(ir:ii, jy, jz) -            &
             rH_z(ir:ii, jy, jz-1))*const4/JACO2(jz-1)
+#else
+        RHS_col(ir:ii,jy,jz) =  aH_x + aH_y + (rH_z(ir:ii, jy, jz) -           &
+            rH_z(ir:ii, jy, jz-1))*const4
+#endif
 
         endif
 
@@ -297,14 +317,20 @@ call mpi_recv (p(1:2, 1, 1), 2, MPI_RPREC, down, 8, comm, status, ierr)
 
 if (coord == 0) then
     p(1:2, 1, 0) = 0._rprec !! BC, arbitrary pressure
-    ! p(1:2, 1, 1) = p(1:2,1,0) - dz * rbottomw(1:2,1)
+#ifdef PPMAPPING
     p(1:2, 1, 1) = p(1:2,1,0) - JACO1(1)*dz * rbottomw(1:2,1)
+#else
+    p(1:2, 1, 1) = p(1:2,1,0) - dz * rbottomw(1:2,1)
+#endif
 end if
 
 do jz = 2, nz
     ! JDA dissertation, eqn(2.88)
-    ! p(1:2, 1, jz) = p(1:2, 1, jz-1) + rH_z(1:2, 1, jz) * dz
+#ifdef PPMAPPING
     p(1:2, 1, jz) = p(1:2, 1, jz-1) + rH_z(1:2, 1, jz) * dz * JACO1(jz)
+#else
+    p(1:2, 1, jz) = p(1:2, 1, jz-1) + rH_z(1:2, 1, jz) * dz
+#endif
 end do
 
 #ifdef PPMPI
@@ -375,16 +401,22 @@ if(coord<nproc-1) p(:,:,nz) = BOGUS
 
 ! Final step compute the z-derivative of p
 ! note: p has additional level at z=-dz/2 for this derivative
-! dpdz(1:nx, 1:ny, 1:nz-1) = (p(1:nx, 1:ny, 1:nz-1) - p(1:nx, 1:ny, 0:nz-2)) / dz
+#ifdef PPMAPPING
 do jz = 1, nz-1
     dpdz(1:nx, 1:ny, jz) = (p(1:nx, 1:ny, jz) - p(1:nx, 1:ny, jz-1))         &
         / dz / JACO1(jz)
 end do
+#else
+dpdz(1:nx, 1:ny, 1:nz-1) = (p(1:nx, 1:ny, 1:nz-1) - p(1:nx, 1:ny, 0:nz-2)) / dz
+#endif
 #ifdef PPSAFETYMODE
 if(coord<nproc-1)  dpdz(:,:,nz) = BOGUS
 #endif
-! if(coord==nproc-1) dpdz(1:nx,1:ny,nz) = (p(1:nx,1:ny,nz)-p(1:nx,1:ny,nz-1)) / dz
+#ifdef PPMAPPING
 if(coord==nproc-1) dpdz(1:nx,1:ny,nz) = (p(1:nx,1:ny,nz)-p(1:nx,1:ny,nz-1))  &
     / dz / JACO1(nz)
+#else
+if(coord==nproc-1) dpdz(1:nx,1:ny,nz) = (p(1:nx,1:ny,nz)-p(1:nx,1:ny,nz-1)) / dz
+#endif
 
 end subroutine press_stag_array

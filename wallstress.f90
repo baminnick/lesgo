@@ -53,7 +53,6 @@ use messages, only : error
 use iwmles, only : iwm_wallstress
 use tlwmles, only : tlwm
 use sim_param, only : txz, tyz, dudz, dvdz
-use sim_param, only : mesh_stretch
 implicit none
 character(*), parameter :: sub_name = 'wallstress'
 
@@ -156,18 +155,24 @@ end subroutine ws_free_ubc
 subroutine ws_dns_lbc
 !*******************************************************************************
 use param, only : nx, ny, nu_molec, z_i, u_star, ubot 
-! use param, only : dz
+#ifdef PPMAPPING
+use sim_param, only : mesh_stretch
+#else
+use param, only : dz
+#endif
 use sim_param , only : u, v
 implicit none
 integer :: i, j
 
 do j = 1, ny
     do i = 1, nx
-        ! dudz(i,j,1) = ( u(i,j,1) - ubot ) / ( 0.5_rprec*dz )
-        ! dvdz(i,j,1) = v(i,j,1) / ( 0.5_rprec*dz )
+#ifdef PPMAPPING
         dudz(i,j,1) = ( u(i,j,1) - ubot ) / (mesh_stretch(1))
         dvdz(i,j,1) = v(i,j,1) / (mesh_stretch(1))
-
+#else
+        dudz(i,j,1) = ( u(i,j,1) - ubot ) / ( 0.5_rprec*dz )
+        dvdz(i,j,1) = v(i,j,1) / ( 0.5_rprec*dz )
+#endif
         txz(i,j,1) = -nu_molec/(z_i*u_star)*dudz(i,j,1)
         tyz(i,j,1) = -nu_molec/(z_i*u_star)*dvdz(i,j,1)
     end do
@@ -200,7 +205,9 @@ subroutine ws_equilibrium_lbc
 !*******************************************************************************
 use param, only : dz, ld, nx, ny, vonk, zo
 use sim_param, only : u, v
+#ifdef PPMAPPING
 use sim_param, only : JACO2
+#endif
 use test_filtermodule
 implicit none
 integer :: i, j
@@ -212,8 +219,11 @@ u1 = u(:,:,1)
 v1 = v(:,:,1)
 call test_filter(u1)
 call test_filter(v1)
-! denom = log(0.5_rprec*dz/zo)
+#ifdef PPMAPPING
 denom = log(0.5_rprec*JACO2(1)*dz/zo)
+#else
+denom = log(0.5_rprec*dz/zo)
+#endif
 u_avg = sqrt(u1(1:nx,1:ny)**2+v1(1:nx,1:ny)**2)
 ustar = u_avg*vonk/denom
 
@@ -223,10 +233,13 @@ do j = 1, ny
         txz(i,j,1) = const*u1(i,j)
         tyz(i,j,1) = const*v1(i,j)
         !this is as in Moeng 84
-        ! dudz(i,j,1) = ustar(i,j)/(0.5_rprec*dz*vonK)*u(i,j,1)/u_avg(i,j)
-        ! dvdz(i,j,1) = ustar(i,j)/(0.5_rprec*dz*vonK)*v(i,j,1)/u_avg(i,j)
+#ifdef PPMAPPING
         dudz(i,j,1) = ustar(i,j)/(0.5_rprec*JACO2(1)*dz*vonK)*u(i,j,1)/u_avg(i,j)
         dvdz(i,j,1) = ustar(i,j)/(0.5_rprec*JACO2(1)*dz*vonK)*v(i,j,1)/u_avg(i,j)
+#else
+        dudz(i,j,1) = ustar(i,j)/(0.5_rprec*dz*vonK)*u(i,j,1)/u_avg(i,j)
+        dvdz(i,j,1) = ustar(i,j)/(0.5_rprec*dz*vonK)*v(i,j,1)/u_avg(i,j)
+#endif
         dudz(i,j,1) = merge(0._rprec,dudz(i,j,1),u(i,j,1).eq.0._rprec)
         dvdz(i,j,1) = merge(0._rprec,dvdz(i,j,1),v(i,j,1).eq.0._rprec)
     end do

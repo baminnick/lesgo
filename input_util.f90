@@ -166,12 +166,12 @@ do
                 read (buff(equal_pos+1:), *) L_z
             case ('UNIFORM_SPACING')
                 read (buff(equal_pos+1:), *) uniform_spacing
-            case ('STRETCH')
-                read (buff(equal_pos+1:), *) stretch
+#ifdef PPMAPPING
             case ('STR_FACTOR')
                 read (buff(equal_pos+1:), *) str_factor
             case ('LOAD_STRETCH')
                 read (buff(equal_pos+1:), *) load_stretch
+#endif
             case default
                 ! if (coord == 0) write(*,*) 'Found unused data value in '       &
                 !     // block_name // ' block: ' // buff(1:equal_pos-1)

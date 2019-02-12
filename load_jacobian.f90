@@ -4,10 +4,11 @@ subroutine load_jacobian()
 ! a stretched grid in the wall-normal direction. Based on user
 ! input, the grid may be loaded via external files or created.
 ! 
-! JACO1 - Jacobian on the w-grid
-! JACO2 - Jacobian on the uv-grid
+! JACO1        - Jacobian on the w-grid
+! JACO2        - Jacobian on the uv-grid
 ! mesh_stretch - z-locations on the uv-grid
-! dj_dzeta - Derivative involving Jacobian for PPE
+! dj_dzeta     - Derivative involving Jacobian for PPE
+! 
 use sim_param
 use param
 use types
@@ -97,6 +98,7 @@ if (coord == 0) then
     JACO2(lbz)=JACO2(1)
     mesh_stretch(lbz)=mesh_stretch(1)     
     dj_dzeta(lbz)=dj_dzeta(1)
+    write(*,*) '--> Grid stretched using mapping function'
 else
     JACO1(lbz)=FIELD1((coord-1)*(nz-1)+nz-1)
     JACO2(lbz)=FIELD2((coord-1)*(nz-1)+nz-1)
@@ -105,3 +107,4 @@ else
 end if
 
 end subroutine load_jacobian
+
