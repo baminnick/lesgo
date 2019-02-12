@@ -24,8 +24,10 @@ use iwmles
 use types,only:rprec
 use param
 use sim_param, only : u, v, w, RHSx, RHSy, RHSz
+#ifdef PPMAPPING
 use sim_param, only : delta_stretch, JACO1
 use test_filtermodule, only : filter_size
+#endif
 use sgs_param, only : Cs_opt2, F_LM, F_MM, F_QN, F_NN
 #ifdef PPDYN_TN
 use sgs_param, only : F_ee2, F_deedt2, ee_past
@@ -53,18 +55,22 @@ character (64) :: fname_dyn_tn
 #endif
 
 ! integer::jz !! used to output initial profile
-integer :: jz !! now used for delta_stretch
+#ifdef PPMAPPING
+integer :: jz
+#endif
 
 ! Flag to identify if file exists
 logical :: file_flag
 logical :: interp_flag
 logical :: iwm_file_flag !xiang: for iwm restart
 
+#ifdef PPMAPPING
 call load_jacobian ()
 ! Initialize delta_stretch for SGS
 do jz = 1, nz
     delta_stretch(jz) = filter_size*(dx*dy*(JACO1(jz))*dz)**(1._rprec/3._rprec)
 enddo
+#endif
 
 #ifdef PPTURBINES
 fxa = 0._rprec
@@ -498,7 +504,9 @@ use messages, only : error
 #ifdef PPTURBINES
 use turbines, only: turbine_vel_init
 #endif
+#ifdef PPMAPPING
 use sim_param, only : mesh_stretch
+#endif
 
 implicit none
 integer :: jz, jz_abs
@@ -514,8 +522,11 @@ real(rprec) :: zo_turbines = 0._rprec
 do jz = 1, nz
 
 #ifdef PPMPI
-    ! z = (coord*(nz-1) + jz - 0.5_rprec) * dz
+#ifdef PPMAPPING
     z = mesh_stretch(jz)
+#else
+    z = (coord*(nz-1) + jz - 0.5_rprec) * dz
+#endif
 #else
     z = (jz - 0.5_rprec) * dz
 #endif
@@ -593,8 +604,11 @@ do jz = 1, nz
 
 #ifdef PPMPI
     jz_abs = coord * (nz-1) + jz
-    ! z = (coord * (nz-1) + jz - 0.5_rprec) * dz * z_i
+#ifdef PPMAPPING
     z = mesh_stretch(jz)
+#else
+    z = (coord * (nz-1) + jz - 0.5_rprec) * dz * z_i
+#endif
 #else
     jz_abs = jz
     z = (jz-.5_rprec) * dz * z_i

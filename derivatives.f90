@@ -292,7 +292,9 @@ use param, only : nx, ny, nz, dz, BOGUS
 #ifdef PPSAFETYMODE
 use param, only : nproc, coord
 #endif
+#ifdef PPMAPPING
 use sim_param, only : JACO1
+#endif
 implicit none
 
 integer, intent(in) :: lbz
@@ -313,7 +315,11 @@ dfdz(:,:,0) = BOGUS
 do jz = lbz+1, nz
 do jy = 1, ny
 do jx = 1, nx !! jb has ld instead of nx fourier
+#ifdef PPMAPPING
     dfdz(jx,jy,jz) = (1/JACO1(jz))*const*(f(jx,jy,jz)-f(jx,jy,jz-1))
+#else
+    dfdz(jx,jy,jz) = const*(f(jx,jy,jz)-f(jx,jy,jz-1))
+#endif
 end do
 end do
 end do
@@ -348,7 +354,9 @@ use param, only : ld, ny, nz, dz, BOGUS
 use param, only : coord
 #endif
 #endif
+#ifdef PPMAPPING
 use sim_param, only : JACO2
+#endif
 implicit none
 
 real(rprec), dimension(:,:,lbz:), intent(in) :: f
@@ -361,7 +369,11 @@ const = 1._rprec/dz
 do jz = lbz, nz-1
 do jy = 1, ny
 do jx = 1, ld !! nx fourier
+#ifdef PPMAPPING
     dfdz(jx,jy,jz) = (1/JACO2(jz))*const*(f(jx,jy,jz+1)-f(jx,jy,jz))
+#else
+    dfdz(jx,jy,jz) = const*(f(jx,jy,jz+1)-f(jx,jy,jz))
+#endif
 end do
 end do
 end do
