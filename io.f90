@@ -76,6 +76,9 @@ if (cumulative_time) then
         jt_total = 0
         total_time = 0._rprec
         total_time_dim = 0._rprec
+        ! Initialize temp values to be overwritten
+        dt_r = 0.0_rprec
+        cfl_r = 0.0_rprec
     end if
 end if
 
