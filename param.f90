@@ -174,6 +174,10 @@ integer :: nxp = 32
 ! mode limiting options for GQL
 integer :: thrx = 0
 
+! mode limiting options for Hybrid RNL/LES
+logical :: hybrid_fourier = .false.
+real(rprec) :: hwm = 0.050_rprec
+
 !---------------------------------------------------
 ! TIMESTEP PARAMETERS
 !---------------------------------------------------
@@ -258,7 +262,7 @@ real(rprec) :: rms_random_force = 0.4_rprec
 integer :: wbase = 100
 
 ! how often to write ke to check_ke.out
-integer :: nenergy = 100
+! integer :: nenergy = 100
 
 ! how often to display Lagrangian CFL condition of
 ! dynamic SGS models

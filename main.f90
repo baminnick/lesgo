@@ -81,7 +81,10 @@ real(rprec), dimension(:,:,:), allocatable :: dummyRHSx, dummyRHSy, dummyRHSz
 character (*), parameter :: prog_name = 'main'
 
 integer :: jt_step, nstart
-real(rprec) :: rmsdivvel, ke, maxcfl, tt
+real(rprec) :: rmsdivvel, maxcfl, tt
+! real(rprec) :: ke
+
+integer :: jz !! for hybrid_fourier
 
 type(clock_t) :: clock, clock_total
 !type(clock_t) :: clock_forcing
@@ -149,13 +152,96 @@ allocate( dummyRHSz  (ld    ,ny, lbz:nz) )
 ! BEGIN TIME LOOP
 time_loop: do jt_step = nstart, nsteps
 
+! DEBUG
+! Zero out modes not used in fourier mode for comparison
+!if (hybrid_fourier) then
+!do jz = lbz, nz
+!if (.not. zhyb(jz)) then
+!call dfftw_execute_dft_r2c(forw, u(:,:,jz), u(:,:,jz))
+!call dfftw_execute_dft_r2c(forw, v(:,:,jz), v(:,:,jz))
+!call dfftw_execute_dft_r2c(forw, w(:,:,jz), w(:,:,jz))
+!u(kxpi,:,jz) = 0.0_rprec
+!v(kxpi,:,jz) = 0.0_rprec
+!w(kxpi,:,jz) = 0.0_rprec
+!u(:,:,jz) = u(:,:,jz) / (nx*ny)
+!v(:,:,jz) = v(:,:,jz) / (nx*ny)
+!w(:,:,jz) = w(:,:,jz) / (nx*ny)
+!call dfftw_execute_dft_c2r(back, u(:,:,jz), u(:,:,jz))
+!call dfftw_execute_dft_c2r(back, v(:,:,jz), v(:,:,jz))
+!call dfftw_execute_dft_c2r(back, w(:,:,jz), w(:,:,jz))
+!endif
+!enddo
+!endif
+
+! DEBUG - TIME LOOP START
+!if (coord == 5) then
+!if (hybrid_fourier) then
+!do jz = 0, nz
+!do jy = 1, ny
+!write(*,*) 'u', jy, jz, u(kxi,jy,jz)
+!write(*,*) 'v', jy, jz, v(kxi,jy,jz)
+!write(*,*) 'w', jy, jz, w(kxi,jy,jz)
+!write(*,*) '-----------------------------------'
+!enddo
+!enddo
+!else
+!do jz = 0, nz
+!do jy = 1, ny
+!write(*,*) 'u', jy, jz, u(1:nx,jy,jz)
+!write(*,*) 'v', jy, jz, v(1:nx,jy,jz)
+!write(*,*) 'w', jy, jz, w(1:nx,jy,jz)
+!write(*,*) '-----------------------------------'
+!enddo
+!enddo
+!endif
+!endif
+
+! DEBUG
+!if (coord == 6) then
+!if (hybrid_fourier) then
+!write(*,*) 'A1', u(kxi,1,4)
+!write(*,*) 'A2', v(kxi,1,4)
+!write(*,*) 'A3', w(kxi,1,4)
+!write(*,*) '-------------------'
+!else
+!write(*,*) 'A1', u(:,1,4)
+!write(*,*) 'A2', v(:,1,4)
+!write(*,*) 'A3', w(:,1,4)
+!write(*,*) '-------------------'
+!endif
+!endif
+
+! DEBUG
+!if (coord == 0) then
+!if (hybrid_fourier) then
+!write(*,*) 'ui', u(kxi,1,4)
+!write(*,*) 'vi', v(kxi,1,4)
+!write(*,*) 'wi', w(kxi,1,4)
+!write(*,*) '---------------------'
+!write(*,*) 'ui+1', u(kxi,1,5)
+!write(*,*) 'vi+1', v(kxi,1,5)
+!write(*,*) 'wi+1', w(kxi,1,5)
+!write(*,*) '---------------------'
+!else
+!write(*,*) 'ui', u(:,1,4)
+!write(*,*) 'vi', v(:,1,4)
+!write(*,*) 'wi', w(:,1,4)
+!write(*,*) '---------------------'
+!write(*,*) 'ui+1', u(:,1,5)
+!write(*,*) 'vi+1', v(:,1,5)
+!write(*,*) 'wi+1', w(:,1,5)
+!write(*,*) '---------------------'
+!endif
+!endif
+
+
     ! Get the starting time for the iteration
     call clock%start
 
     if (use_cfl_dt) then
 
         ! Go back to physical space to calculate CFL
-        if (fourier) then
+        if ((fourier) .or. (hybrid_fourier)) then
             call wave2physF( u, uF )
             call wave2physF( v, vF )
             call wave2physF( w, wF )
@@ -210,6 +296,56 @@ time_loop: do jt_step = nstart, nsteps
     !  except bottom coord, only 1:nz-1
     call ddz_w(w, dwdz, lbz)
 
+! DEBUG - AFTER DERIVATIVES
+!if (coord == 0) then
+!if (hybrid_fourier) then
+!do jz = 0, nz
+!do jy = 1, ny
+!write(*,*) 'dudx', jy, jz, dudx(kxi,jy,jz)
+!write(*,*) 'dudy', jy, jz, dudy(kxi,jy,jz)
+!write(*,*) 'dudz', jy, jz, dudz(kxi,jy,jz)
+!write(*,*) 'dvdx', jy, jz, dvdx(kxi,jy,jz)
+!write(*,*) 'dvdy', jy, jz, dvdy(kxi,jy,jz)
+!write(*,*) 'dvdz', jy, jz, dvdz(kxi,jy,jz)
+!write(*,*) 'dwdx', jy, jz, dwdx(kxi,jy,jz)
+!write(*,*) 'dwdy', jy, jz, dwdy(kxi,jy,jz)
+!write(*,*) 'dwdz', jy, jz, dwdz(kxi,jy,jz)
+!write(*,*) '-----------------------------------'
+!enddo
+!enddo
+!else
+!do jz = 0, nz
+!do jy = 1, ny
+!write(*,*) 'dudx', jy, jz, dudx(1:nx,jy,jz)
+!write(*,*) 'dudy', jy, jz, dudy(1:nx,jy,jz)
+!write(*,*) 'dudz', jy, jz, dudz(1:nx,jy,jz)
+!write(*,*) 'dvdx', jy, jz, dvdx(1:nx,jy,jz)
+!write(*,*) 'dvdy', jy, jz, dvdy(1:nx,jy,jz)
+!write(*,*) 'dvdz', jy, jz, dvdz(1:nx,jy,jz)
+!write(*,*) 'dwdx', jy, jz, dwdx(1:nx,jy,jz)
+!write(*,*) 'dwdy', jy, jz, dwdy(1:nx,jy,jz)
+!write(*,*) 'dwdz', jy, jz, dwdz(1:nx,jy,jz)
+!write(*,*) '-----------------------------------'
+!enddo
+!enddo
+!endif
+!endif
+
+! DEBUG
+!if (coord == 6) then
+!if (hybrid_fourier) then
+!write(*,*) 'B1', dudx(kxi,1,4)
+!write(*,*) 'B2', dudy(kxi,1,4)
+!write(*,*) 'B3', dudz(kxi,1,4)
+!write(*,*) '-------------------'
+!else
+!write(*,*) 'B1', dudx(:,1,4)
+!write(*,*) 'B2', dudy(:,1,4)
+!write(*,*) 'B3', dudz(:,1,4)
+!write(*,*) '-------------------'
+!endif
+!endif
+
     ! Calculate wall stress and derivatives at the wall
     ! (txz, tyz, dudz, dvdz at jz=1)
     ! MPI: bottom and top processes only
@@ -231,6 +367,21 @@ time_loop: do jt_step = nstart, nsteps
     !   MPI: txx, txy, tyy, tzz at 1:nz-1; txz, tyz at 1:nz (stress-free lid)
     call sgs_stag()
 
+! DEBUG
+!if (coord == 6) then
+!if (hybrid_fourier) then
+!write(*,*) 'C1', txx(kxi,1,4)
+!write(*,*) 'C2', txy(kxi,1,4)
+!write(*,*) 'C3', txz(kxi,1,4)
+!write(*,*) '-------------------'
+!else
+!write(*,*) 'C1', txx(:,1,4)
+!write(*,*) 'C2', txy(:,1,4)
+!write(*,*) 'C3', txz(:,1,4)
+!write(*,*) '-------------------'
+!endif
+!endif
+
     ! Exchange ghost node information (since coords overlap) for tau_zz
     !   send info up (from nz-1 below to 0 above)
 #ifdef PPMPI
@@ -245,6 +396,21 @@ time_loop: do jt_step = nstart, nsteps
     call divstress_uv(divtx, divty, txx, txy, txz, tyy, tyz)
     call divstress_w(divtz, txz, tyz, tzz)
 
+! DEBUG
+!if (coord == 6) then
+!if (hybrid_fourier) then
+!write(*,*) 'D1', divtx(kxi,1,4)
+!write(*,*) 'D2', divty(kxi,1,4)
+!write(*,*) 'D3', divtz(kxi,1,4)
+!write(*,*) '-------------------'
+!else
+!write(*,*) 'D1', divtx(:,1,4)
+!write(*,*) 'D2', divty(:,1,4)
+!write(*,*) 'D3', divtz(:,1,4)
+!write(*,*) '-------------------'
+!endif
+!endif
+
     ! Calculates u x (omega) term in physical space. Uses 3/2 rule for
     ! dealiasing. Stores this term in RHS (right hand side) variable
 
@@ -252,7 +418,7 @@ time_loop: do jt_step = nstart, nsteps
     ! Use RNL equations
     call convec(u,v,w,dudy,dudz,dvdx,dvdz,dwdx,dwdy,RHSx,RHSy,RHSz)
 
-    if (.not. fourier) then
+    if ((.not. fourier) .and. (.not. hybrid_fourier)) then
         u_pert = u - x_avg(u)
         v_pert = v - x_avg(v)
         w_pert = w - x_avg(w)
@@ -322,10 +488,32 @@ time_loop: do jt_step = nstart, nsteps
         RHSz = RHSz - RHSz_high + 2.0_rprec*gql_filter( RHSz_high )
     endif
 
-
 #endif
 
 #endif
+
+! DEBUG - AFTER CONVEC
+!if (coord == 0) then
+!if (hybrid_fourier) then
+!do jz = 0, nz
+!do jy = 1, ny
+!write(*,*) 'RHSx', jy, jz, RHSx(kxi,jy,jz)
+!write(*,*) 'RHSy', jy, jz, RHSy(kxi,jy,jz)
+!write(*,*) 'RHSz', jy, jz, RHSz(kxi,jy,jz)
+!write(*,*) '-----------------------------------'
+!enddo
+!enddo
+!else
+!do jz = 0, nz
+!do jy = 1, ny
+!write(*,*) 'RHSx', jy, jz, RHSx(1:nx,jy,jz)
+!write(*,*) 'RHSy', jy, jz, RHSy(1:nx,jy,jz)
+!write(*,*) 'RHSz', jy, jz, RHSz(1:nx,jy,jz)
+!write(*,*) '-----------------------------------'
+!enddo
+!enddo
+!endif
+!endif
 
     ! Add div-tau term to RHS variable
     !   this will be used for pressure calculation
@@ -356,7 +544,17 @@ time_loop: do jt_step = nstart, nsteps
             ! no need to transform mean_p_force to kx space
             RHSx(1,1,1:nz-1) = RHSx(1,1,1:nz-1) + mean_p_force_x
             RHSy(1,1,1:nz-1) = RHSy(1,1,1:nz-1) + mean_p_force_y
-        else
+        elseif (hybrid_fourier) then
+            do jz = 1, (nz-1)
+                if (zhyb(jz)) then
+                    RHSx(1,1,jz) = RHSx(1,1,jz) + mean_p_force_x
+                    RHSy(1,1,jz) = RHSy(1,1,jz) + mean_p_force_y
+                else
+                    RHSx(:,:,jz) = RHSx(:,:,jz) + mean_p_force_x
+                    RHSy(:,:,jz) = RHSy(:,:,jz) + mean_p_force_y
+                endif
+            enddo
+        else !! not hybrid_fourier or fourier
             RHSx(:,:,1:nz-1) = RHSx(:,:,1:nz-1) + mean_p_force_x
             RHSy(:,:,1:nz-1) = RHSy(:,:,1:nz-1) + mean_p_force_y
         endif
@@ -438,6 +636,63 @@ time_loop: do jt_step = nstart, nsteps
     if(coord < nproc-1) w(:,:,nz) = BOGUS
 #endif
 
+! DEBUG
+!if (coord == 0) then
+!if (hybrid_fourier) then
+!write(*,*) 'F1', u(:,1,4)
+!write(*,*) 'F2', v(:,1,4)
+!write(*,*) 'F3', w(:,1,4)
+!write(*,*) '-------------------'
+!else
+!write(*,*) 'F1', u(:,1,4)
+!write(*,*) 'F2', v(:,1,4)
+!write(*,*) 'F3', w(:,1,4)
+!write(*,*) '-------------------'
+!endif
+!endif
+
+! DEBUG 
+! Zero out modes not used in Fourier before pressure solve
+!if (hybrid_fourier) then
+!do jz = lbz, nz
+!if (.not. zhyb(jz)) then
+!call dfftw_execute_dft_r2c(forw, u(:,:,jz), u(:,:,jz))
+!call dfftw_execute_dft_r2c(forw, v(:,:,jz), v(:,:,jz))
+!call dfftw_execute_dft_r2c(forw, w(:,:,jz), w(:,:,jz))
+!u(kxpi,:,jz) = 0.0_rprec
+!v(kxpi,:,jz) = 0.0_rprec
+!w(kxpi,:,jz) = 0.0_rprec
+!u(:,:,jz) = u(:,:,jz) / (nx*ny)
+!v(:,:,jz) = v(:,:,jz) / (nx*ny)
+!w(:,:,jz) = w(:,:,jz) / (nx*ny)
+!call dfftw_execute_dft_c2r(back, u(:,:,jz), u(:,:,jz))
+!call dfftw_execute_dft_c2r(back, v(:,:,jz), v(:,:,jz))
+!call dfftw_execute_dft_c2r(back, w(:,:,jz), w(:,:,jz))
+!endif
+!enddo
+!if (coord == nproc - 1) then
+!call dfftw_execute_dft_r2c(forw, divtz(:,:,nz), divtz(:,:,nz))
+!divtz(kxpi,:,nz) = 0.0_rprec
+!divtz(:,:,nz) = divtz(:,:,nz) / (nx*ny)
+!call dfftw_execute_dft_c2r(back, divtz(:,:,nz), divtz(:,:,nz))
+!endif
+!endif
+
+! DEBUG
+!if (hybrid_fourier) then
+!do jz = lbz, nz
+!if (zhyb(jz)) then
+!call dfftw_execute_dft_c2r(back, u(:,:,jz), u(:,:,jz))
+!call dfftw_execute_dft_c2r(back, v(:,:,jz), v(:,:,jz))
+!call dfftw_execute_dft_c2r(back, w(:,:,jz), w(:,:,jz))
+!endif
+!enddo
+!if (coord == 0) then
+!call dfftw_execute_dft_c2r(back, divtz(:,:,1), divtz(:,:,1))
+!write(*,*) u(:,1,1)
+!endif
+!endif
+
     !//////////////////////////////////////////////////////
     !/// PRESSURE SOLUTION                              ///
     !//////////////////////////////////////////////////////
@@ -445,7 +700,59 @@ time_loop: do jt_step = nstart, nsteps
     !   div of momentum eqn + continuity (div-vel=0) yields Poisson eqn
     !   do not need to store p --> only need gradient
     !   provides p, dpdx, dpdy at 0:nz-1 and dpdz at 1:nz-1
-    call press_stag_array()
+    !call press_stag_array()
+    if (hybrid_fourier) then
+        call press_stag_array_hybrid()
+    else !! fourier or not fourier
+        call press_stag_array()
+    endif
+
+! DEBUG
+!if (hybrid_fourier) then
+!do jz = lbz, nz
+!if (zhyb(jz)) then
+!u(:,:,jz) = u(:,:,jz) / (nx*ny)
+!v(:,:,jz) = v(:,:,jz) / (nx*ny)
+!w(:,:,jz) = w(:,:,jz) / (nx*ny)
+!call dfftw_execute_dft_r2c(forw, u(:,:,jz), u(:,:,jz))
+!call dfftw_execute_dft_r2c(forw, v(:,:,jz), v(:,:,jz))
+!call dfftw_execute_dft_r2c(forw, w(:,:,jz), w(:,:,jz))
+!endif
+!enddo
+!if (coord == 0) then
+!divtz(:,:,1) = divtz(:,:,1) / (nx*ny)
+!call dfftw_execute_dft_r2c(forw, divtz(:,:,1), divtz(:,:,1))
+!endif
+!endif
+
+! DEBUG
+!if (coord == 6) then
+!if (hybrid_fourier) then
+!write(*,*) 'G1', p(kxi,1,4)
+!write(*,*) 'G2', dpdx(kxi,1,4)
+!write(*,*) 'G3', dpdy(kxi,1,4)
+!write(*,*) 'G4', dpdz(kxi,1,4)
+!write(*,*) '----------------------------------------------------'
+!else
+!write(*,*) 'G1', p(:,1,4)
+!write(*,*) 'G2', dpdx(:,1,4)
+!write(*,*) 'G3', dpdy(:,1,4)
+!write(*,*) 'G4', dpdz(:,1,4)
+!write(*,*) '----------------------------------------------------'
+!endif
+!endif
+
+! DEBUG
+!if (coord == 0) then
+!write(*,*) 'v', v(1,1,1)
+!write(*,*) 'dvdz', dvdz(1,1,1)
+!write(*,*) 'txz', txz(1,1,1)
+!write(*,*) 'divty', divty(1,1,1)
+!write(*,*) 'RHSy', RHSy(1,1,1)
+!write(*,*) 'p', p(1,1,1)
+!write(*,*) 'dpdy', dpdy(1,1,1)
+!write(*,*) '-------------------------------'
+!endif
 
     ! Add pressure gradients to RHS variables (for next time step)
     !   could avoid storing pressure gradients - add directly to RHS
@@ -475,7 +782,7 @@ time_loop: do jt_step = nstart, nsteps
     call project ()
 
     ! Write ke to file
-    if (modulo (jt_total, nenergy) == 0) call energy(ke)
+    ! if (modulo (jt_total, nenergy) == 0) call energy(ke)
 
 #ifdef PPLVLSET
     if (global_CA_calc) call level_set_global_CA()
@@ -489,7 +796,7 @@ time_loop: do jt_step = nstart, nsteps
 
     if (modulo (jt_total, wbase) == 0) then
 
-        if (fourier) then
+        if ((fourier) .or. (hybrid_fourier)) then
             call wave2physF( u, uF )
             call wave2physF( v, vF )
             call wave2physF( w, wF )
@@ -547,7 +854,7 @@ time_loop: do jt_step = nstart, nsteps
             write(*,*)
             write(*,'(a)') 'Flow field information:'
             write(*,'(a,E15.7)') '  Velocity divergence metric: ', rmsdivvel
-            write(*,'(a,E15.7)') '  Kinetic energy: ', ke
+            ! write(*,'(a,E15.7)') '  Kinetic energy: ', ke
             write(*,'(a,E15.7)') '  Bot wall stress: ', get_tau_wall_bot()
             write(*,'(a,E15.7)') '  Turnovers: ', total_time_dim / ( L_x * z_i / u_star )
 #ifdef PPMPI
@@ -577,7 +884,7 @@ time_loop: do jt_step = nstart, nsteps
             call write_tau_wall_top()
         end if
 
-        if (fourier) then
+        if ((fourier) .or. (hybrid_fourier)) then
             if(coord == 0) then
                 write(*,'(a)') '======================= BOTTOM ========================='
                 write(*,*) 'u: ', uF(nxp/2,ny/2,1:2)

@@ -155,28 +155,44 @@ end subroutine ws_free_ubc
 subroutine ws_dns_lbc
 !*******************************************************************************
 use param, only : nx, ny, nu_molec, z_i, u_star, ubot 
+use param, only : hybrid_fourier
 #ifdef PPMAPPING
 use sim_param, only : mesh_stretch
 #else
 use param, only : dz
 #endif
 use sim_param , only : u, v
+use fft, only : kxi
 implicit none
 integer :: i, j
 
-do j = 1, ny
-    do i = 1, nx
+if (hybrid_fourier) then
+    do j = 1, ny
 #ifdef PPMAPPING
-        dudz(i,j,1) = ( u(i,j,1) - ubot ) / (mesh_stretch(1))
-        dvdz(i,j,1) = v(i,j,1) / (mesh_stretch(1))
+        dudz(kxi,j,1) = ( u(kxi,j,1) - ubot ) / (mesh_stretch(1))
+        dvdz(kxi,j,1) = v(kxi,j,1) / (mesh_stretch(1))
 #else
-        dudz(i,j,1) = ( u(i,j,1) - ubot ) / ( 0.5_rprec*dz )
-        dvdz(i,j,1) = v(i,j,1) / ( 0.5_rprec*dz )
+        dudz(kxi,j,1) = ( u(kxi,j,1) - ubot ) / ( 0.5_rprec*dz )
+        dvdz(kxi,j,1) = v(kxi,j,1) / ( 0.5_rprec*dz )
 #endif
-        txz(i,j,1) = -nu_molec/(z_i*u_star)*dudz(i,j,1)
-        tyz(i,j,1) = -nu_molec/(z_i*u_star)*dvdz(i,j,1)
+        txz(kxi,j,1) = -nu_molec/(z_i*u_star)*dudz(kxi,j,1)
+        tyz(kxi,j,1) = -nu_molec/(z_i*u_star)*dvdz(kxi,j,1)
     end do
-end do
+else !! fourier or not fourier
+    do j = 1, ny
+        do i = 1, nx
+#ifdef PPMAPPING
+            dudz(i,j,1) = ( u(i,j,1) - ubot ) / (mesh_stretch(1))
+            dvdz(i,j,1) = v(i,j,1) / (mesh_stretch(1))
+#else
+            dudz(i,j,1) = ( u(i,j,1) - ubot ) / ( 0.5_rprec*dz )
+            dvdz(i,j,1) = v(i,j,1) / ( 0.5_rprec*dz )
+#endif
+            txz(i,j,1) = -nu_molec/(z_i*u_star)*dudz(i,j,1)
+            tyz(i,j,1) = -nu_molec/(z_i*u_star)*dvdz(i,j,1)
+        end do
+    end do
+endif
 
 end subroutine ws_dns_lbc
 

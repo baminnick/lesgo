@@ -24,6 +24,7 @@ use iwmles
 use types,only:rprec
 use param
 use sim_param, only : u, v, w, RHSx, RHSy, RHSz
+use sim_param, only : uF, vF, wF
 #ifdef PPMAPPING
 use sim_param, only : delta_stretch, JACO1
 use test_filtermodule, only : filter_size
@@ -43,7 +44,7 @@ use string_util, only : string_concat
 #ifdef PPMPI
 use mpi_defs, only : mpi_sync_real_array, MPI_SYNC_DOWNUP
 #endif
-use derivatives, only: phys2wave
+use derivatives, only: phys2wave, phys2waveF
 
 implicit none
 
@@ -134,8 +135,12 @@ else if (lbc_mom==1) then
     !     'field with DNS BCs'
     if (coord == 0) write(*,*) '--> Creating initial boundary layer velocity ',&
         'field with LES BCs... to become DNS'
-    ! call ic_dns( ) ! debug
-    call ic_les()
+    ! call ic_dns( ) ! DEBUG
+    if (fourier) then
+        call ic_les_physical()
+    else
+        call ic_les()
+    endif
 else
     if (coord == 0) write(*,*) '--> Creating initial boundary layer velocity ',&
     'field with LES BCs'
@@ -168,6 +173,20 @@ end if
 !7780 format('jz, ubar, vbar, wbar:',(1x,I3,1x,F9.4,1x,F9.4,1x,F9.4))
 
 #ifdef PPMPI
+! DEBUG - Use uF, vF, wF for fourier to initialize on physical grid
+if (fourier) then
+! Exchange ghost node information for u, v, and w
+call mpi_sync_real_array( uF, 0, MPI_SYNC_DOWNUP )
+call mpi_sync_real_array( vF, 0, MPI_SYNC_DOWNUP )
+call mpi_sync_real_array( wF, 0, MPI_SYNC_DOWNUP )
+
+!--set 0-level velocities to BOGUS
+if (coord == 0) then
+    uF(:, :, lbz) = BOGUS
+    vF(:, :, lbz) = BOGUS
+    wF(:, :, lbz) = BOGUS
+end if
+else
 ! Exchange ghost node information for u, v, and w
 call mpi_sync_real_array( u, 0, MPI_SYNC_DOWNUP )
 call mpi_sync_real_array( v, 0, MPI_SYNC_DOWNUP )
@@ -179,16 +198,23 @@ if (coord == 0) then
     v(:, :, lbz) = BOGUS
     w(:, :, lbz) = BOGUS
 end if
+endif
 #endif
 
 ! Transform velocities if starting a new simulation
-if ((.not. initu) .and. fourier) then
+if ( (.not. initu) .and. ((fourier) .or. (hybrid_fourier)) ) then
     if ( coord == 0 ) then 
         write(*,*) '--> Transforming initial velocity to kx space'
     endif
-    call phys2wave( u, lbz )
-    call phys2wave( v, lbz )
-    call phys2wave( w, lbz )
+    if (fourier) then !! only if ic_les_physical was used
+        call phys2waveF( uF, u )
+        call phys2waveF( vF, v )
+        call phys2waveF( wF, w )
+    else !! hybrid_fourier
+        call phys2wave( u, lbz )
+        call phys2wave( v, lbz )
+        call phys2wave( w, lbz )
+    endif
 endif
 
 contains
@@ -651,5 +677,170 @@ end if
 #endif
 
 end subroutine ic_les
+
+!*******************************************************************************
+subroutine ic_les_physical()
+!*******************************************************************************
+! This subroutine produces an initial condition for the boundary layer.
+! A log profile is used that flattens at z=z_i. Noise is added to
+! promote the generation of turbulence
+!
+! This puts the initial profile on variables uF, vF, wF to be used
+! for fourier mode.
+! 
+use types,only:rprec
+use param
+use sim_param, only : uF, vF, wF
+use messages, only : error
+#ifdef PPTURBINES
+use turbines, only: turbine_vel_init
+#endif
+#ifdef PPMAPPING
+use sim_param, only : mesh_stretch
+#endif
+
+implicit none
+integer :: jz, jz_abs
+real(rprec), dimension(nz) :: ubar
+real(rprec) :: rms, sigma_rv, arg, arg2, z
+real(rprec) :: angle
+character(*), parameter :: sub_name = 'ic'
+
+#ifdef PPTURBINES
+real(rprec) :: zo_turbines = 0._rprec
+#endif
+
+do jz = 1, nz
+
+#ifdef PPMPI
+#ifdef PPMAPPING
+    z = mesh_stretch(jz)
+#else
+    z = (coord*(nz-1) + jz - 0.5_rprec) * dz
+#endif
+#else
+    z = (jz - 0.5_rprec) * dz
+#endif
+
+    ! For channel flow, choose closest wall
+    if(lbc_mom  > 0 .and. ubc_mom > 0) z = min(z, dz*nproc*(nz-1) - z)
+    ! For upside-down half-channel, choose upper wall
+    if(lbc_mom == 0 .and. ubc_mom > 0) z = dz*nproc*(nz-1) - z
+
+    ! IC in equilibrium with rough surface (rough dominates in effective zo)
+    ! If assuming smooth wall and zo = 0 in lesgo.conf, need to initialize 
+    ! correctly. Therefore assuming zo = 0.0001
+    if (zo == 0.0_rprec) then
+        ! arg2 = z/0.0001_rprec !! roughness length-scale
+        ! arg2 = z*z_i*u_star/nu_molec !! viscous length-scale
+        if (trigger) then
+            arg2 = z*z_i*u_star/nu_molec*trig_factor !! viscous length-scale
+        else
+            arg2 = z*z_i*u_star/nu_molec !! viscous length-scale
+        endif
+    else
+        arg2 = z/zo
+    end if
+    arg = (1._rprec/vonk)*log(arg2) + 5.0_rprec !-1./(2.*vonk*z_i*z_i)*z*z
+
+#ifdef PPLVLSET
+    ! Kludge to adjust magnitude of velocity profile
+    ! Not critical - may delete
+    arg = 0.357*arg
+#endif
+
+#ifdef PPTURBINES
+    call turbine_vel_init (zo_turbines)
+    arg2 = z/zo_turbines
+    arg = (1._rprec/vonk)*log(arg2)!-1./(2.*vonk*z_i*z_i)*z*z
+#endif
+
+    if (coriolis_forcing) then
+        if (z > 0.5_rprec) then
+            ubar(jz) = ug
+        else
+            ubar(jz) = arg/30._rprec
+        end if
+    else
+        ubar(jz) = arg
+    end if
+
+end do
+
+!rms = 0.0_rprec !! Don't add noise for debugging
+rms = 3._rprec
+sigma_rv = 0.289_rprec
+
+! Fill u, v, and w with uniformly distributed random numbers between 0 and 1
+call init_random_seed
+call random_number(uF)
+call random_number(vF)
+call random_number(wF)
+
+! Center random number about 0 and rescale
+uF = rms / sigma_rv * (uF - 0.5_rprec)
+vF = rms / sigma_rv * (vF - 0.5_rprec)
+wF = rms / sigma_rv * (wF - 0.5_rprec)
+
+! Modify angle of bulk flow based on pressure gradient
+if (mean_p_force_x == 0._rprec) then
+    angle = 3.14159265358979323846_rprec/2._rprec
+else
+    angle = atan(mean_p_force_y/mean_p_force_x)
+end if
+
+! Rescale noise depending on distance from wall and mean log profile
+! z is in meters
+do jz = 1, nz
+
+#ifdef PPMPI
+    jz_abs = coord * (nz-1) + jz
+#ifdef PPMAPPING
+    z = mesh_stretch(jz)
+#else
+    z = (coord * (nz-1) + jz - 0.5_rprec) * dz * z_i
+#endif
+#else
+    jz_abs = jz
+    z = (jz-.5_rprec) * dz * z_i
+#endif
+    ! For channel flow, choose closest wall
+    if(lbc_mom  > 0 .and. ubc_mom > 0) z = min(z, dz*nproc*(nz-1)*z_i - z)
+    ! For upside-down half-channel, choose upper wall
+    if(lbc_mom == 0 .and. ubc_mom > 0) z = dz*nproc*(nz-1)*z_i - z
+
+    if (z <= z_i) then
+        uF(:,:,jz) = uF(:,:,jz) * (1._rprec-z / z_i) + ubar(jz)*cos(angle)
+        vF(:,:,jz) = vF(:,:,jz) * (1._rprec-z / z_i) + ubar(jz)*sin(angle)
+        wF(:,:,jz) = wF(:,:,jz) * (1._rprec-z / z_i)
+    else
+        uF(:,:,jz) = uF(:,:,jz) * 0.01_rprec + ubar(jz)*cos(angle)
+        vF(:,:,jz) = vF(:,:,jz) * 0.01_rprec + ubar(jz)*sin(angle)
+        wF(:,:,jz) = wF(:,:,jz) * 0.01_rprec
+    end if
+end do
+
+! Bottom boundary conditions
+if (coord == 0) then
+    wF(:, :, 1) = 0._rprec
+#ifdef PPMPI
+    uF(:, :, 0) = 0._rprec
+    vF(:, :, 0) = 0._rprec
+    wF(:, :, 0) = 0._rprec
+#endif
+end if
+
+! Set upper boundary condition as zero for u, v, and w
+#ifdef PPMPI
+if (coord == nproc-1) then
+#endif
+    wF(1:nxp, 1:ny, nz) = 0._rprec
+    uF(1:nxp, 1:ny, nz) = 0._rprec
+    vF(1:nxp, 1:ny, nz) = 0._rprec
+#ifdef PPMPI
+end if
+#endif
+
+end subroutine ic_les_physical
 
 end subroutine initial

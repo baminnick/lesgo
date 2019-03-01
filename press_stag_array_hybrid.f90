@@ -18,7 +18,7 @@
 !!
 
 !*******************************************************************************
-subroutine press_stag_array()
+subroutine press_stag_array_hybrid()
 !*******************************************************************************
 !
 ! Calculate the pressure and its derivatives on exit. Everything is in physical
@@ -28,6 +28,7 @@ use types, only : rprec
 use param
 use messages
 use sim_param, only : u, v, w, divtz, p, dpdx, dpdy, dpdz
+use sim_param, only : zhyb, coord_int
 use fft
 #ifdef PPMAPPING
 use sim_param, only : JACO1, JACO2, dj_dzeta
@@ -39,26 +40,27 @@ real(rprec) :: const, const2, const3, const4
 integer :: jx, jy, jz
 integer :: ir, ii
 integer :: jz_min
-integer :: end_kx
+integer :: jj, kcnt
 
 real(rprec), save, dimension(:,:,:), allocatable :: rH_x, rH_y, rH_z
 real(rprec), save, dimension(:,:), allocatable :: rtopw, rbottomw
 real(rprec), save, dimension(:,:,:), allocatable :: RHS_col
 real(rprec), save, dimension(:,:,:), allocatable :: a, b, c
+real(rprec), save, dimension(:,:,:), allocatable :: p_rnl, p_phys
 
 logical, save :: arrays_allocated = .false.
 
 real(rprec), dimension(2) :: aH_x, aH_y
 
+real(rprec), dimension(1:ld,1:ny) :: ptemp !! for computing dpdz
+
 ! Specifiy cached constants
-if (fourier) then
-    const = 1._rprec
-else
-    const = 1._rprec/(nx*ny)
-endif
-const2 = const/tadv1/dt
+const = 1._rprec/(nx*ny)
+const2 = 1._rprec/tadv1/dt
 const3 = 1._rprec/(dz**2)
 const4 = 1._rprec/(dz)
+! Fourier mode uses const = 1._rprec, Physical uses const = 1._rprec/(nx*ny)
+! Both modes use const2 = const/tadv1/dt which is different
 
 ! Allocate arrays
 if( .not. arrays_allocated ) then
@@ -66,6 +68,15 @@ if( .not. arrays_allocated ) then
     allocate ( rtopw(ld,ny), rbottomw(ld,ny) )
     allocate ( RHS_col(ld,ny,nz+1) )
     allocate ( a(lh,ny,nz+1), b(lh,ny,nz+1), c(lh,ny,nz+1) )
+
+    allocate ( p_rnl(2*kx_num,ny,0:nz) )
+    allocate ( p_phys(ld-2*kx_num,ny,0:nz) )
+
+    ! zeroing for debugging purposes
+    !a(:,:,:) = 0.0_rprec
+    !b(:,:,:) = 0.0_rprec
+    !c(:,:,:) = 0.0_rprec
+    !RHS_col(:,:,:) = 0.0_rprec
 
     arrays_allocated = .true.
 endif
@@ -86,13 +97,15 @@ do jz = 1, nz-1
     rH_y(:,:,jz) = const2 * v(:,:,jz)
     rH_z(:,:,jz) = const2 * w(:,:,jz)
 
-    if (.not. fourier) then
+    if (.not. zhyb(jz)) then
+        rH_x(:,:,jz) = const * rH_x(:,:,jz)
+        rH_y(:,:,jz) = const * rH_y(:,:,jz)
+        rH_z(:,:,jz) = const * rH_z(:,:,jz)
+
         call dfftw_execute_dft_r2c(forw, rH_x(:,:,jz), rH_x(:,:,jz))
         call dfftw_execute_dft_r2c(forw, rH_y(:,:,jz), rH_y(:,:,jz))
         call dfftw_execute_dft_r2c(forw, rH_z(:,:,jz), rH_z(:,:,jz))
     endif
-    ! (else) fourier, do nothing already in fourier space
-
 end do
 
 #if defined(PPMPI) && defined(PPSAFETYMODE)
@@ -110,44 +123,28 @@ rH_y(1:ld:2,:,nz) = BOGUS
 
 #ifdef PPMPI
 if (coord == nproc-1) then
-    rH_z(:,:,nz) = const2 * w(:,:,nz)
-    if (.not. fourier) then
-        ! call dfftw_execute_dft_r2c(forw, rH_z(:,:,nz), rH_z(:,:,jz))
-        call dfftw_execute_dft_r2c(forw, rH_z(:,:,nz), rH_z(:,:,nz))
-        ! possible typo here, nz -> jz instead of nz -> nz
-    endif
-    ! (else) fourier, do nothing already in fourier space
+    rH_z(:,:,nz) = const * const2 * w(:,:,nz)
+    call dfftw_execute_dft_r2c(forw, rH_z(:,:,nz), rH_z(:,:,nz))
 #ifdef PPSAFETYMODE
 else
     rH_z(1:ld:2,:,nz) = BOGUS !--perhaps this should be 0 on top process?
 #endif
 endif
 #else
-rH_z(:,:,nz) = const2 * w(:,:,nz)
-if (.not. fourier) then
-    ! call dfftw_execute_dft_r2c(forw, rH_z(:,:,nz), rH_z(:,:,jz))
-    call dfftw_execute_dft_r2c(forw, rH_z(:,:,nz), rH_z(:,:,nz))
-    ! possible typo here, nz -> jz instead of nz -> nz
+rH_z(:,:,nz) = const * const2 * w(:,:,nz)
+call dfftw_execute_dft_r2c(forw, rH_z(:,:,nz), rH_z(:,:,nz))
 endif
-! (else) fourier, do nothing already in fourier space
 #endif
 
 if (coord == 0) then
-    rbottomw(:,:) = const * divtz(:,:,1)
-    if (.not. fourier) then
-        call dfftw_execute_dft_r2c(forw, rbottomw, rbottomw )
-    endif
-    ! (else) fourier, do nothing already in fourier space
+    rbottomw(:,:) = divtz(:,:,1)
 end if
 
 #ifdef PPMPI
 if (coord == nproc-1) then
 #endif
     rtopw(:,:) = const * divtz(:,:,nz)
-    if (.not. fourier) then
-        call dfftw_execute_dft_r2c(forw, rtopw, rtopw)
-    endif
-    ! (else) fourier, do nothing already in fourier space
+    call dfftw_execute_dft_r2c(forw, rtopw, rtopw)
 #ifdef PPMPI
 endif
 #endif
@@ -218,20 +215,64 @@ endif
         rH_z(1, 1, nz), ld*ny, MPI_RPREC, up, 6, comm, status, ierr)
 #endif
 
-if (fourier) then
-    end_kx = kx_num
-else
-    end_kx = lh-1
-endif
-
 do jz = jz_min, nz
+
+if (zhyb(jz-1)) then !! Fourier levels, only include RNL wavenumbers
 do jy = 1, ny
     if (jy == ny/2 + 1) cycle
 
-    do jx = 1, end_kx
+    do jx = 1, kx_num
 
-        if (jx*jy == 1) cycle
+        ! indices for a, b, c, kx, and ky
+        jj = int(kxs_in(jx)) + 1
 
+        if (jj*jy == 1) cycle !! skip kx = ky = 0 
+
+        ! indices for rH_x, rH_y, rH_z, and RHS_col
+        ii = 2*jj   ! imaginary index
+        ir = ii - 1 ! real index
+
+        ! JDA dissertation, eqn(2.85) a,b,c=coefficients and RHS_col=r_m
+#ifdef PPMAPPING
+        a(jj, jy, jz) = const3*(1._rprec/(JACO2(jz-1)**2)) -                   &
+            0.5_rprec*(1/JACO2(jz-1))*dj_dzeta(jz-1)*const4
+        b(jj, jy, jz) = -(kx(jj, jy)**2 + ky(jj, jy)**2 +                      &
+            2._rprec*const3*(1._rprec/(JACO2(jz-1)**2)))
+        c(jj, jy, jz) = const3*(1._rprec/(JACO2(jz-1)**2)) +                   &
+            0.5_rprec*(1/JACO2(jz-1))*dj_dzeta(jz-1)*const4
+#else
+        a(jj, jy, jz) = const3
+        b(jj, jy, jz) = -(kx(jj, jy)**2 + ky(jj, jy)**2 + 2._rprec*const3)
+        c(jj, jy, jz) = const3
+#endif
+
+        !  Compute eye * kx * H_x
+        aH_x(1) = -rH_x(ii,jy,jz-1) * kx(jj,jy)
+        aH_x(2) =  rH_x(ir,jy,jz-1) * kx(jj,jy)
+        aH_y(1) = -rH_y(ii,jy,jz-1) * ky(jj,jy)
+        aH_y(2) =  rH_y(ir,jy,jz-1) * ky(jj,jy)
+
+#ifdef PPMAPPING
+        RHS_col(ir:ii,jy,jz) = aH_x + aH_y + (rH_z(ir:ii, jy, jz) -            &
+            rH_z(ir:ii, jy, jz-1))*const4/JACO2(jz-1)
+#else
+        RHS_col(ir:ii,jy,jz) =  aH_x + aH_y + (rH_z(ir:ii, jy, jz) -           &
+            rH_z(ir:ii, jy, jz-1))*const4
+#endif
+
+    end do
+end do
+
+else !! Physical levels, include all wavenumbers
+
+do jy = 1, ny
+    if (jy == ny/2 + 1) cycle
+
+    do jx = 1, lh-1
+
+        if (jx*jy == 1) cycle !! skip kx = ky = 0 
+
+        ! indices for rH_x, rH_y, rH_z, and RHS_col
         ii = 2*jx   ! imaginary index
         ir = ii - 1 ! real index
 
@@ -265,10 +306,78 @@ do jy = 1, ny
 
     end do
 end do
+
+endif
+
 end do
 
-! this skips zero wavenumber solution, nyquist freqs
-call tridag_array (a, b, c, RHS_col, p)
+! Correct coefficients for wavenumbers NOT included in RNL at first uv point
+! above the interface. This is done after values are placed for every wavenumber.
+! So only need to give zeros to enforce interface BC. This acts as the pressure 
+! boundary condition for the LES. Currently using Dirichlet BC, may use Neumann.
+do jz = jz_min, nz
+if ((zhyb(jz-1)) .and. (.not. zhyb(jz))) then !! interface at jz-1, want jz
+
+do jy = 1, ny
+    if (jy == ny/2 + 1) cycle
+
+    kcnt = 1
+    do jx = 1, lh-1
+
+        if (kcnt .le. kx_num) then
+        if (jx .eq. (int(kxs_in(kcnt))+1)) then !! skip RNL wavenumbers
+            kcnt = kcnt + 1
+            cycle
+        endif
+        endif
+
+        if (jx*jy == 1) cycle !! skip kx = ky = 0 
+
+        a(jx, jy, jz+1) = 0.0_rprec
+
+    end do
+end do
+
+endif
+end do
+
+! DEBUG
+!if (coord == 5) then
+!do jz = 1, nz+1
+!do jy = 1, ny
+!write(*,*) jy, jz, RHS_col(kxi,jy,jz)
+!enddo
+!enddo
+!endif
+
+! tridag_array routines skips zero wavenumber solution, nyquist freqs
+! --> Only accounted for in tridag_array_hybrid_rnl, 
+!     assuming kx=ky=0 only included in kxs_in
+
+! call mpi_barrier( comm, ierr )
+
+! Find pressure modes for rnl wavenumbers by solving system across all z-levels
+call tridag_array_hybrid_rnl (a(int(kxs_in)+1,:,:), b(int(kxs_in)+1,:,:), c(int(kxs_in)+1,:,:), RHS_col(kxi,:,:), p_rnl)
+
+if (coord_int /= -1) then
+! Find pressure modes for non-rnl wavenumbers by solving system above wall-model
+call tridag_array_hybrid_phys (a(int(kxs_phys)+1,:,:), b(int(kxs_phys)+1,:,:), c(int(kxs_phys)+1,:,:), RHS_col(kxpi,:,:), p_phys)
+endif
+
+! zeroing for debugging purposes
+p(:,:,:) = 0.0_rprec
+dpdx(:,:,:) = 0.0_rprec
+dpdy(:,:,:) = 0.0_rprec
+dpdz(:,:,:) = 0.0_rprec
+
+! Put pressure values into sim_param pressure
+p(kxi,:,:) = p_rnl(:,:,:)
+p(kxpi,:,:) = p_phys(:,:,:)
+
+! DEBUG
+!if (coord == 6) then
+!write(*,*) 'B', p(kxi,1,4)
+!endif
 
 ! zero-wavenumber solution
 #ifdef PPMPI
@@ -312,36 +421,46 @@ p(:,ny/2+1,:) = 0._rprec
 
 ! Now need to get p(wave,level) to physical p(jx,jy,jz)
 ! Loop over height levels
-if (.not. fourier) then
+if (.not. zhyb(0)) then
     call dfftw_execute_dft_c2r(back,p(:,:,0), p(:,:,0))
 endif
-! (else) fourier, do nothing already in fourier space... no need to get physical
 
 do jz = 1, nz-1
-    do jy = 1, ny
-    do jx = 1, end_kx
-        ii = 2*jx   ! imaginary index
-        ir = ii - 1 ! real index
-        dpdx(ir,jy,jz) = -p(ii,jy,jz) * kx(jx,jy)
-        dpdx(ii,jy,jz) =  p(ir,jy,jz) * kx(jx,jy)
-        dpdy(ir,jy,jz) = -p(ii,jy,jz) * ky(jx,jy)
-        dpdy(ii,jy,jz) =  p(ir,jy,jz) * ky(jx,jy)
-    end do
-    end do
+    if (zhyb(jz)) then
+        do jy = 1, ny
+        do jx = 1, kx_num
+            ii = 2*int( kxs_in(jx) ) + 2   ! imaginary index
+            ir = ii - 1 ! real index
+            dpdx(ir,jy,jz) = -p(ii,jy,jz) * kxrnl(jx,jy)
+            dpdx(ii,jy,jz) =  p(ir,jy,jz) * kxrnl(jx,jy)
+            dpdy(ir,jy,jz) = -p(ii,jy,jz) * kyrnl(jx,jy)
+            dpdy(ii,jy,jz) =  p(ir,jy,jz) * kyrnl(jx,jy)
+        end do
+        end do
+    else
+        do jy = 1, ny
+        do jx = 1, lh-1
+            ii = 2*jx   ! imaginary index
+            ir = ii - 1 ! real index
+            dpdx(ir,jy,jz) = -p(ii,jy,jz) * kx(jx,jy)
+            dpdx(ii,jy,jz) =  p(ir,jy,jz) * kx(jx,jy)
+            dpdy(ir,jy,jz) = -p(ii,jy,jz) * ky(jx,jy)
+            dpdy(ii,jy,jz) =  p(ir,jy,jz) * ky(jx,jy)
+        end do
+        end do
+    endif
 
     ! note the oddballs of p are already 0, so we should be OK here
-    if (.not. fourier) then
+    if (.not. zhyb(jz)) then
         call dfftw_execute_dft_c2r(back,dpdx(:,:,jz), dpdx(:,:,jz))
         call dfftw_execute_dft_c2r(back,dpdy(:,:,jz), dpdy(:,:,jz))
         call dfftw_execute_dft_c2r(back,p(:,:,jz), p(:,:,jz))
     endif
-    ! (else) fourier, do nothing already in fourier space
 end do
 
-if ( (coord==nproc-1) .and. (.not. fourier) ) then
+if (coord==nproc-1) then
     call dfftw_execute_dft_c2r(back,p(:,:,nz),p(:,:,nz))
 endif
-! (else) fourier, do nothing already in fourier space
 
 ! nz level is not needed elsewhere (although its valid)
 #ifdef PPSAFETYMODE
@@ -352,14 +471,41 @@ if(coord<nproc-1) p(:,:,nz) = BOGUS
 
 ! Final step compute the z-derivative of p
 ! note: p has additional level at z=-dz/2 for this derivative
-#ifdef PPMAPPING
 do jz = 1, nz-1
-    dpdz(1:nx, 1:ny, jz) = (p(1:nx, 1:ny, jz) - p(1:nx, 1:ny, jz-1))         &
-        / dz / JACO1(jz)
-end do
+    if (zhyb(jz) .and. zhyb(jz-1)) then !! both Fourier levels
+
+#ifdef PPMAPPING
+        dpdz(kxi, 1:ny, jz) = (p(kxi, 1:ny, jz) - p(kxi, 1:ny, jz-1))        &
+            / dz / JACO1(jz)
 #else
-dpdz(1:nx, 1:ny, 1:nz-1) = (p(1:nx, 1:ny, 1:nz-1) - p(1:nx, 1:ny, 0:nz-2)) / dz
+        dpdz(kxi, 1:ny, jz) = (p(kxi, 1:ny, jz) - p(kxi, 1:ny, jz-1)) / dz
 #endif
+
+    elseif ( (.not. zhyb(jz)) .and. (.not. zhyb(jz-1)) ) then !! both Physical
+
+#ifdef PPMAPPING
+        dpdz(1:nx, 1:ny, jz) = (p(1:nx, 1:ny, jz) - p(1:nx, 1:ny, jz-1))         &
+            / dz / JACO1(jz)
+#else
+        dpdz(1:nx, 1:ny, jz) = (p(1:nx, 1:ny, jz) - p(1:nx, 1:ny, jz-1)) / dz
+#endif
+
+    else !! jz-1 is at interface in Fourier, jz in Physical, dpdz in Physical
+
+        ptemp(:,:) = p(:,:,jz-1)
+        call dfftw_execute_dft_c2r(back, ptemp(:,:), ptemp(:,:))
+
+#ifdef PPMAPPING
+        dpdz(1:nx, 1:ny, jz) = (p(1:nx, 1:ny, jz) - ptemp(1:nx, 1:ny))         &
+            / dz / JACO1(jz)
+#else
+        dpdz(1:nx, 1:ny, jz) = (p(1:nx, 1:ny, jz) - ptemp(1:nx, 1:ny)) / dz
+#endif
+
+    end if
+end do
+
+
 #ifdef PPSAFETYMODE
 if(coord<nproc-1)  dpdz(:,:,nz) = BOGUS
 #endif
@@ -370,4 +516,10 @@ if(coord==nproc-1) dpdz(1:nx,1:ny,nz) = (p(1:nx,1:ny,nz)-p(1:nx,1:ny,nz-1))  &
 if(coord==nproc-1) dpdz(1:nx,1:ny,nz) = (p(1:nx,1:ny,nz)-p(1:nx,1:ny,nz-1)) / dz
 #endif
 
-end subroutine press_stag_array
+! DEBUG
+!if (coord == 0) then
+!write(*,*) 'C', dpdy(kxi,2,4)
+!write(*,*) '---------------------------------'
+!endif
+
+end subroutine press_stag_array_hybrid

@@ -39,7 +39,7 @@ function get_max_cfl() result(cfl)
 ! domain
 !
 use types, only : rprec
-use param, only : dt, dx, dy, dz, nx, ny, nz, fourier, nxp
+use param, only : dt, dx, dy, dz, nx, ny, nz, fourier, nxp, hybrid_fourier
 use sim_param, only : u,v,w
 use sim_param, only : uF, vF, wF
 #ifdef PPMAPPING
@@ -63,7 +63,7 @@ integer :: jz
 real(rprec) :: cfl_buf
 #endif
 
-if (fourier) then !! remember dx = L_x / nxp (if fourier=true)
+if ((fourier) .or. (hybrid_fourier)) then !! remember dx = L_x / nxp (if fourier=true)
     cfl_u = maxval( abs(uF(1:nxp,1:ny,1:nz-1)) ) / dx
     cfl_v = maxval( abs(vF(1:nxp,1:ny,1:nz-1)) ) / dy
 #ifdef PPMAPPING
@@ -105,7 +105,7 @@ function get_cfl_dt() result(dt)
 ! value specified in the param module
 !
 use types, only : rprec
-use param, only : cfl, dx, dy, dz, nx, ny, nz, fourier, nxp
+use param, only : cfl, dx, dy, dz, nx, ny, nz, fourier, nxp, hybrid_fourier
 use sim_param, only : u,v,w
 use sim_param, only : uF, vF, wF
 #ifdef PPMAPPING
@@ -133,7 +133,7 @@ real(rprec) :: dt_buf
 #endif
 
 ! Avoid division by computing max dt^-1
-if (fourier) then
+if ((fourier) .or. (hybrid_fourier)) then
     dt_inv_u = maxval( abs(uF(1:nxp,1:ny,1:nz-1)) ) / dx
     dt_inv_v = maxval( abs(vF(1:nxp,1:ny,1:nz-1)) ) / dy
 #ifdef PPMAPPING

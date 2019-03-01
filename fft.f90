@@ -31,13 +31,17 @@ save
 public :: padd, unpadd, init_fft
 
 public :: kx, ky, k2
+public :: kxrnl, kyrnl, kxi, kxpi !! hybrid_fourier only
 public :: forw, back, forw_big, back_big
 public :: forw_x, back_x, forw_y, forw_x_fourier
 public :: forw_fourier, back_fourier
 public :: ycomp_forw_big, ycomp_back_big
 
 real(rprec), allocatable, dimension(:,:) :: kx, ky, k2
-integer, allocatable, dimension(:) :: kx_veci
+real(rprec), allocatable, dimension(:,:) :: kxrnl, kyrnl !! hybrid_fourier only
+integer, allocatable, dimension(:) :: kxi !! hybrid_fourier only
+integer, allocatable, dimension(:) :: kxpi !! hybrid_fourier only
+real(rprec), allocatable, dimension(:) :: kxs_phys !! hybrid_fourier only
 
 integer*8 :: forw, back, forw_big, back_big
 integer*8 :: forw_x, back_x, forw_y, forw_x_fourier
@@ -189,17 +193,17 @@ subroutine init_wavenumber()
 !*******************************************************************************
 use param, only : lh, ny, L_x, L_y, pi
 use param, only : kxs_in, fourier, kx_num, coord
+use param, only : hybrid_fourier
 implicit none
-integer :: jx,jy
+integer :: jx, jy
+integer :: ii, ir, kcnt, k2cnt, k3cnt !! hybrid_fourier only
 
 ! Allocate wavenumbers
 allocate( kx(lh,ny), ky(lh,ny), k2(lh,ny) )
-allocate(kx_veci ( kx_num ) )
-
-! Create wavenumber index
-do jx = 1, kx_num
-    kx_veci(jx) = int( jx ) !! note: starts at 1, not 0
-enddo
+allocate( kxrnl(kx_num,ny), kyrnl(kx_num,ny) ) !! hybrid_fourier only 
+allocate( kxi(2*kx_num) ) !! hybrid_fourier only
+allocate( kxpi(ld-2*kx_num) ) !! hybrid_fourier only
+allocate( kxs_phys(lh-kx_num) ) !! hybrid_fourier only
 
 do jx = 1, lh-1
     kx(jx,:) = real(jx-1,kind=rprec)
@@ -209,6 +213,61 @@ if (fourier) then
     do jx = 1, kx_num
         kx(jx,:) = kxs_in(jx)
     end do
+endif
+
+if (hybrid_fourier) then
+    kcnt = 1
+    do jx = 1, kx_num
+        ! Make index array to access desired kx from Fourier coef
+        ii = 2 * int(kxs_in(jx)) + 2
+        ir = ii - 1
+        kxi(kcnt) = ir
+        kxi(kcnt + 1) = ii
+        kcnt = kcnt + 2
+
+        ! Create kx wavenumber array for rnl
+        kxrnl(jx,:) = kxs_in(jx)
+    enddo
+
+    ! Make index array to access kx NOT in RNL
+    kcnt = 1
+    k2cnt = 1
+    k3cnt = 1
+    do jx = 1, lh
+        if (kcnt .le. kx_num) then
+            if (jx == (kxs_in(kcnt)+1)) then
+                kcnt = kcnt + 1
+            else
+                kxs_phys(k3cnt) = jx - 1
+                ii = 2 * jx
+                ir = ii - 1
+                kxpi(k2cnt) = ir
+                kxpi(k2cnt+1) = ii
+                k3cnt = k3cnt + 1
+                k2cnt = k2cnt + 2
+            endif
+        else
+            kxs_phys(k3cnt) = jx - 1
+            ii = 2 * jx
+            ir = ii - 1
+            kxpi(k2cnt) = ir
+            kxpi(k2cnt+1) = ii
+            k3cnt = k3cnt + 1
+            k2cnt = k2cnt + 2
+        endif
+    
+    enddo
+
+    do jy = 1, ny
+        kyrnl(:,jy) = real(modulo(jy - 1 + ny/2,ny) - ny/2,kind=rprec)
+    enddo
+
+    ! kxrnl and kyrnl don't have Nyquist since physical grid should 
+    ! have larger wavenumber
+
+    kxrnl = 2._rprec*pi/L_x*kxrnl
+    kyrnl = 2._rprec*pi/L_y*kyrnl
+
 endif
 
 do jy = 1, ny
@@ -228,14 +287,24 @@ ky = 2._rprec*pi/L_y*ky
 ! magnitude squared: will have 0's around the edge
 k2 = kx*kx + ky*ky
 
-if ((coord == 0) .and. fourier) then
+if (coord == 0) then
+if (fourier) then
     write(*,*) '>>>>>>>>>>>>>>>>>>>>>>>>>>>'
     write(*,*) 'SIMULATING IN FOURIER SPACE'
-    WRITE(*,*) '<<<<<<<<<<<<<<<<<<<<<<<<<<<'
+    write(*,*) '<<<<<<<<<<<<<<<<<<<<<<<<<<<'
     write(*,*) 'SOLVING ON KX MODES:'
     do jx = 1, lh-1
         write(*,*) kx(jx,1)
     enddo
+elseif (hybrid_fourier) then
+    write(*,*) '>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>'
+    write(*,*) 'SIMULATING IN PHYSICAL/FOURIER SPACE'
+    write(*,*) '<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'
+    write(*,*) 'RNL SOLVING ON KX MODES:'
+    do jx = 1, kx_num
+        write(*,*) kxrnl( jx ,1)
+    enddo
+endif
 endif
 
 end subroutine init_wavenumber

@@ -310,6 +310,10 @@ do
                 read (buff(equal_pos+1:), *) nxp
             case ('THRX')
                 read (buff(equal_pos+1:), *) thrx
+            case ('HYBRID_FOURIER')
+                read (buff(equal_pos+1:), *) hybrid_fourier
+            case ('HWM')
+                read (buff(equal_pos+1:), *) hwm
             case default
                 ! if (coord == 0) write(*,*) 'Found unused data value in '       &
                 !     // block_name // ' block: ' // buff(1:equal_pos-1)
@@ -341,6 +345,30 @@ do
                 ld = 2 * lh
                 lh_big = nx2 / 2 + 1
                 ld_big = 2 * lh_big
+            endif
+        endif !! end of fourier setting interpretation
+
+        ! Interpret user input for hybrid RNL/LES setting
+        if (hybrid_fourier) then
+            if (nx .le. 2*maxval(kxs_in) ) then
+                nx = int( 2*(kxs_in(kx_num) + 1) )
+                if (coord == 0) then
+                    write(*,*) 'HYBRID FOURIER: Physical grid (nx) not large enough'
+                    write(*,*) '>>> Changing Nx to ', nx
+                endif
+            endif
+
+            ! Change nxp so that it is equal to nx
+            if (nxp .ne. nx) then
+                nxp = nx
+                if (coord == 0) write(*,*) 'HYBRID FOURIER: Changing Nxp to ', nxp
+            endif
+        endif !! end of hybrid RNL/LES setting interpretation
+
+        ! Warn user if both fourier and hybrid_fourier flags are on
+        if (fourier .and. hybrid_fourier) then
+            if (coord == 0) then
+                write(*,*) 'ERROR: BOTH FOURIER AND HYBRID_FOURIER ARE ON!'
             endif
         endif
 
@@ -556,8 +584,8 @@ do
         select case (uppercase(buff(1:equal_pos-1)))
             case ('WBASE')
                 read (buff(equal_pos+1:), *) wbase
-            case ('NENERGY')
-                read (buff(equal_pos+1:), *) nenergy
+            !case ('NENERGY')
+            !    read (buff(equal_pos+1:), *) nenergy
             case ('LAG_CFL_COUNT')
                 read (buff(equal_pos+1:), *) lag_cfl_count
             case ('CHECKPOINT_DATA')

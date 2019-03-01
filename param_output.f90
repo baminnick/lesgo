@@ -90,11 +90,17 @@ write(2,i_fmt) 'trig_on : ', trig_on
 write(2,i_fmt) 'trig_off : ', trig_off
 write(2,f_fmt) 'trig_factor', trig_factor
 write(2,x3l_fmt) 'fourier : ', fourier
-if (fourier) then
+write(2,x3l_fmt) 'hybrid_fourier : ', hybrid_fourier
+if ((fourier) .or. (hybrid_fourier)) then
 do n = 1, kx_num
     write(2,if_fmt) 'n, kxs_in(n) : ', n, kxs_in(n)
 enddo
+if (fourier) then
 write(2,i_fmt) 'nxp : ', nxp
+endif
+if (hybrid_fourier) then
+write(2,f_fmt) 'hwm : ', hwm
+endif
 #ifdef PPGQL
 write(2,i_fmt) 'thrx : ', thrx
 #endif
@@ -178,7 +184,7 @@ inquire(2,convert=ch)
 write(2,x2c_fmt) 'read_endian : ', ch
 #endif
 write(2,i_fmt) 'wbase : ', wbase
-write(2,i_fmt) 'nenergy : ', nenergy
+!write(2,i_fmt) 'nenergy : ', nenergy
 write(2,i_fmt) 'lag_cfl_count : ', lag_cfl_count
 write(2,l_fmt) 'checkpoint_data : ', checkpoint_data
 write(2,i_fmt) 'checkpoint_nskip : ', checkpoint_nskip

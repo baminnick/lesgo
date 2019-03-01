@@ -128,11 +128,11 @@ set (Sources cfl_util.f90 clocks.f90 convec.f90 derivatives.f90 divstress_uv.f90
      initial.f90 initialize.f90 input_util.f90 interpolag_Sdep.f90
      interpolag_Ssim.f90 io.f90 lagrange_Sdep.f90 lagrange_Ssim.f90 main.f90
      messages.f90 param.f90 param_output.f90
-     press_stag_array.f90 rmsdiv.f90 scaledep_dynamic.f90 
+     press_stag_array.f90 press_stag_array_hybrid.f90 rmsdiv.f90 scaledep_dynamic.f90 
      sgs_param.f90 sgs_stag_util.f90 sim_param.f90 stat_defs.f90 
      std_dynamic.f90 string_util.f90 test_filtermodule.f90 tridag_array.f90 
-     types.f90 wallstress.f90 init_random_seed.f90
-     iwmles.f90 tlwmles.f90)
+     tridag_array_hybrid_rnl.f90 tridag_array_hybrid_phys.f90 types.f90 wallstress.f90 
+     init_random_seed.f90 iwmles.f90 tlwmles.f90)
 
 if (USE_MPI)
     add_definitions(-DPPMPI)

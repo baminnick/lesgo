@@ -44,10 +44,10 @@ subroutine ddx(f,dfdx,lbz)
 ! x using spectral decomposition.
 !
 use types, only : rprec
-use param, only : ld, nx, ny, nz, fourier
+use param, only : ld, nx, ny, nz, fourier, hybrid_fourier
+use sim_param, only : zhyb
 use fft
 use emul_complex, only : OPERATOR(.MULI.)
-!use param, only : coord
 implicit none
 
 integer, intent(in) :: lbz
@@ -56,52 +56,45 @@ real(rprec), dimension(:,:,lbz:), intent(inout) :: dfdx
 real(rprec) :: const
 integer :: jz
 
-!real(rprec) :: xx, yy
-!real(rprec), dimension(ld,ny) :: FF
-!integer :: jx
-
-!if (coord == 0) then
-!    write(*,*) '----------------------------------'
-!    ! Create FF
-!    do jx = 1, nx
-!    do jz = 1, ny
-!        xx = (2.0_rprec*3.1415926535_rprec)*real(jx-1,rprec)/real(nx-1,rprec)
-!        yy = (2.0_rprec*3.1415926535_rprec)*real(jz-1,rprec)/real(ny-1,rprec)
-!        ! FF(jx,jz) = cos(5.0_rprec*xx) + cos(2.0_rprec*yy) + 5.0_rprec
-!        FF(jx,jz) = cos(5.0_rprec*xx) + cos(2.0_rprec*yy)
-!        ! FF(jx,jz) = cos(5.0_rprec*xx) 
-!        ! FF(jx,jz) = cos(5.0_rprec*yy)
-!        ! FF(jx,jz) = 5.0_rprec
-!    enddo
-!    enddo
-!
-!    call dfftw_execute_dft_r2c(forw,FF(:,:),FF(:,:))
-!    FF(:,:) = FF(:,:) / ( nx * ny )
-!    write(*,*) FF(:,1)
-!    write(*,*) '***'
-!    write(*,*) FF(:,2)
-!    write(*,*) '***'
-!    write(*,*) FF(:,3)
-!    write(*,*) '***'
-!    write(*,*) FF(:,4)
-!    write(*,*) '***'
-!    write(*,*) FF(:,5)
-!    write(*,*) '***'
-!    write(*,*) FF(:,6)
-!    write(*,*) '***'
-!    write(*,*) FF(:,7)
-!    write(*,*) '***'
-!    write(*,*) FF(:,8)
-!    write(*,*) '***'
-!    write(*,*) FF(:,9)
-!    write(*,*) '***'
-!    write(*,*) FF(:,10)
-!
-!    write(*,*) '----------------------------------'
-!endif
-
 const = 1._rprec !! if fourier
 if (.not. fourier) const = 1._rprec / ( nx * ny )
+
+if (hybrid_fourier) then
+
+! Loop through horizontal slices
+do jz = lbz, nz
+    if (.not. zhyb(jz)) then
+        ! Use dfdx to hold f; since we are doing in place FFTs this is required
+        dfdx(:,:,jz) = const*f(:,:,jz)
+        call dfftw_execute_dft_r2c(forw, dfdx(:,:,jz),dfdx(:,:,jz))
+
+        ! Zero padded region and Nyquist frequency
+        dfdx(ld-1:ld,:,jz) = 0._rprec
+        dfdx(:,ny/2+1,jz) = 0._rprec
+
+        ! Use complex emulation of dfdx to perform complex multiplication
+        ! Optimized version for real(eye*kx)=0
+        ! only passing imaginary part of eye*kx
+        dfdx(:,:,jz) = dfdx(:,:,jz) .MULI. kx
+
+        ! Perform inverse transform to get pseudospectral derivative
+        call dfftw_execute_dft_c2r(back, dfdx(:,:,jz), dfdx(:,:,jz))
+    else
+        ! Use dfdx to hold f
+        dfdx(:,:,jz) = f(:,:,jz)
+
+        ! Zero padded region and Nyquist frequency
+        dfdx(ld-1:ld,:,jz) = 0._rprec
+        dfdx(:,ny/2+1,jz) = 0._rprec
+
+        ! Use complex emulation of dfdx to perform complex multiplication
+        ! Optimized version for real(eye*kx)=0
+        ! only passing imaginary part of eye*kx
+        dfdx(kxi,:,jz) = dfdx(kxi,:,jz) .MULI. kxrnl
+    endif
+enddo
+
+else !! not hybrid_fourier
 
 ! Loop through horizontal slices
 do jz = lbz, nz
@@ -126,6 +119,8 @@ do jz = lbz, nz
     endif
 enddo
 
+endif
+
 end subroutine ddx
 
 !*******************************************************************************
@@ -136,7 +131,8 @@ subroutine ddy(f,dfdy, lbz)
 ! y using spectral decomposition.
 !
 use types, only : rprec
-use param, only : ld, nx, ny, nz, fourier
+use param, only : ld, nx, ny, nz, fourier, hybrid_fourier
+use sim_param, only : zhyb
 use fft
 use emul_complex, only : OPERATOR(.MULI.)
 implicit none
@@ -149,6 +145,43 @@ integer :: jz
 
 const = 1._rprec !! if fourier
 if (.not. fourier) const = 1._rprec / ( nx * ny )
+
+if (hybrid_fourier) then
+
+! Loop through horizontal slices
+do jz = lbz, nz
+    if (.not. zhyb(jz)) then
+        ! Use dfdy to hold f; since we are doing in place FFTs this is required
+        dfdy(:,:,jz) = const * f(:,:,jz)
+        call dfftw_execute_dft_r2c(forw, dfdy(:,:,jz), dfdy(:,:,jz))
+
+        ! Zero padded region and Nyquist frequency
+        dfdy(ld-1:ld,:,jz) = 0._rprec
+        dfdy(:,ny/2+1,jz) = 0._rprec
+
+        ! Use complex emulation of dfdx to perform complex multiplication
+        ! Optimized version for real(eye*kx)=0
+        ! only passing imaginary part of eye*kx
+        dfdy(:,:,jz) = dfdy(:,:,jz) .MULI. ky
+
+        ! Perform inverse transform to get pseudospectral derivative
+        call dfftw_execute_dft_c2r(back, dfdy(:,:,jz), dfdy(:,:,jz))
+    else
+        ! Use dfdy to hold f
+        dfdy(:,:,jz) = f(:,:,jz)
+
+        ! Zero padded region and Nyquist frequency
+        dfdy(ld-1:ld,:,jz) = 0._rprec
+        dfdy(:,ny/2+1,jz) = 0._rprec
+
+        ! Use complex emulation of dfdx to perform complex multiplication
+        ! Optimized version for real(eye*kx)=0
+        ! only passing imaginary part of eye*kx
+        dfdy(kxi,:,jz) = dfdy(kxi,:,jz) .MULI. kyrnl
+    endif
+end do
+
+else !! not hybrid_fourier
 
 ! Loop through horizontal slices
 do jz = lbz, nz
@@ -173,6 +206,8 @@ do jz = lbz, nz
     endif
 end do
 
+endif
+
 end subroutine ddy
 
 !*******************************************************************************
@@ -183,7 +218,8 @@ subroutine ddxy (f, dfdx, dfdy, lbz)
 ! x and y using spectral decomposition.
 !
 use types, only : rprec
-use param, only : ld, nx, ny, nz, fourier
+use param, only : ld, nx, ny, nz, fourier, hybrid_fourier
+use sim_param, only : zhyb
 use fft
 use emul_complex, only : OPERATOR(.MULI.)
 implicit none
@@ -196,6 +232,48 @@ integer :: jz
 
 const = 1._rprec !! if fourier
 if (.not. fourier) const = 1._rprec / ( nx * ny )
+
+if (hybrid_fourier) then
+
+! Loop through horizontal slices
+do jz = lbz, nz
+    if (.not. zhyb(jz)) then
+        ! Use dfdx to hold f; since we are doing in place FFTs this is required
+        dfdx(:,:,jz) = const * f(:,:,jz)
+        call dfftw_execute_dft_r2c(forw, dfdx(:,:,jz), dfdx(:,:,jz))
+
+        ! Zero padded region and Nyquist frequency
+        dfdx(ld-1:ld,:,jz) = 0._rprec
+        dfdx(:,ny/2+1,jz) = 0._rprec
+
+        ! Derivatives: must do y first here, because we're using dfdx as storage
+        ! Use complex emulation of dfdy to perform complex multiplication
+        ! Optimized version for real(eye*ky)=0
+        ! only passing imaginary part of eye*ky
+        dfdy(:,:,jz) = dfdx(:,:,jz) .MULI. ky
+        dfdx(:,:,jz) = dfdx(:,:,jz) .MULI. kx
+
+        ! Perform inverse transform to get pseudospectral derivative
+        call dfftw_execute_dft_c2r(back, dfdx(:,:,jz), dfdx(:,:,jz))
+        call dfftw_execute_dft_c2r(back, dfdy(:,:,jz), dfdy(:,:,jz))
+    else
+        ! Use dfdx to hold f
+        dfdx(:,:,jz) = f(:,:,jz)
+
+        ! Zero padded region and Nyquist frequency
+        dfdx(ld-1:ld,:,jz) = 0._rprec
+        dfdx(:,ny/2+1,jz) = 0._rprec
+
+        ! Derivatives: must do y first here, because we're using dfdx as storage
+        ! Use complex emulation of dfdy to perform complex multiplication
+        ! Optimized version for real(eye*ky)=0
+        ! only passing imaginary part of eye*ky
+        dfdy(kxi,:,jz) = dfdx(kxi,:,jz) .MULI. kyrnl
+        dfdx(kxi,:,jz) = dfdx(kxi,:,jz) .MULI. kxrnl
+    endif
+end do
+
+else !! not hybrid_fourier
 
 ! Loop through horizontal slices
 do jz = lbz, nz
@@ -223,17 +301,20 @@ do jz = lbz, nz
     endif
 end do
 
+endif
+
 end subroutine ddxy
 
 !*******************************************************************************
-subroutine filt_da(f,dfdx,dfdy, lbz)
+subroutine filt_da( f, dfdx, dfdy, lbz)
 !*******************************************************************************
 !
 ! This subroutine kills the oddball components in f and computes the partial
 ! derivative of f with respect to x and y using spectral decomposition.
 !
 use types, only : rprec
-use param, only : ld, nx, ny, nz, fourier
+use param, only : ld, nx, ny, nz, fourier, hybrid_fourier
+use sim_param, only : zhyb
 use fft
 use emul_complex, only : OPERATOR(.MULI.)
 implicit none
@@ -246,6 +327,47 @@ integer :: jz
 
 const = 1._rprec !! if fourier
 if (.not. fourier) const = 1._rprec/(nx*ny)
+
+if (hybrid_fourier) then
+
+! loop through horizontal slices
+do jz = lbz, nz
+    if (.not. zhyb(jz)) then
+        ! Calculate FFT in place
+        f(:,:,jz) = const * f(:,:,jz)
+        call dfftw_execute_dft_r2c(forw, f(:,:,jz), f(:,:,jz))
+
+        ! Kill oddballs in zero padded region and Nyquist frequency
+        f(ld-1:ld,:,jz) = 0._rprec
+        f(:,ny/2+1,jz) = 0._rprec
+
+        ! Use complex emulation of dfdy to perform complex multiplication
+        ! Optimized version for real(eye*ky)=0
+        ! only passing imaginary part of eye*ky
+        dfdx(:,:,jz) = f(:,:,jz) .MULI. kx
+        dfdy(:,:,jz) = f(:,:,jz) .MULI. ky
+
+        ! Perform inverse transform to get pseudospectral derivative
+        ! The oddballs for derivatives should already be dead, since they are for f
+        ! inverse transform
+        call dfftw_execute_dft_c2r(back, f(:,:,jz), f(:,:,jz))
+        call dfftw_execute_dft_c2r(back, dfdx(:,:,jz), dfdx(:,:,jz))
+        call dfftw_execute_dft_c2r(back, dfdy(:,:,jz), dfdy(:,:,jz))
+    else
+        ! Kill oddballs in zero padded region and Nyquist frequency
+        f(ld-1:ld,:,jz) = 0._rprec
+        f(:,ny/2+1,jz) = 0._rprec
+
+        ! Use complex emulation of dfdy to perform complex multiplication
+        ! Optimized version for real(eye*ky)=0
+        ! only passing imaginary part of eye*ky
+        dfdx(kxi,:,jz) = f(kxi,:,jz) .MULI. kxrnl
+        dfdy(kxi,:,jz) = f(kxi,:,jz) .MULI. kyrnl
+
+    endif
+end do
+
+else !! not hybrid_fourier
 
 ! loop through horizontal slices
 do jz = lbz, nz
@@ -275,6 +397,8 @@ do jz = lbz, nz
     endif
 end do
 
+endif
+
 end subroutine filt_da
 
 !*******************************************************************************
@@ -289,6 +413,9 @@ subroutine ddz_uv(f, dfdz, lbz)
 !
 use types, only : rprec
 use param, only : nx, ny, nz, dz, BOGUS
+use param, only : hybrid_fourier
+use sim_param, only : zhyb
+use fft !! only for hybrid_fourier
 #ifdef PPSAFETYMODE
 use param, only : nproc, coord
 #endif
@@ -302,6 +429,7 @@ real(rprec), dimension(:,:,lbz:), intent(in) :: f
 real(rprec), dimension(:,:,lbz:), intent(inout) :: dfdz
 integer :: jx, jy, jz
 real(rprec) :: const
+real(rprec), dimension(1:ld,1:ny) :: ftemp !! only for hybrid_fourier
 
 const = 1._rprec/dz
 
@@ -312,17 +440,67 @@ dfdz(:,:,0) = BOGUS
 ! Calculate derivative.
 ! The ghost node information is available here
 ! if coord == 0, dudz(1) will be set in wallstress
+if (hybrid_fourier) then
+
+do jz = lbz+1, nz
+
+    if ( (zhyb(jz)) .and. (zhyb(jz-1)) ) then !! both f-values in Fourier
+
+        ! Only take derivative for desired kx
+        do jy = 1, ny
+#ifdef PPMAPPING
+            dfdz(kxi,jy,jz) = (1/JACO1(jz))*const*(f(kxi,jy,jz)-f(kxi,jy,jz-1))
+#else
+            dfdz(kxi,jy,jz) = const*(f(kxi,jy,jz)-f(kxi,jy,jz-1))
+#endif
+        enddo
+
+    elseif ( (.not. zhyb(jz)) .and. (.not. zhyb(jz-1)) ) then !! both in Physical
+
+        do jy = 1, ny
+        do jx = 1, nx
+#ifdef PPMAPPING
+            dfdz(jx,jy,jz) = (1/JACO1(jz))*const*(f(jx,jy,jz)-f(jx,jy,jz-1))
+#else
+            dfdz(jx,jy,jz) = const*(f(jx,jy,jz)-f(jx,jy,jz-1))
+#endif
+        enddo
+        enddo
+
+    else !! jz-1 is at interface in Fourier, jz in Physical, dfdz in Physical
+
+    ftemp(:,:) = f(:,:,jz-1)
+    call dfftw_execute_dft_c2r(back, ftemp(:,:), ftemp(:,:))
+
+        do jy = 1, ny
+        do jx = 1, nx
+#ifdef PPMAPPING
+            dfdz(jx,jy,jz) = (1/JACO1(jz))*const*(f(jx,jy,jz)-ftemp(jx,jy))
+#else
+            dfdz(jx,jy,jz) = const*(f(jx,jy,jz)-ftemp(jx,jy))
+#endif
+        enddo
+        enddo
+
+    endif
+
+enddo
+
+else !! fourier or not fourier
+
 do jz = lbz+1, nz
 do jy = 1, ny
-do jx = 1, nx !! jb has ld instead of nx fourier
+do jx = 1, nx
 #ifdef PPMAPPING
     dfdz(jx,jy,jz) = (1/JACO1(jz))*const*(f(jx,jy,jz)-f(jx,jy,jz-1))
 #else
     dfdz(jx,jy,jz) = const*(f(jx,jy,jz)-f(jx,jy,jz-1))
 #endif
-end do
-end do
-end do
+enddo
+enddo
+enddo
+
+endif
 
 ! Not necessarily accurate at top and bottom boundary
 ! Set to BOGUS just to be safe
@@ -349,6 +527,9 @@ subroutine ddz_w(f, dfdz, lbz)
 !
 use types, only : rprec
 use param, only : ld, ny, nz, dz, BOGUS
+use param, only : hybrid_fourier, nx 
+use sim_param, only : zhyb
+use fft !! only for hybrid_fourier
 #ifdef PPSAFETYMODE
 #ifdef PPMPI
 use param, only : coord
@@ -364,8 +545,57 @@ real(rprec), dimension(:,:,lbz:), intent(inout) :: dfdz
 integer, intent(in) :: lbz
 real(rprec)::const
 integer :: jx, jy, jz
+real(rprec), dimension(1:ld,1:ny) :: ftemp !! only for hybrid_fourier
 
 const = 1._rprec/dz
+
+if (hybrid_fourier) then
+
+do jz = lbz, nz-1
+
+    if ( (zhyb(jz+1)) .and. (zhyb(jz)) ) then !! both f-values in Fourier
+
+        ! Only take derivative for desired kx
+        do jy = 1, ny
+#ifdef PPMAPPING
+            dfdz(kxi,jy,jz) = (1/JACO2(jz))*const*(f(kxi,jy,jz+1)-f(kxi,jy,jz))
+#else
+            dfdz(kxi,jy,jz) = const*(f(kxi,jy,jz+1)-f(kxi,jy,jz))
+#endif
+        enddo
+
+    elseif ( (.not. zhyb(jz+1)) .and. (.not. zhyb(jz)) ) then !! both in Physical
+
+        do jy = 1, ny
+        do jx = 1, ld
+#ifdef PPMAPPING
+            dfdz(jx,jy,jz) = (1/JACO2(jz))*const*(f(jx,jy,jz+1)-f(jx,jy,jz))
+#else
+            dfdz(jx,jy,jz) = const*(f(jx,jy,jz+1)-f(jx,jy,jz))
+#endif
+        enddo
+        enddo
+
+    else !! jz in Fourier, jz+1 in Physical, dfdz at interface in Fourier
+
+        ftemp(:,:) = f(:,:,jz+1) / (nx*ny) !! normalize
+        call dfftw_execute_dft_r2c(forw, ftemp(:,:), ftemp(:,:))
+
+        ! Only take derivative for desired kx
+        do jy = 1, ny
+#ifdef PPMAPPING
+                dfdz(kxi,jy,jz) = (1/JACO2(jz))*const*(ftemp(kxi,jy)-f(kxi,jy,jz))
+#else
+                dfdz(kxi,jy,jz) = const*(ftemp(kxi,jy)-f(kxi,jy,jz))
+#endif
+        enddo
+
+    endif
+
+enddo
+
+else !! fourier or not fourier
+
 do jz = lbz, nz-1
 do jy = 1, ny
 do jx = 1, ld !! nx fourier
@@ -377,6 +607,8 @@ do jx = 1, ld !! nx fourier
 end do
 end do
 end do
+
+endif
 
 #ifdef PPSAFETYMODE
 #ifdef PPMPI
@@ -395,7 +627,8 @@ end subroutine ddz_w
 subroutine phys2wave( f, lb )
 !*******************************************************************************
 !
-! Transform field from physical space to wavenumber space. 
+! Transform field from physical space to wavenumber space, or if hybrid_fourier
+! is on, then only transforms lower portion of the field.
 ! (x,y) --> (kx,ky)
 !
 ! lb - lower bound index for z-dimension
@@ -403,7 +636,9 @@ subroutine phys2wave( f, lb )
 ! 
 use types, only : rprec
 use param, only : nx, ny, nz
+use param, only : hybrid_fourier
 use fft
+use sim_param, only : zhyb
 implicit none
 
 real(rprec), dimension(:,:,lb:), intent(inout) :: f
@@ -414,10 +649,24 @@ integer, intent(in) :: lb
 const = 1._rprec / ( nx * ny )
 
 ! Loop through horizontal slices
-do jz = lb, nz
-    f(:,:,jz) = const*f(:,:,jz) !! normalization
-    call dfftw_execute_dft_r2c(forw, f(:,:,jz), f(:,:,jz))
-enddo
+if (hybrid_fourier) then
+    do jz = lb, nz
+        if (zhyb(jz)) then
+            f(:,:,jz) = const*f(:,:,jz) !! normalization
+            call dfftw_execute_dft_r2c(forw, f(:,:,jz), f(:,:,jz))
+
+! DEBUG
+! This is only for debugging purposes
+!f(kxpi,:,jz) = 0.0_rprec
+
+        endif
+    enddo
+else !! fourier
+    do jz = lb, nz
+        f(:,:,jz) = const*f(:,:,jz) !! normalization
+        call dfftw_execute_dft_r2c(forw, f(:,:,jz), f(:,:,jz))
+    enddo
+endif
 
 end subroutine phys2wave
 
@@ -425,7 +674,8 @@ end subroutine phys2wave
 subroutine wave2phys( f, lb )
 !*******************************************************************************
 !
-! Transform field from wavenumber space to physical space. 
+! Transform field from wavenumber space to physical space, or if hybrid_fourier
+! is on, then only transforms lower portion of the field.
 ! (kx,ky) --> (x,y)
 !
 ! lb - lower bound index for z-dimension
@@ -433,7 +683,9 @@ subroutine wave2phys( f, lb )
 ! 
 use types, only : rprec
 use param, only : nz
+use param, only : hybrid_fourier
 use fft
+use sim_param, only : zhyb
 implicit none
 
 real(rprec), dimension(:,:,lb:), intent(inout) :: f
@@ -441,9 +693,17 @@ integer :: jz
 integer, intent(in) :: lb
 
 ! Loop through horizontal slices
-do jz = lb, nz
-    call dfftw_execute_dft_c2r(back, f(:,:,jz), f(:,:,jz))
-enddo
+if (hybrid_fourier) then
+    do jz = lb, nz
+        if (zhyb(jz)) then
+            call dfftw_execute_dft_c2r(back, f(:,:,jz), f(:,:,jz))
+        endif
+    enddo
+else !! fourier
+    do jz = lb, nz
+        call dfftw_execute_dft_c2r(back, f(:,:,jz), f(:,:,jz))
+    enddo
+endif
 
 end subroutine wave2phys
 
@@ -453,7 +713,7 @@ subroutine phys2waveF( u, uhat )
 !
 ! Transform field from physical space to wavenumber space.
 ! (x,y) --> (kx,ky)
-! This function is intended for fourier
+! Only for fourier mode, not ready for hybrid_fourier!
 !
 use types, only : rprec
 use param, only : nxp, ny, nz, lbz, kx_num, kxs_in
@@ -490,18 +750,23 @@ do jx = 1, kx_num
     uhat(irh:iih, :, :) = u(ir:ii, :, :)
 end do
 
+
 end subroutine phys2waveF
 
 !*******************************************************************************
 subroutine wave2physF( uhat, u )
 !*******************************************************************************
 !
-! Transform field from wavenumber space to physical space.
+! Transform field from wavenumber space to physical space, or if hybrid_fourier 
+! is on, then only transforms lower portion of the field.
 ! (kx,ky) --> (x,y)
-! This function is intended to be used for fourier
+! If in fourier mode, nxp may be different than ld
+! If in hybrid_fourier mode, nxp+2 = ld
 !
 use types, only : rprec
 use param, only : nxp, ny, nz, lbz, kx_num, kxs_in
+use param, only : fourier, hybrid_fourier
+use sim_param, only : zhyb
 use fft
 implicit none
 
@@ -512,23 +777,35 @@ real(rprec), dimension(nxp+2, ny, lbz:nz), intent(out) :: u
 ! Fill physical u with zeroes everywhere
 u(:,:,:) = 0.0_rprec
 
-! Place uhat values in appropriate u index before inverse fourier transform
-do jx = 1, kx_num
-    ! uhat indices
-    iih = 2*jx
-    irh = iih - 1
+if (fourier) then
+    ! Place uhat values in appropriate u index before inverse transform
+    do jx = 1, kx_num
+        ! uhat indices
+        iih = 2*jx
+        irh = iih - 1
 
-    ! u indices
-    ii = 2 * int( kxs_in(jx) ) + 2
-    ir = ii - 1
+        ! u indices
+        ii = 2 * int( kxs_in(jx) ) + 2
+        ir = ii - 1
 
-    u(ir:ii, :, :) = uhat( irh:iih, :, :)
-end do
+        u(ir:ii, :, :) = uhat( irh:iih, :, :)
+    end do
 
-! Loop through horizontal slices
-do jz = lbz, nz
-    call dfftw_execute_dft_c2r(back_fourier, u(1:nxp+2,1:ny,jz), u(1:nxp+2,1:ny,jz))
-enddo
+    ! Loop through horizontal slices
+    do jz = lbz, nz
+        call dfftw_execute_dft_c2r(back_fourier, u(1:nxp+2,1:ny,jz), u(1:nxp+2,1:ny,jz))
+    enddo
+elseif (hybrid_fourier) then
+    ! Loop through horizontal slices
+    do jz = lbz, nz
+        if (zhyb(jz)) then
+            u(kxi,:,jz) = uhat(kxi,:,jz) !! place uhat values in appropriate place
+            call dfftw_execute_dft_c2r(back, u(1:ld,1:ny,jz), u(1:ld,1:ny,jz))
+        else !! move over physical portion of uhat into u
+            u(:,:,jz) = uhat(:,:,jz)
+        endif
+    enddo
+endif
 
 end subroutine wave2physF
 
@@ -537,15 +814,16 @@ subroutine dft_direct_forw_2d_n_yonlyC_big(f)
 !*******************************************************************************
 ! 
 ! Computes 2D DFT directly, no FFT in x-direction.
-! 
-! This function is inteded to be used for fourier
+! y --> ky
+! This function is inteded to be used for fourier and hybrid_fourier
 ! 
 use types, only: rprec
 use param, only: ny2, kx_num
 use fft
+use param, only: hybrid_fourier, kxs_in
 implicit none
 
-integer :: jx, jy, ii, ir, jx_s
+integer :: jx, jy, ii, ir
 real(rprec), dimension(:,:), intent(inout) :: f
 real(rprec) :: const
 complex(rprec), dimension(ny2) :: fhat
@@ -556,8 +834,11 @@ fhat(:) = ( 0._rprec, 0._rprec )
 
 do jx = 1, kx_num
     ! un-interleave the real array into a complex array
-    jx_s = kx_veci( jx )
-    ii = 2*jx_s ! imag index
+    if (hybrid_fourier) then
+        ii = 2 * int( kxs_in(jx) ) + 2
+    else !! fourier only
+        ii = 2*jx !! imag index
+    endif
     ir = ii-1 ! real index
 
     do jy = 1, ny2
@@ -581,15 +862,16 @@ subroutine dft_direct_back_2d_n_yonlyC_big(f)
 !*******************************************************************************
 ! 
 ! Computes 2D inverse DFT directly, no FFT in x-direction.
-! 
-! This function is inteded to be used for fourier
+! ky --> y
+! This function is inteded to be used for fourier and hybrid_fourier
 ! 
 use types, only: rprec
 use param, only: ny2, kx_num
 use fft
+use param, only: hybrid_fourier, kxs_in
 implicit none
 
-integer :: jx, jy, ii, ir, jx_s
+integer :: jx, jy, ii, ir
 real(rprec), dimension(:,:), intent(inout) :: f
 complex(rprec), dimension(ny2) :: fhat
 
@@ -597,8 +879,11 @@ fhat(:) = ( 0._rprec, 0._rprec )
 
 do jx = 1, kx_num
     ! un-interleave the real array into a complex array
-    jx_s = kx_veci( jx )
-    ii = 2*jx_s ! imag index
+    if (hybrid_fourier) then
+        ii = 2 * int( kxs_in(jx) ) + 2
+    else !! fourier only
+        ii = 2*jx ! imag index
+    endif
     ir = ii-1 ! real index
 
     do jy = 1, ny2
@@ -637,6 +922,7 @@ use types, only: rprec
 use param, only: nx
 use fft
 use functions, only: interleave_r2c, interleave_c2r
+use param, only : fourier, hybrid_fourier, kxs_in, kx_num
 #ifdef PPGQL
 use param, only: thrx
 #endif
@@ -652,6 +938,7 @@ integer :: ix, jx_end
 #endif
 
 integer :: ldh, nxh, nyh
+integer :: jx_s
 
 ldh = size(f,1)    !! either ld or ld_big
 nxh = ldh - 2      !! either nx or nx2
@@ -675,6 +962,8 @@ gc(1:nx,:) = interleave_r2c( g(:,:) )
 ! UV part
 outc(1,:) = outc(1,:) + fc(1,:) * gc(1,:)
 
+if (fourier) then
+
 ! Uv, vU parts
 do jx = 2, nxh/2
     outc(jx,:) = outc(jx,:) + fc(1,:) * gc(jx,:)
@@ -686,6 +975,24 @@ do jx = 2, nxh/2
     outc(1,:) = outc(1,:) + fc(jx,:) * conjg( gc(jx,:) )
     outc(1,:) = outc(1,:) + conjg( fc(jx,: )) * gc(jx,:)
 enddo
+
+elseif (hybrid_fourier) then
+
+! Uv, vU parts
+do jx = 2, kx_num
+    jx_s = int( kxs_in(jx) ) + 1
+    outc(jx_s,:) = outc(jx_s,:) + fc(1,:) * gc(jx_s,:)
+    outc(jx_s,:) = outc(jx_s,:) + fc(jx_s,:) * gc(1,:)
+enddo
+
+! < uv > part
+do jx = 2, kx_num
+    jx_s = int( kxs_in(jx) ) + 1
+    outc(1,:) = outc(1,:) + fc(jx_s,:) * conjg( gc(jx_s,:) )
+    outc(1,:) = outc(1,:) + conjg( fc(jx_s,: )) * gc(jx_s,:)
+enddo
+
+endif
 
 #ifdef PPGQL
 ! GQL has the same interactions as RNL above, only adding more interactions
@@ -740,6 +1047,7 @@ do ix = 2, (thrx+1)
     enddo
 enddo
 
+!! End of Band-limited GQL Modification
 #endif
 
 ! re-structure the complex array into a real array
@@ -748,13 +1056,6 @@ out(:,:) = interleave_c2r( outc(1:nx,:) )
 return
 
 end function convolve_rnl
-
-
-
-
-
-
-
 
 !*******************************************************************************
 function convolve_rnl_old(f,g) result(out)

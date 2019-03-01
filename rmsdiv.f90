@@ -26,7 +26,8 @@ subroutine rmsdiv(rms)
 !
 use types, only : rprec
 use param
-use sim_param, only : dudx, dvdy, dwdz
+use sim_param, only : dudx, dvdy, dwdz, dudxF, dvdyF, dwdzF
+use derivatives, only : wave2physF
 
 implicit none
 integer :: jx, jy, jz, jz_max
@@ -39,15 +40,36 @@ real(rprec) :: rms_global
 rms = 0._rprec
 jz_max = nz - 1
 
-! Calculate L1 norm of velocity divergence
-do jz = 1, jz_max
-do jy = 1, ny
-do jx = 1, nx
-    rms = rms + abs( dudx(jx,jy,jz) + dvdy(jx,jy,jz) + dwdz(jx,jy,jz) )
-end do
-end do
-end do
-rms = rms / (nx*ny*(jz_max))
+if ((fourier) .or. (hybrid_fourier)) then
+    call wave2physF( dudx, dudxF )
+    call wave2physF( dvdy, dvdyF )
+    call wave2physF( dwdz, dwdzF )
+
+    ! Calculate L1 norm of velocity divergence
+    do jz = 1, jz_max
+    do jy = 1, ny
+    do jx = 1, nxp
+        rms = rms + abs( dudxF(jx,jy,jz) + dvdyF(jx,jy,jz) + dwdzF(jx,jy,jz) )
+       ! write(*,*) coord, jx, jy, jz, abs( dudxF(jx,jy,jz) + dvdyF(jx,jy,jz) + dwdzF(jx,jy,jz) )
+    end do
+    end do
+    end do
+    rms = rms / (nxp*ny*(jz_max))
+
+else !! not fourier or hybrid_fourier
+
+    ! Calculate L1 norm of velocity divergence
+    do jz = 1, jz_max
+    do jy = 1, ny
+    do jx = 1, nx
+        rms = rms + abs( dudx(jx,jy,jz) + dvdy(jx,jy,jz) + dwdz(jx,jy,jz) )
+       ! write(*,*) coord, jx, jy, jz, abs( dudx(jx,jy,jz) + dvdy(jx,jy,jz) + dwdz(jx,jy,jz) )
+    end do
+    end do
+    end do
+    rms = rms / (nx*ny*(jz_max))
+
+endif
 
 #ifdef PPMPI
 ! Transfer between processors

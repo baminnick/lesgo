@@ -311,10 +311,6 @@ do jy = 1, ny
     upert(:,jy) = u(:,jy) - uavg(:)
 enddo
 
-! DEBUG
-!write(*,*) 'F1', u(:,:)
-!write(*,*) 'F2', upert(:,:)
-
 return
 end subroutine ypert_by_z
 
@@ -889,7 +885,7 @@ subroutine write_tau_wall_bot()
 ! 
 use types, only : rprec
 use param, only : wbase, jt_total, total_time_dim, L_x, z_i, u_star, nx, ny
-use param, only : nxp, fourier
+use param, only : nxp, fourier, hybrid_fourier
 use sim_param, only : txz, tyz, txzF, tyzF
 use functions, only : int2str
 use param, only : lh, L_y
@@ -909,7 +905,7 @@ turnovers = total_time_dim / (L_x * z_i / u_star)
 txzavg = 0._rprec
 tyzavg = 0._rprec
 
-if (fourier) then
+if ((hybrid_fourier) .or. (fourier)) then
     ! compute spatial average
     do jx = 1, nxp
     do jy = 1, ny
@@ -963,17 +959,11 @@ endif
 call ypert_by_z(txz(:,:,1),txzpert)
 call ypert_by_z(tyz(:,:,1),tyzpert)
 
-! DEBUG
-!write(*,*) '0', txzpert
-
 ! Consider each y location
 do jy = 1, ny
     ! Take 1D Fourier Transform
     call dfftw_execute_dft_r2c( forw_x, txzpert(:,jy), txzhat)
     call dfftw_execute_dft_r2c( forw_x, tyzpert(:,jy), tyzhat)
-
-    ! DEBUG
-    !write(*,*) '1',txzhat
 
     ! Normalize transformed variables
     txzhat = txzhat / nx
@@ -984,9 +974,6 @@ do jy = 1, ny
         txz2(jx) = txz2(jx) + real(txzhat(jx)*conjg(txzhat(jx)))
         tyz2(jx) = tyz2(jx) + real(tyzhat(jx)*conjg(tyzhat(jx)))
     enddo
-
-    ! DEBUG
-    !write(*,*) '2', txz2
 enddo
 
 ! Normalize by spanwise length - treating as a spanwise average

@@ -60,9 +60,13 @@ real(rprec), dimension(:), allocatable :: delta_stretch
 
 real(rprec), dimension(:,:,:), allocatable :: uF, vF, wF
 real(rprec), target, dimension(:,:,:), allocatable :: pF
-real(rprec), dimension(:,:,:), allocatable :: dudyF, dudzF,                    &
-    dvdxF, dvdzF, dwdxF, dwdyF
+real(rprec), dimension(:,:,:), allocatable :: dudxF, dudyF, dudzF,             &
+    dvdxF, dvdyF, dvdzF, dwdxF, dwdyF, dwdzF
 real(rprec), dimension(:,:,:), allocatable :: txzF, tyzF
+
+logical, dimension(:), allocatable :: zhyb
+integer :: jz_int = -1
+integer :: coord_int = -1
 
 contains
 
@@ -155,12 +159,15 @@ allocate ( uF(nxp+2, ny, lbz:nz) ); uF = 0.0_rprec
 allocate ( vF(nxp+2, ny, lbz:nz) ); vF = 0.0_rprec
 allocate ( wF(nxp+2, ny, lbz:nz) ); wF = 0.0_rprec
 allocate ( pF(nxp+2, ny, 0:nz) ); pF = 0.0_rprec
+allocate ( dudxF(nxp+2, ny, lbz:nz) ); dudxF = 0.0_rprec
 allocate ( dudyF(nxp+2, ny, lbz:nz) ); dudyF = 0.0_rprec
 allocate ( dudzF(nxp+2, ny, lbz:nz) ); dudzF = 0.0_rprec
 allocate ( dvdxF(nxp+2, ny, lbz:nz) ); dvdxF = 0.0_rprec
+allocate ( dvdyF(nxp+2, ny, lbz:nz) ); dvdyF = 0.0_rprec
 allocate ( dvdzF(nxp+2, ny, lbz:nz) ); dvdzF = 0.0_rprec
 allocate ( dwdxF(nxp+2, ny, lbz:nz) ); dwdxF = 0.0_rprec
 allocate ( dwdyF(nxp+2, ny, lbz:nz) ); dwdyF = 0.0_rprec
+allocate ( dwdzF(nxp+2, ny, lbz:nz) ); dwdzF = 0.0_rprec
 allocate ( txzF(nxp+2, ny, lbz:nz) ); txzF = 0.0_rprec
 allocate ( tyzF(nxp+2, ny, lbz:nz) ); tyzF = 0.0_rprec
 
@@ -183,6 +190,8 @@ allocate ( dj_dzeta(lbz:nz)); dj_dzeta = BOGUS
 allocate ( mesh_stretch(lbz:nz)); mesh_stretch = BOGUS
 allocate ( delta_stretch(lbz:nz)); delta_stretch = BOGUS
 #endif
+
+allocate( zhyb(lbz:nz)); zhyb = .false.
 
 sim_param_initialized = .true.
 

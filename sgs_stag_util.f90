@@ -48,6 +48,7 @@ use types, only : rprec
 use param
 use sim_param, only : txx, txy, txz, tyy, tyz, tzz
 use sim_param, only : dudx, dudy, dudz, dvdx, dvdy, dvdz, dwdx, dwdy, dwdz
+use sim_param, only : zhyb
 #ifdef PPMAPPING
 use sim_param, only : JACO2, mesh_stretch, delta_stretch
 #endif
@@ -250,7 +251,15 @@ do jx = 1, nx
     S(jx,jy) = sqrt( 2._rprec*(S11(jx,jy,jz)**2 + S22(jx,jy,jz)**2 +           &
         S33(jx,jy,jz)**2 + 2._rprec*(S12(jx,jy,jz)**2 +                        &
         S13(jx,jy,jz)**2 + S23(jx,jy,jz)**2 )))
-    Nu_t(jx,jy,jz) = S(jx,jy)*Cs_opt2(jx,jy,jz)*l(jz)**2
+    if (hybrid_fourier) then
+        if (zhyb(jz)) then
+            Nu_t(jx,jy,jz) = 0.0_rprec
+        else
+            Nu_t(jx,jy,jz) = S(jx,jy)*Cs_opt2(jx,jy,jz)*l(jz)**2
+        endif
+    else !! not hybrid_fourier
+        Nu_t(jx,jy,jz) = S(jx,jy)*Cs_opt2(jx,jy,jz)*l(jz)**2
+    endif
 end do
 end do
 end do
