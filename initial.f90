@@ -73,6 +73,10 @@ do jz = 1, nz
 enddo
 #endif
 
+if (hybrid_fourier) then
+    call init_hybrid()
+endif
+
 #ifdef PPTURBINES
 fxa = 0._rprec
 fya = 0._rprec
@@ -200,6 +204,19 @@ if (coord == 0) then
 end if
 endif
 #endif
+
+! DEBUG
+!if (coord == 0) then
+!do jz = 1, nz
+!do jy = 1, ny
+!do jx = 1, nx
+!write(*,*) 'u', jx, jy, jz, u(jx,jy,jz)
+!write(*,*) 'v', jx, jy, jz, v(jx,jy,jz)
+!write(*,*) 'w', jx, jy, jz, w(jx,jy,jz)
+!enddo
+!enddo
+!enddo
+!endif
 
 ! Transform velocities if starting a new simulation
 if ( (.not. initu) .and. ((fourier) .or. (hybrid_fourier)) ) then

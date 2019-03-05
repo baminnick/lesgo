@@ -893,8 +893,8 @@ function get_tau_wall_bot() result(twall)
 ! This function provides plane-averaged value of wall stress magnitude
 ! 
 use types, only: rprec
-use param, only : nx, ny, nxp, fourier, hybrid_fourier
-use sim_param, only : txz, tyz, txzF, tyzF
+use param, only : nx, ny, fourier, hybrid_fourier
+use sim_param, only : txz, tyz
 
 implicit none
 real(rprec) :: twall, txsum, tysum
@@ -903,13 +903,8 @@ integer :: jx, jy
 txsum = 0._rprec
 tysum = 0._rprec
 if ((fourier) .or. (hybrid_fourier)) then
-    do jx = 1, nxp
-    do jy = 1, ny
-        txsum = txsum + txzF(jx,jy,1)
-        tysum = tysum + tyzF(jx,jy,1)
-    enddo
-    enddo
-    twall = sqrt( (txsum/(nxp*ny))**2 + (tysum/(nxp*ny))**2  )
+    ! Use kx=ky=0 as spatial average
+    twall = sqrt( (txz(1,1,1))**2 + (tyz(1,1,1))**2  )
 else
     do jx = 1, nx
     do jy = 1, ny
@@ -929,8 +924,8 @@ function get_tau_wall_top() result(twall)
 ! This function provides plane-averaged value of wall stress magnitude
 ! 
 use types, only: rprec
-use param, only : nx, ny, nz, nxp, fourier, hybrid_fourier
-use sim_param, only : txz, tyz, txzF, tyzF
+use param, only : nx, ny, nz, fourier, hybrid_fourier
+use sim_param, only : txz, tyz
 
 implicit none
 real(rprec) :: twall, txsum, tysum
@@ -939,13 +934,8 @@ integer :: jx, jy
 txsum = 0._rprec
 tysum = 0._rprec
 if ((fourier) .or. (hybrid_fourier)) then
-    do jx = 1, nxp
-    do jy = 1, ny
-        txsum = txsum + txzF(jx,jy,nz)
-        tysum = tysum + tyzF(jx,jy,nz)
-    enddo
-    enddo
-    twall = sqrt( (txsum/(nxp*ny))**2 + (tysum/(nxp*ny))**2  )
+    ! Use kx=ky=0 as spatial average
+    twall = sqrt( (txz(1,1,nz))**2 + (tyz(1,1,nz))**2  )
 else
     do jx = 1, nx
     do jy = 1, ny

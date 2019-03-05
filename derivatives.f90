@@ -657,7 +657,7 @@ if (hybrid_fourier) then
 
 ! DEBUG
 ! This is only for debugging purposes
-!f(kxpi,:,jz) = 0.0_rprec
+f(kxpi,:,jz) = 0.0_rprec
 
         endif
     enddo

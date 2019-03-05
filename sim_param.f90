@@ -54,8 +54,7 @@ real(rprec), target, dimension(:,:,:), allocatable :: p
 
 #ifdef PPMAPPING
 real(rprec), dimension(:), allocatable :: JACO1, JACO2
-real(rprec), dimension(:), allocatable :: mesh_stretch, dj_dzeta
-real(rprec), dimension(:), allocatable :: delta_stretch
+real(rprec), dimension(:), allocatable :: mesh_stretch, delta_stretch
 #endif
 
 real(rprec), dimension(:,:,:), allocatable :: uF, vF, wF
@@ -186,7 +185,6 @@ allocate ( fz(ld, ny, nz) ); fz = 0.0_rprec
 #ifdef PPMAPPING
 allocate ( JACO1(lbz:nz) ); JACO1 = 1/BOGUS
 allocate ( JACO2(lbz:nz) ); JACO2 = 1/BOGUS
-allocate ( dj_dzeta(lbz:nz)); dj_dzeta = BOGUS
 allocate ( mesh_stretch(lbz:nz)); mesh_stretch = BOGUS
 allocate ( delta_stretch(lbz:nz)); delta_stretch = BOGUS
 #endif

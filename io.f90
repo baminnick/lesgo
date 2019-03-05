@@ -45,7 +45,7 @@ private
 
 public jt_total, openfiles, energy, output_loop, output_final, output_init,    &
     write_tau_wall_bot, write_tau_wall_top, kx_energy, kx_energy_fourier,      &
-    ky_energy
+    ky_energy, kx_tau_wall, kx_tau_wall_fourier
 
 ! Where to end with nz index.
 integer :: nz_end
@@ -883,38 +883,29 @@ subroutine write_tau_wall_bot()
 ! 
 ! Write spatially-averaged statistics on wall stress
 ! 
+! This file has been adapted for fourier and not fourier modes
+! 
 use types, only : rprec
 use param, only : wbase, jt_total, total_time_dim, L_x, z_i, u_star, nx, ny
 use param, only : nxp, fourier, hybrid_fourier
 use sim_param, only : txz, tyz, txzF, tyzF
 use functions, only : int2str
-use param, only : lh, L_y
 use fft
 implicit none
 
 real(rprec) :: turnovers, txzavg, tyzavg, twall, txzsamp, tyzsamp
 integer :: jx, jy
-real(rprec), dimension(ld,ny) :: txzpert, tyzpert
-complex(rprec), dimension(nx/2+1) :: txzhat, tyzhat
-real(rprec), dimension(nx/2+1) :: txz2, tyz2, twall2
-character(len = 10), dimension(nx/2+1) :: fhead !! file header variable for kx
 
-! --------------------------- Wall Stress Statistics  ---------------------------
 ! Compute output to write to file
 turnovers = total_time_dim / (L_x * z_i / u_star)
 txzavg = 0._rprec
 tyzavg = 0._rprec
 
 if ((hybrid_fourier) .or. (fourier)) then
-    ! compute spatial average
-    do jx = 1, nxp
-    do jy = 1, ny
-        txzavg = txzavg + txzF(jx,jy,1)
-        tyzavg = tyzavg + tyzF(jx,jy,1)
-    end do
-    end do
-    txzavg = txzavg/(nxp*ny)
-    tyzavg = tyzavg/(nxp*ny)
+    ! Use kx=ky=0 as spatial average
+    txzavg = txz(1,1,1)
+    tyzavg = tyz(1,1,1)
+
     ! Consider fluctuations about txzavg and tyzavg at a given sample point
     txzsamp = txzF(nxp/2,ny/2,1) - txzavg
     tyzsamp = tyzF(nxp/2,ny/2,1) - tyzavg
@@ -941,8 +932,41 @@ tyzavg = abs(tyzavg)
 txzsamp = txzavg + txzsamp
 tyzsamp = tyzavg + tyzsamp
 
-! ------------------------------ kx Wall Stress ------------------------------
-if (.not. fourier) then
+! Write to file
+open(2,file=path // 'output/tau_wall_bot.dat', status='unknown',               &
+    form='formatted', position='append')
+!! one time header output
+if (jt_total==wbase) write(2,*)                                                &
+    'jt_total, turnovers, 1.0, tau_wall, txzavg, tyzavg, txzsamp, tyzsamp'
+!! continual time-related output
+write(2,*) jt_total, turnovers, 1.0, twall, txzavg, tyzavg, txzsamp, tyzsamp
+close(2)
+!! Note: sample points are at nx/2 and ny/2
+
+end subroutine write_tau_wall_bot
+
+!*******************************************************************************
+subroutine kx_tau_wall()
+!*******************************************************************************
+! 
+! Computes and writes streamwise spectra for the stress at the wall.
+! This is similar in spirit to kx_energy
+! 
+! This function is intended for .not. fourier
+! 
+use types, only : rprec
+use param, only : wbase, jt_total, nx, ny
+use sim_param, only : txz, tyz
+use functions, only : int2str
+use param, only : lh, L_y
+use fft
+implicit none
+
+integer :: jx, jy
+real(rprec), dimension(ld,ny) :: txzpert, tyzpert
+complex(rprec), dimension(nx/2+1) :: txzhat, tyzhat
+real(rprec), dimension(nx/2+1) :: txz2, tyz2, twall2
+character(len = 10), dimension(nx/2+1) :: fhead !! file header variable for kx
 
 ! Initialize variables
 txz2 = 0.0_rprec
@@ -983,28 +1007,85 @@ tyz2 = tyz2 / L_y
 ! Make summations
 twall2 = txz2 + tyz2
 
-endif
-
-! ------------------------------- Write to file -------------------------------
-! Wall Stress Statistics File
-open(2,file=path // 'output/tau_wall_bot.dat', status='unknown',               &
-    form='formatted', position='append')
-!! one time header output
-if (jt_total==wbase) write(2,*)                                                &
-    'jt_total, turnovers, 1.0, tau_wall, txzavg, tyzavg, txzsamp, tyzsamp'
-!! continual time-related output
-write(2,*) jt_total, turnovers, 1.0, twall, txzavg, tyzavg, txzsamp, tyzsamp
-close(2)
-!! Note: sample points are at nx/2 and ny/2
-
-! kx Wall Stress
+! Write to file
 open(2,file=path // 'output/twall_kx.dat', status='unknown',                     &
     form='formatted', position='append')
 if (jt_total==wbase) write(2,*) 'jt_total ', fhead
 write(2,*) jt_total, twall2
 close(2)
 
-end subroutine write_tau_wall_bot
+end subroutine kx_tau_wall
+
+!*******************************************************************************
+subroutine kx_tau_wall_fourier()
+!*******************************************************************************
+! 
+! Computes and writes streamwise spectra for the stress at the wall.
+! This is similar in spirit to kx_energy_fourier
+! 
+! This function is intended for fourier
+! 
+use types, only : rprec
+use param, only : wbase, jt_total, nxp, ny
+use sim_param, only : txzF, tyzF
+use functions, only : int2str
+use param, only : lh, L_y
+use fft
+implicit none
+
+integer :: jx, jy
+real(rprec), dimension(nxp+2,ny) :: txzpert, tyzpert
+complex(rprec), dimension(nxp/2+1) :: txzhat, tyzhat
+real(rprec), dimension(nxp/2+1) :: txz2, tyz2, twall2
+character(len = 10), dimension(nxp/2+1) :: fhead !! file header variable for kx
+
+! Initialize variables
+txz2 = 0.0_rprec
+tyz2 = 0.0_rprec
+
+! Initialize file, write header 
+if (jt_total == wbase) then
+    do jx = 1, nx/2 + 1
+        fhead(jx) = 'kx='//trim(int2str(jx-1))//' '
+    enddo
+endif
+
+! Take out spanwise mean, ky = 0
+call ypert_by_z(txzF(:,:,1),txzpert)
+call ypert_by_z(tyzF(:,:,1),tyzpert)
+
+! Consider each y location
+do jy = 1, ny
+    ! Take 1D Fourier Transform
+    call dfftw_execute_dft_r2c( forw_x_fourier, txzpert(:,jy), txzhat)
+    call dfftw_execute_dft_r2c( forw_x_fourier, tyzpert(:,jy), tyzhat)
+
+    ! Normalize transformed variables
+    txzhat = txzhat / nx
+    tyzhat = tyzhat / nx
+
+    ! Take product and integrate
+    do jx = 1, lh
+        txz2(jx) = txz2(jx) + real(txzhat(jx)*conjg(txzhat(jx)))
+        tyz2(jx) = tyz2(jx) + real(tyzhat(jx)*conjg(tyzhat(jx)))
+    enddo
+enddo
+
+! Normalize by spanwise length - treating as a spanwise average
+txz2 = txz2 / L_y
+tyz2 = tyz2 / L_y
+
+! Make summations
+twall2 = txz2 + tyz2
+
+! Write to file
+open(2,file=path // 'output/twall_kx.dat', status='unknown',                     &
+    form='formatted', position='append')
+if (jt_total==wbase) write(2,*) 'jt_total ', fhead
+write(2,*) jt_total, twall2
+close(2)
+
+end subroutine kx_tau_wall_fourier
 
 !*******************************************************************************
 subroutine write_tau_wall_top()
@@ -1382,7 +1463,7 @@ use param, only : yplane_calc, yplane_nstart, yplane_nend, yplane_nskip
 use param, only : zplane_calc, zplane_nstart, zplane_nend, zplane_nskip
 use stat_defs, only : tavg_initialized,tavg_dt
 use derivatives, only : wave2phys, phys2wave
-use param, only : fourier
+use param, only : fourier, hybrid_fourier
 use sim_param, only : u, v, w, txz, tyz
 use sim_param, only : dudx, dudy, dudz, dvdx, dvdy, dvdz, dwdx, dwdy, dwdz
 #ifdef PPOUTPUT_BUDGET
@@ -1406,7 +1487,7 @@ if (tavg_calc) then
         ! Are we at the beginning or a multiple of nstart?
         if ( mod(jt_total-tavg_nstart,tavg_nskip)==0 ) then
 
-            if (fourier) then
+            if ((hybrid_fourier) .or. (fourier)) then
                 call wave2phys( u, lbz )
                 call wave2phys( v, lbz )
                 call wave2phys( w, lbz )
@@ -1447,7 +1528,7 @@ if (tavg_calc) then
                 call tavg_compute()
             end if
 
-            if (fourier) then
+            if ((hybrid_fourier) .or. (fourier)) then
                 call phys2wave( u, lbz )
                 call phys2wave( v, lbz )
                 call phys2wave( w, lbz )
@@ -1599,7 +1680,7 @@ use param, only : yplane_nloc, yplane_loc
 use param, only : zplane_nloc, zplane_loc
 use param, only : dx, dy
 use param, only : write_endian
-use param, only : fourier
+use param, only : fourier, hybrid_fourier
 use grid_m
 use sim_param, only : u, v, w, p
 use sim_param, only : dwdy, dwdx, dvdx, dudy
@@ -1658,7 +1739,7 @@ y => grid % y
 z => grid % z
 zw => grid % zw
 
-if (fourier) then
+if ((hybrid_fourier) .or. (fourier)) then
     call wave2physF( u, uF )
     call wave2physF( v, vF )
     call wave2physF( w, wF )
@@ -1676,7 +1757,7 @@ allocate(w_uv(nx,ny,lbz:nz))
 allocate(wF_uv(nxp,ny,lbz:nz))
 
 !  Make sure w has been interpolated to uv-grid
-if (fourier) then
+if ((hybrid_fourier) .or. (fourier)) then
     wF_uv = interp_to_uv_grid(wF(1:nxp,1:ny,lbz:nz), lbz)
 else
     w_uv = interp_to_uv_grid(w(1:nx,1:ny,lbz:nz), lbz)
@@ -1708,7 +1789,7 @@ elseif(itype==2) then
     ! Common file name for all output types
     call string_splice(fname, path //'output/vel.', jt_total)
 
-if (fourier) then
+if ((hybrid_fourier) .or. (fourier)) then
 #if defined(PPCGNS) && defined(PPMPI)
     ! Write CGNS Output
     call string_concat(fname, '.cgns')
@@ -1729,7 +1810,7 @@ if (fourier) then
     write(13,rec=3) wF_uv(:nxp,:ny,1:nz)
     close(13)
 #endif
-else !! .not. fourier
+else !! .not. fourier or hybrid_fourier
 #if defined(PPCGNS) && defined(PPMPI)
     ! Write CGNS Output
     call string_concat(fname, '.cgns')
@@ -1758,7 +1839,7 @@ endif
 
     ! Use vorticityx as an intermediate step for performing uv-w interpolation
     ! Vorticity is written in w grid
-    if (fourier) then
+    if ((hybrid_fourier) .or. (fourier)) then
         vortxF(1:nxp,1:ny,lbz:nz) = 0._rprec
         vortyF(1:nxp,1:ny,lbz:nz) = 0._rprec
         vortzF(1:nxp,1:ny,lbz:nz) = 0._rprec
@@ -1793,7 +1874,7 @@ endif
     ! Common file name for all output types
     call string_splice(fname, path //'output/vort.', jt_total)
 
-if (fourier) then
+if ((hybrid_fourier) .or. (fourier)) then
 #if defined(PPCGNS) && defined(PPMPI)
     ! Write CGNS Output
     call string_concat(fname, '.cgns')
@@ -1815,7 +1896,7 @@ if (fourier) then
     write(13,rec=3) vortzF(:nxp,:ny,1:nz)
     close(13)
 #endif
-else !! .not. fourier
+else !! .not. fourier or hybrid_fourier
 #if defined(PPCGNS) && defined(PPMPI)
     ! Write CGNS Output
     call string_concat(fname, '.cgns')
@@ -1837,7 +1918,7 @@ else !! .not. fourier
     write(13,rec=3) vortz(:nx,:ny,1:nz)
     close(13)
 #endif
-endif !! fourier
+endif
 
     deallocate(vortx, vorty, vortz)
     deallocate(vortxF, vortyF, vortzF)
@@ -1845,14 +1926,14 @@ endif !! fourier
     ! Compute pressure
     allocate(pres_real(nx,ny,lbz:nz))
     allocate(presF_real(nxp,ny,lbz:nz))
-    if (fourier) then
+    if ((hybrid_fourier) .or. (fourier)) then
         presF_real(1:nxp,1:ny,lbz:nz) = 0._rprec
 
         presF_real(1:nxp,1:ny,lbz:nz) = pF(1:nxp,1:ny,lbz:nz)               &
             - 0.5 * ( uF(1:nxp,1:ny,lbz:nz)**2                              &
             + wF_uv(1:nxp,1:ny,lbz:nz)**2                                   &
             + vF(1:nxp,1:ny,lbz:nz)**2 )
-    else !! .not. fourier
+    else !! .not. fourier or hybrid_fourier
         pres_real(1:nx,1:ny,lbz:nz) = 0._rprec
 
         pres_real(1:nx,1:ny,lbz:nz) = p(1:nx,1:ny,lbz:nz)                   &
@@ -1864,7 +1945,7 @@ endif !! fourier
     ! Common file name for all output types
     call string_splice(fname, path //'output/pres.', jt_total)
 
-if (fourier) then
+if ((hybrid_fourier) .or. (fourier)) then
 #if defined(PPCGNS) && defined(PPMPI)
     ! Write CGNS Output
     call string_concat(fname, '.cgns')
@@ -1882,7 +1963,7 @@ if (fourier) then
     write(13,rec=1) presF_real(:nxp,:ny,1:nz)
     close(13)
 #endif
-else !! .not. fourier
+else !! .not. fourier or hybrid_fourier
 #if defined(PPCGNS) && defined(PPMPI)
     ! Write CGNS Output
     call string_concat(fname, '.cgns')

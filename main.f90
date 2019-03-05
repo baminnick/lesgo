@@ -31,8 +31,8 @@ use param
 use sim_param
 use grid_m
 use io, only : energy, output_loop, output_final, jt_total
-use io, only : write_tau_wall_bot, write_tau_wall_top, kx_energy, kx_energy_fourier
-use io, only : ky_energy
+use io, only : write_tau_wall_bot, write_tau_wall_top, kx_tau_wall, kx_tau_wall_fourier
+use io, only : kx_energy, ky_energy, kx_energy_fourier
 use fft
 use derivatives, only : filt_da, ddz_uv, ddz_w
 use derivatives, only : wave2physF
@@ -85,6 +85,8 @@ real(rprec) :: rmsdivvel, maxcfl, tt
 ! real(rprec) :: ke
 
 integer :: jz !! for hybrid_fourier
+
+!integer :: jx, jy !! DEBUG
 
 type(clock_t) :: clock, clock_total
 !type(clock_t) :: clock_forcing
@@ -151,6 +153,28 @@ allocate( dummyRHSz  (ld    ,ny, lbz:nz) )
 
 ! BEGIN TIME LOOP
 time_loop: do jt_step = nstart, nsteps
+
+! DEBUG
+!if (coord == 0) then
+!do jz = 1, nz
+!call dfftw_execute_dft_c2r(back, u(:,:,jz), u(:,:,jz))
+!call dfftw_execute_dft_c2r(back, v(:,:,jz), v(:,:,jz))
+!call dfftw_execute_dft_c2r(back, w(:,:,jz), w(:,:,jz))
+!do jy = 1, ny
+!do jx = 1, nx
+!write(*,*) 'u', jx, jy, jz, u(jx,jy,jz)
+!write(*,*) 'v', jx, jy, jz, v(jx,jy,jz)
+!write(*,*) 'w', jx, jy, jz, w(jx,jy,jz)
+!enddo
+!enddo
+!call dfftw_execute_dft_r2c(forw, u(:,:,jz), u(:,:,jz))
+!call dfftw_execute_dft_r2c(forw, v(:,:,jz), v(:,:,jz))
+!call dfftw_execute_dft_r2c(forw, w(:,:,jz), w(:,:,jz))
+!u(:,:,jz) = u(:,:,jz) / (nx*ny)
+!v(:,:,jz) = v(:,:,jz) / (nx*ny)
+!w(:,:,jz) = w(:,:,jz) / (nx*ny)
+!enddo
+!endif
 
 ! DEBUG
 ! Zero out modes not used in fourier mode for comparison
@@ -879,6 +903,11 @@ time_loop: do jt_step = nstart, nsteps
 #endif
             write(*,'(a)') '========================================================'
             call write_tau_wall_bot()
+            if ((fourier) .or. (hybrid_fourier)) then
+                call kx_tau_wall_fourier()
+            else !! not fourier
+                call kx_tau_wall()
+            endif
         end if
         if ((coord == nproc-1) .AND. (ubc_mom /= 0)) then
             call write_tau_wall_top()
@@ -920,11 +949,11 @@ time_loop: do jt_step = nstart, nsteps
             call mpi_barrier(comm, ierr)
         endif
 
-        if (.not. fourier) then
+        if ((fourier) .or. (hybrid_fourier)) then
+            call kx_energy_fourier()
+        else !! not fourier or hybrid_fourier
             call kx_energy()
             call ky_energy()
-        else
-            call kx_energy_fourier()
         endif
 
         ! Check if we are to check the allowable runtime

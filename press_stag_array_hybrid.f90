@@ -31,7 +31,7 @@ use sim_param, only : u, v, w, divtz, p, dpdx, dpdy, dpdz
 use sim_param, only : zhyb, coord_int
 use fft
 #ifdef PPMAPPING
-use sim_param, only : JACO1, JACO2, dj_dzeta
+use sim_param, only : JACO1, JACO2
 #endif
 
 implicit none
@@ -234,12 +234,11 @@ do jy = 1, ny
 
         ! JDA dissertation, eqn(2.85) a,b,c=coefficients and RHS_col=r_m
 #ifdef PPMAPPING
-        a(jj, jy, jz) = const3*(1._rprec/(JACO2(jz-1)**2)) -                   &
-            0.5_rprec*(1/JACO2(jz-1))*dj_dzeta(jz-1)*const4
-        b(jj, jy, jz) = -(kx(jj, jy)**2 + ky(jj, jy)**2 +                      &
-            2._rprec*const3*(1._rprec/(JACO2(jz-1)**2)))
-        c(jj, jy, jz) = const3*(1._rprec/(JACO2(jz-1)**2)) +                   &
-            0.5_rprec*(1/JACO2(jz-1))*dj_dzeta(jz-1)*const4
+        a(jj, jy, jz) = const3*(1._rprec/(JACO2(jz-1)))*(1._rprec/(JACO1(jz-1)))
+        b(jj, jy, jz) = -(kx(jj,jy)**2 + ky(jj,jy)**2                          &
+            + const3*(1._rprec/(JACO2(jz-1)))*                                 &
+            (1._rprec/(JACO1(jz-1))+1._rprec/(JACO1(jz))))
+        c(jj, jy, jz) = const3*(1._rprec/(JACO2(jz-1)))*(1._rprec/(JACO1(jz)))
 #else
         a(jj, jy, jz) = const3
         b(jj, jy, jz) = -(kx(jj, jy)**2 + ky(jj, jy)**2 + 2._rprec*const3)
@@ -278,12 +277,11 @@ do jy = 1, ny
 
         ! JDA dissertation, eqn(2.85) a,b,c=coefficients and RHS_col=r_m
 #ifdef PPMAPPING
-        a(jx, jy, jz) = const3*(1._rprec/(JACO2(jz-1)**2)) -                   &
-            0.5_rprec*(1/JACO2(jz-1))*dj_dzeta(jz-1)*const4
-        b(jx, jy, jz) = -(kx(jx, jy)**2 + ky(jx, jy)**2 +                      &
-            2._rprec*const3*(1._rprec/(JACO2(jz-1)**2)))
-        c(jx, jy, jz) = const3*(1._rprec/(JACO2(jz-1)**2)) +                   &
-            0.5_rprec*(1/JACO2(jz-1))*dj_dzeta(jz-1)*const4
+        a(jx, jy, jz) = const3*(1._rprec/(JACO2(jz-1)))*(1._rprec/(JACO1(jz-1)))
+        b(jx, jy, jz) = -(kx(jx,jy)**2 + ky(jx,jy)**2                          &
+            + const3*(1._rprec/(JACO2(jz-1)))*                                 &
+            (1._rprec/(JACO1(jz-1))+1._rprec/(JACO1(jz))))
+        c(jx, jy, jz) = const3*(1._rprec/(JACO2(jz-1)))*(1._rprec/(JACO1(jz)))
 #else
         a(jx, jy, jz) = const3
         b(jx, jy, jz) = -(kx(jx, jy)**2 + ky(jx, jy)**2 + 2._rprec*const3)
