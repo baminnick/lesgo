@@ -546,6 +546,12 @@ do
                 !     // block_name // ' block: ' // buff(1:equal_pos-1)
         end select
     elseif (block_exit_pos == 1) then
+        ! Interpret user input for zo and lbc_mom
+        if ((zo < thresh) .and. (lbc_mom == 2)) then
+            zo = 0.0001_rprec
+            if (coord == 0) write(*,*) 'Resetting zo to: ', zo
+        endif
+
         if( use_mean_p_force .AND. eval_mean_p_force ) then
             val_read = mean_p_force_x
             ! Evaluate the mean pressure force
