@@ -24,20 +24,25 @@ subroutine init_hybrid()
 ! This subroutine initializes variables used for hybrid_fourier mode, 
 ! specifically the interface is defined.
 ! 
-use param, only : hwm
-use sim_param, only : zhyb, coord_int, jz_int
+use param, only : hwm, lbz, nz, coord, nproc
+use sim_param, only : zhyb, coord_int, jz_int, coord_intv
 #ifdef PPMAPPING
 use sim_param, only : mesh_stretch
 #else
 use grid_m
 #endif
-use param, only : lbz, nz, coord, nproc
+use param, only : comm, ierr, mpi_rprec
+use mpi
 use types, only : rprec
 
 implicit none
 
 integer:: jz
 real(rprec), dimension(lbz:nz) :: z_uv
+real(rprec), dimension(:), allocatable :: coord_intv_temp
+
+allocate( coord_intv_temp(nproc) )
+allocate( coord_intv(nproc) )
 
 ! Specify uv-locations to be used
 #ifdef PPMAPPING
@@ -105,6 +110,14 @@ do jz = 2, nz-2
         write(*,*) '--> Hybrid Fourier: interface at, hwm = ', z_uv(jz)
     endif
 enddo
+
+! Let coord = 0 know which processor owns the interface
+! This is only for reporting iteration time of wall-model
+call mpi_gather(real(coord_int,rprec), 1, MPI_RPREC,                     &
+     coord_intv_temp, 1, MPI_RPREC, 0, comm, ierr)
+if (coord == 0) then
+    coord_intv = int( coord_intv_temp(:) )
+endif
 
 ! Output which z-levels are in fourier mode for debugging
 !do jz = lbz, nz

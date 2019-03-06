@@ -66,6 +66,7 @@ real(rprec), dimension(:,:,:), allocatable :: txzF, tyzF
 logical, dimension(:), allocatable :: zhyb
 integer :: jz_int = -1
 integer :: coord_int = -1
+integer, dimension(:), allocatable :: coord_intv
 
 contains
 

@@ -84,12 +84,13 @@ integer :: jt_step, nstart
 real(rprec) :: rmsdivvel, maxcfl, tt
 ! real(rprec) :: ke
 
-integer :: jz !! for hybrid_fourier
+integer :: jz, jc !! for hybrid_fourier
 
 !integer :: jx, jy !! DEBUG
 
 type(clock_t) :: clock, clock_total
 !type(clock_t) :: clock_forcing
+type(clock_t) :: clock_hybrid !! only used if hybrid_fourier
 #ifdef PPOUTPUT_WMLES
 type(clock_t) :: clock_wm
 #endif
@@ -102,6 +103,8 @@ type(clock_t) :: clock_wm
 real(rprec) :: rbuffer
 real(rprec) :: maxdummy ! Used to calculate maximum with mpi_allreduce
 real(rprec) :: tau_top   ! Used to write top wall stress at first proc
+real(rprec), dimension(:), allocatable :: gatherdummy !! hybrid_fourier
+real(rprec) :: fourier_time, int_time, phys_time !! hybrid_fourier
 #endif
 
 real(rprec), dimension(:,:,:), allocatable :: tempRHS
@@ -150,6 +153,10 @@ allocate( dummyRHSx  (ld    ,ny, lbz:nz) )
 allocate( dummyRHSy  (ld    ,ny, lbz:nz) )
 allocate( dummyRHSz  (ld    ,ny, lbz:nz) )
 #endif
+
+if (hybrid_fourier) then
+    allocate( gatherdummy(nproc) )
+endif
 
 ! BEGIN TIME LOOP
 time_loop: do jt_step = nstart, nsteps
@@ -220,47 +227,9 @@ time_loop: do jt_step = nstart, nsteps
 !endif
 !endif
 
-! DEBUG
-!if (coord == 6) then
-!if (hybrid_fourier) then
-!write(*,*) 'A1', u(kxi,1,4)
-!write(*,*) 'A2', v(kxi,1,4)
-!write(*,*) 'A3', w(kxi,1,4)
-!write(*,*) '-------------------'
-!else
-!write(*,*) 'A1', u(:,1,4)
-!write(*,*) 'A2', v(:,1,4)
-!write(*,*) 'A3', w(:,1,4)
-!write(*,*) '-------------------'
-!endif
-!endif
-
-! DEBUG
-!if (coord == 0) then
-!if (hybrid_fourier) then
-!write(*,*) 'ui', u(kxi,1,4)
-!write(*,*) 'vi', v(kxi,1,4)
-!write(*,*) 'wi', w(kxi,1,4)
-!write(*,*) '---------------------'
-!write(*,*) 'ui+1', u(kxi,1,5)
-!write(*,*) 'vi+1', v(kxi,1,5)
-!write(*,*) 'wi+1', w(kxi,1,5)
-!write(*,*) '---------------------'
-!else
-!write(*,*) 'ui', u(:,1,4)
-!write(*,*) 'vi', v(:,1,4)
-!write(*,*) 'wi', w(:,1,4)
-!write(*,*) '---------------------'
-!write(*,*) 'ui+1', u(:,1,5)
-!write(*,*) 'vi+1', v(:,1,5)
-!write(*,*) 'wi+1', w(:,1,5)
-!write(*,*) '---------------------'
-!endif
-!endif
-
-
     ! Get the starting time for the iteration
     call clock%start
+    if (hybrid_fourier) call clock_hybrid%start
 
     if (use_cfl_dt) then
 
@@ -352,21 +321,6 @@ time_loop: do jt_step = nstart, nsteps
 !write(*,*) '-----------------------------------'
 !enddo
 !enddo
-!endif
-!endif
-
-! DEBUG
-!if (coord == 6) then
-!if (hybrid_fourier) then
-!write(*,*) 'B1', dudx(kxi,1,4)
-!write(*,*) 'B2', dudy(kxi,1,4)
-!write(*,*) 'B3', dudz(kxi,1,4)
-!write(*,*) '-------------------'
-!else
-!write(*,*) 'B1', dudx(:,1,4)
-!write(*,*) 'B2', dudy(:,1,4)
-!write(*,*) 'B3', dudz(:,1,4)
-!write(*,*) '-------------------'
 !endif
 !endif
 
@@ -831,6 +785,7 @@ time_loop: do jt_step = nstart, nsteps
         ! Get the ending time for the iteration
         call clock%stop
         call clock_total%stop
+        call clock_hybrid%stop
 
         ! Calculate rms divergence of velocity
         ! only written to screen, not used otherwise
@@ -846,6 +801,29 @@ time_loop: do jt_step = nstart, nsteps
         call mpi_allreduce(clock_total % time, maxdummy, 1, mpi_rprec,         &
             MPI_MAX, comm, ierr)
         clock_total % time = maxdummy
+        if (hybrid_fourier) then
+            call mpi_gather(clock_hybrid % time, 1, mpi_rprec,                 &
+                gatherdummy, 1, mpi_rprec, 0, comm, ierr)
+            if (coord == 0) then
+                ! Re-initialize time variables with each recording
+                fourier_time = 0.0_rprec
+                int_time = 0.0_rprec
+                phys_time = 0.0_rprec
+                ! Grab max time variables from each part
+                do jc = 1, nproc
+                    if (coord_intv(jc) == -1) then !! processor in fourier mode
+                        if (gatherdummy(jc) > fourier_time)                    &
+                            fourier_time = gatherdummy(jc)
+                    elseif (coord_intv(jc) == 0) then !! processor owns int
+                        if (gatherdummy(jc) > int_time)                        &
+                            int_time = gatherdummy(jc)
+                    else !! processor in physical mode
+                        if (gatherdummy(jc) > phys_time)                       &
+                            phys_time = gatherdummy(jc)
+                    endif
+                enddo
+            endif
+        endif
         !call mpi_allreduce(clock_forcing % time, maxdummy, 1, mpi_rprec,       &
         !    MPI_MAX, comm, ierr)
         !clock_forcing % time = maxdummy
@@ -898,6 +876,13 @@ time_loop: do jt_step = nstart, nsteps
             ! write(*,'(1a,E15.7)') '  Cumulative Forcing: ', clock_total_f
             ! write(*,'(1a,E15.7)') '  Forcing %: ',                             &
             !     clock_total_f /clock_total % time
+            if (hybrid_fourier) then
+                write(*,*)
+                write(*,'(1a)') 'Hybrid Fourier wall times (s): '
+                write(*,'(1a,E15.7)') '  Fourier mode: ', fourier_time
+                write(*,'(1a,E15.7)') '  Interface: ', int_time
+                write(*,'(1a,E15.7)') '  Physical mode: ', phys_time
+            endif
 #ifdef PPOUTPUT_WMLES
             write(*,'(1a,E15.7)') '  WM Iteration: ', clock_wm % time
 #endif
