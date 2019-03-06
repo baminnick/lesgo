@@ -67,7 +67,6 @@ implicit none
 character (*), parameter :: sub_name = 'sgs_stag'
 
 real(rprec), dimension(nz) :: l, ziko, zz
-real(rprec) :: const, const2, const3
 integer :: jx, jy, jz
 integer :: jz_min, jz_max
 
@@ -242,14 +241,10 @@ if (sgs) then
     ! Define |S| and eddy viscosity (nu_t= c_s^2 l^2 |S|) for entire domain
     !   stored on w-nodes (on uvp node for jz=1 or nz for 'wall' BC only)
     do jz = 1, nz
-    do jy = 1, ny
-    do jx = 1, nx
-        S(jx,jy) = sqrt( 2._rprec*(S11(jx,jy,jz)**2 + S22(jx,jy,jz)**2 +           &
-            S33(jx,jy,jz)**2 + 2._rprec*(S12(jx,jy,jz)**2 +                        &
-            S13(jx,jy,jz)**2 + S23(jx,jy,jz)**2 )))
-            Nu_t(jx,jy,jz) = S(jx,jy)*Cs_opt2(jx,jy,jz)*l(jz)**2
-    end do
-    end do
+        S(1:nx,:) = sqrt( 2.0_rprec*(S11(1:nx,:,jz)**2 + S22(1:nx,:,jz)**2 +       &
+            S33(1:nx,:,jz)**2 + 2.0_rprec*(S12(1:nx,:,jz)**2 +                     &
+            S13(1:nx,:,jz)**2 + S23(1:nx,:,jz)**2 )))
+        Nu_t(1:nx,:,jz) = S(1:nx,:)*Cs_opt2(1:nx,:,jz)*l(jz)**2
     end do
 
 end if !! if (sgs)
@@ -480,9 +475,7 @@ use mpi_defs, only : mpi_sync_real_array, MPI_SYNC_DOWN
 #endif
 implicit none
 
-real(rprec) :: ux, uy, uz, vx, vy, vz, wx, wy, wz
-integer :: jx, jy, jz
-integer :: jz_min, jz_max
+integer :: jz, jz_min, jz_max
 
 ! Calculate Sij for jz=1 (coord==0 only)
 !   stored on uvp-nodes (this level only) for 'wall'
@@ -492,30 +485,15 @@ if (coord == 0) then
 
         ! Stress free
         case (0)
-            do jy = 1, ny
-            do jx = 1, nx
-                ! Sij values are supposed to be on w-nodes for this case
-                !   does that mean they (Sij) should all be zero?
-                ! Check ux, uy, vx, vy, and qz
-                ux = dudx(jx,jy,1) ! was 0.5_rprec*(dudx(jx,jy,1) + dudx(jx,jy,1))
-                uy = dudy(jx,jy,1)
-                uz = dudz(jx,jy,1)
-                vx = dvdx(jx,jy,1)
-                vy = dvdy(jx,jy,1)
-                vz = dvdz(jx,jy,1)
-                wx = dwdx(jx,jy,1)
-                wy = dwdy(jx,jy,1)
-                wz = 0.5_rprec*(dwdz(jx,jy,1) + 0._rprec)
-
-                ! these values are stored on w-nodes
-                S11(jx,jy,1) = ux
-                S12(jx,jy,1) = 0.5_rprec*(uy+vx)
-                S13(jx,jy,1) = 0.5_rprec*(uz+wx)
-                S22(jx,jy,1) = vy
-                S23(jx,jy,1) = 0.5_rprec*(vz+wy)
-                S33(jx,jy,1) = wz
-            end do
-            end do
+            ! Sij values are supposed to be on w-nodes for this case
+            !   does that mean they (Sij) should all be zero?
+            ! these values are stored on w-nodes
+            S11(1:nx,:,1) = dudx(1:nx,:,1) ! was 0.5_rprec*(dudx(1:nx,:,1) + dudx(1:nx,:,1))
+            S12(1:nx,:,1) = 0.5_rprec*(dudy(1:nx,:,1)+dvdx(1:nx,:,1))
+            S13(1:nx,:,1) = 0.5_rprec*(dudz(1:nx,:,1)+dwdx(1:nx,:,1))
+            S22(1:nx,:,1) = dvdy(1:nx,:,1)
+            S23(1:nx,:,1) = 0.5_rprec*(dvdy(1:nx,:,1)+dwdy(1:nx,:,1))
+            S33(1:nx,:,1) = 0.5_rprec*(dwdz(1:nx,:,1) + 0.0_rprec)
 
         ! Wall
         ! recall dudz and dvdz are stored on uvp-nodes for first level only,
@@ -523,19 +501,15 @@ if (coord == 0) then
         ! recall dwdx and dwdy are stored on w-nodes (always)
         ! All Sij near wall are put on uv1 node
         case (1:)
-            do jy=1,ny
-            do jx=1,nx
-                ! these values stored on uvp-nodes
-                S11(jx,jy,1) = dudx(jx,jy,1) !! uvp_node(1)
-                S12(jx,jy,1) = 0.5_rprec*(dudy(jx,jy,1)+dvdx(jx,jy,1)) !! uvp_node(1)
-                wx = 0.5_rprec*(dwdx(jx,jy,1)+dwdx(jx,jy,2)) !! uvp_node(1)
-                S13(jx,jy,1) = 0.5_rprec*(dudz(jx,jy,1)+wx) !! uvp_node(1)
-                S22(jx,jy,1) = dvdy(jx,jy,1) !! uvp_node(1)
-                wy = 0.5_rprec*(dwdy(jx,jy,1)+dwdy(jx,jy,2)) !! uvp_node(1)
-                S23(jx,jy,1) = 0.5_rprec*(dvdz(jx,jy,1)+wy) !! uvp_node(1)
-                S33(jx,jy,1) = dwdz(jx,jy,1) !! uvp_node(1)
-            end do
-            end do
+            ! these values stored on uvp-nodes
+            S11(1:nx,:,1) = dudx(1:nx,:,1) !! uvp_node(1)
+            S12(1:nx,:,1) = 0.5_rprec*(dudy(1:nx,:,1)+dvdx(1:nx,:,1)) !! uvp_node(1)
+            S13(1:nx,:,1) = 0.5_rprec*(dudz(1:nx,:,1) +                            & 
+                (0.5_rprec*(dwdx(1:nx,:,1)+dwdx(1:nx,:,2))) ) !! uvp_node(1)
+            S22(1:nx,:,1) = dvdy(1:nx,:,1) !! uvp_node(1)
+            S23(1:nx,:,1) = 0.5_rprec*(dvdz(1:nx,:,1) +                            &
+                (0.5_rprec*(dwdy(1:nx,:,1)+dwdy(1:nx,:,2))) ) !! uvp_node(1)
+            S33(1:nx,:,1) = dwdz(1:nx,:,1) !! uvp_node(1)
 
     end select
 
@@ -554,53 +528,42 @@ if (coord == nproc-1) then
 
         ! Stress free
         case (0)
+            ! Sij values are supposed to be on w-nodes for this case
+            !   does that mean they (Sij) should all be zero?
+            ! these values are stored on w-nodes
 
-            do jy=1,ny
-            do jx=1,nx
-                ! Sij values are supposed to be on w-nodes for this case
-                !   does that mean they (Sij) should all be zero?
-                ux = dudx(jx,jy,nz-1) ! uvp_node(nz-1)
-                uy = dudy(jx,jy,nz-1) ! uvp_node(nz-1)
-                uz = dudz(jx,jy,nz)   ! this comes from wallstress() i.e. zero
-                                      ! w_node(nz)
-                vx = dvdx(jx,jy,nz-1) ! uvp_node(nz-1)
-                vy = dvdy(jx,jy,nz-1) ! uvp_node(nz-1)
-                vz = dvdz(jx,jy,nz)   ! this comes from wallstress() i.e. zero
-                                      ! w_node(nz)
-                wx = dwdx(jx,jy,nz)   ! uvp_node(nz-1)
-                wy = dwdy(jx,jy,nz)   ! uvp_node(nz-1)
-                wz = 0.5_rprec*(dwdz(jx,jy,nz-1) + 0._rprec) ! w_node(nz)
-
-                ! these values are stored on w-nodes
-                S11(jx,jy,nz) = ux                ! w_node(nz)
-                S12(jx,jy,nz) = 0.5_rprec*(uy+vx) ! w_node(nz)
-                S13(jx,jy,nz) = 0.5_rprec*(uz+wx) ! w_node(nz)
-                S22(jx,jy,nz) = vy                ! w_node(nz)
-                S23(jx,jy,nz) = 0.5_rprec*(vz+wy) ! w_node(nz)
-                S33(jx,jy,nz) = wz                ! w_node(nz)
-            end do
-            end do
+            ! dudx(1:nx,:,nz-1) on uvp_node(nz-1)
+            S11(1:nx,:,nz) = dudx(1:nx,:,nz-1)                               ! w_node(nz)
+            ! dudy(1:nx,:,nz-1) on uvp_node(nz-1)
+            ! dvdx(1:nx,:,nz-1) on uvp_node(nz-1)
+            S12(1:nx,:,nz) = 0.5_rprec*(dudy(1:nx,:,nz-1)+dvdx(1:nx,:,nz-1)) ! w_node(nz)
+            ! dudz(1:nx,:,nz) comes from wallstress() i.e. zero, on w_node(nz)
+            ! dwdx(1:nx,:,nz) on uvp_node(nz-1)
+            S13(1:nx,:,nz) = 0.5_rprec*(dudz(1:nx,:,nz)+dwdx(1:nx,:,nz))     ! w_node(nz)
+            ! dvdy(1:nx,:,nz-1) on uvp_node(nz-1)
+            S22(1:nx,:,nz) = dvdy(1:nx,:,nz-1)                               ! w_node(nz)
+            ! dvdz(1:nx,:,nz) comes from wallstress() i.e. zero, on w_node(nz)
+            ! dwdy(1:nx,:,nz) on uvp_node(nz-1)
+            S23(1:nx,:,nz) = 0.5_rprec*(dvdz(1:nx,:,nz)+dwdy(1:nx,:,nz))     ! w_node(nz)
+            ! dwdz(1:nx,:,nz-1) + 0._rprec ! w_node(nz)
+            S33(1:nx,:,nz) = 0.5_rprec*(dwdz(1:nx,:,nz-1) + 0.0_rprec)       ! w_node(nz)           
 
         ! Wall
         ! recall dudz and dvdz are stored on uvp-nodes for first level only,
         !   'wall' only
         ! recall dwdx and dwdy are stored on w-nodes (always)
         case (1:)
-            do jy = 1, ny
-            do jx = 1, nx
-                ! these values stored on uvp-nodes
-                S11(jx,jy,nz) = dudx(jx,jy,nz-1) !! uvp_node(nz-1)
-                S12(jx,jy,nz) = 0.5_rprec*(dudy(jx,jy,nz-1)+dvdx(jx,jy,nz-1)) !! uvp_node(nz-1)
-                wx = 0.5_rprec*(dwdx(jx,jy,nz-1)+dwdx(jx,jy,nz)) !! uvp_node(nz-1)
-                ! dudz from wallstress()
-                S13(jx,jy,nz) = 0.5_rprec*(dudz(jx,jy,nz)+wx) !! uvp_node(nz-1)
-                S22(jx,jy,nz) = dvdy(jx,jy,nz-1) !! uvp_node(nz-1)
-                wy = 0.5_rprec*(dwdy(jx,jy,nz-1)+dwdy(jx,jy,nz)) !! uvp_node(nz-1)
-                ! dvdz from wallstress()
-                S23(jx,jy,nz) = 0.5_rprec*(dvdz(jx,jy,nz)+wy) !! uvp_node(nz-1)
-                S33(jx,jy,nz) = dwdz(jx,jy,nz-1) !! uvp_node(nz-1)
-            end do
-            end do
+            ! these values stored on uvp-nodes
+            S11(1:nx,:,nz) = dudx(1:nx,:,nz-1) !! uvp_node(nz-1)
+            S12(1:nx,:,nz) = 0.5_rprec*(dudy(1:nx,:,nz-1)+dvdx(1:nx,:,nz-1)) !! uvp_node(nz-1)
+            ! dudz from wallstress()
+            S13(1:nx,:,nz) = 0.5_rprec*(dudz(1:nx,:,nz) +                                    &
+                (0.5_rprec*(dwdx(1:nx,:,nz-1)+dwdx(1:nx,:,nz))) ) !! uvp_node(nz-1)
+            S22(1:nx,:,nz) = dvdy(1:nx,:,nz-1) !! uvp_node(nz-1)
+            ! dvdz from wallstress()
+            S23(1:nx,:,nz) = 0.5_rprec*(dvdz(1:nx,:,nz) +                                    &
+                (0.5_rprec*(dwdy(1:nx,:,nz-1)+dwdy(1:nx,:,nz))) ) !! uvp_node(nz-1)
+            S33(1:nx,:,nz) = dwdz(1:nx,:,nz-1) !! uvp_node(nz-1)
 
     end select
 
@@ -621,18 +584,13 @@ call mpi_sync_real_array( dwdz(:,:,1:), 1, MPI_SYNC_DOWN )
 !   values are stored on w-nodes
 !   dudz, dvdz, dwdx, dwdy are already stored on w-nodes
 do jz = jz_min, jz_max
-do jy = 1, ny
-do jx = 1, nx
-    S11(jx,jy,jz) = 0.5_rprec*(dudx(jx,jy,jz) + dudx(jx,jy,jz-1)) !! w-node(jz)
-    uy = dudy(jx,jy,jz) + dudy(jx,jy,jz-1)                        !! w-node(jz)
-    vx = dvdx(jx,jy,jz) + dvdx(jx,jy,jz-1)                        !! w-node(jz)
-    S12(jx,jy,jz) = 0.25_rprec*(uy+vx)                            !! w-node(jz)
-    S13(jx,jy,jz) = 0.5_rprec*(dudz(jx,jy,jz) + dwdx(jx,jy,jz))   !! w-node(jz)
-    S22(jx,jy,jz) = 0.5_rprec*(dvdy(jx,jy,jz) + dvdy(jx,jy,jz-1)) !! w-node(jz)
-    S23(jx,jy,jz) = 0.5_rprec*(dvdz(jx,jy,jz) + dwdy(jx,jy,jz))   !! w-node(jz)
-    S33(jx,jy,jz) = 0.5_rprec*(dwdz(jx,jy,jz) + dwdz(jx,jy,jz-1)) !! w-node(jz)
-end do
-end do
+    S11(1:nx,:,jz) = 0.5_rprec*(dudx(1:nx,:,jz) + dudx(1:nx,:,jz-1)) !! w-node(jz)
+    S12(1:nx,:,jz) = 0.25_rprec*(dudy(1:nx,:,jz) + dudy(1:nx,:,jz-1) +           &
+        dvdx(1:nx,:,jz) + dvdx(1:nx,:,jz-1))                         !! w-node(jz)
+    S13(1:nx,:,jz) = 0.5_rprec*(dudz(1:nx,:,jz) + dwdx(1:nx,:,jz))   !! w-node(jz)
+    S22(1:nx,:,jz) = 0.5_rprec*(dvdy(1:nx,:,jz) + dvdy(1:nx,:,jz-1)) !! w-node(jz)
+    S23(1:nx,:,jz) = 0.5_rprec*(dvdz(1:nx,:,jz) + dwdy(1:nx,:,jz))   !! w-node(jz)
+    S33(1:nx,:,jz) = 0.5_rprec*(dwdz(1:nx,:,jz) + dwdz(1:nx,:,jz-1)) !! w-node(jz)
 end do
 
 end subroutine calc_Sij
