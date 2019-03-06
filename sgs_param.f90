@@ -83,7 +83,7 @@ subroutine sgs_param_init ()
 !*******************************************************************************
 use param, only : ld, ny, nz, lbz, molec, nu_molec, u_star,                    &
     z_i, dx, dy, dz, sgs_model
-use param, only : fourier, nxp
+! use param, only : fourier, nxp
 use test_filtermodule, only : filter_size
 
 implicit none
