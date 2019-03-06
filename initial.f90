@@ -585,7 +585,7 @@ do jz = 1, nz
     if (zo == 0.0_rprec) then
         ! arg2 = z/0.0001_rprec !! roughness length-scale
         ! arg2 = z*z_i*u_star/nu_molec !! viscous length-scale
-        if (trigger) then
+        if ((trigger) .and. (trig_on == 1)) then
             arg2 = z*z_i*u_star/nu_molec*trig_factor !! viscous length-scale
         else
             arg2 = z*z_i*u_star/nu_molec !! viscous length-scale
@@ -750,7 +750,7 @@ do jz = 1, nz
     if (zo == 0.0_rprec) then
         ! arg2 = z/0.0001_rprec !! roughness length-scale
         ! arg2 = z*z_i*u_star/nu_molec !! viscous length-scale
-        if (trigger) then
+        if ((trigger) .and. (trig_on == 1)) then
             arg2 = z*z_i*u_star/nu_molec*trig_factor !! viscous length-scale
         else
             arg2 = z*z_i*u_star/nu_molec !! viscous length-scale
