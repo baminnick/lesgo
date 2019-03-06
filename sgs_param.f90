@@ -34,10 +34,11 @@ real(rprec), dimension(:,:,:),allocatable :: Nu_t !! eddy viscosity
 real(rprec), dimension(:,:,:),allocatable :: Cs_opt2 !! (C_s)^2, Dynamic Smag Coef
 real(rprec), dimension(:,:),  allocatable :: S
 
-real(rprec), dimension(:,:,:), allocatable :: S11F, S22F, S33F, S12F, S13F, S23F
-real(rprec), dimension(:,:,:), allocatable :: Nu_tF !! eddy viscosity
-real(rprec), dimension(:,:,:), allocatable :: Cs_opt2F !! (C_s)^2, Dynamic Smag Coef
-real(rprec), dimension(:,:), allocatable :: SF
+! RNL-LES only for sgs = 1
+!real(rprec), dimension(:,:,:), allocatable :: S11F, S22F, S33F, S12F, S13F, S23F
+!real(rprec), dimension(:,:,:), allocatable :: Nu_tF !! eddy viscosity
+!real(rprec), dimension(:,:,:), allocatable :: Cs_opt2F !! (C_s)^2, Dynamic Smag Coef
+!real(rprec), dimension(:,:), allocatable :: SF
 
 ! For all dynamic models (2-5)
 real(rprec), dimension(:,:,:),allocatable :: ee_now
@@ -99,17 +100,17 @@ allocate ( Cs_opt2(ld,ny,nz) ); Cs_opt2 = 0._rprec
 allocate ( S(ld,ny) ); S = 0._rprec
 
 ! RNL-LES only for sgs = 1
-if (fourier) then
-    allocate ( S11F(nxp+2,ny,nz) ); S11F = 0._rprec
-    allocate ( S12F(nxp+2,ny,nz) ); S12F = 0._rprec
-    allocate ( S13F(nxp+2,ny,nz) ); S13F = 0._rprec
-    allocate ( S22F(nxp+2,ny,nz) ); S22F = 0._rprec
-    allocate ( S23F(nxp+2,ny,nz) ); S23F = 0._rprec
-    allocate ( S33F(nxp+2,ny,nz) ); S33F = 0._rprec
-    allocate ( Nu_tF(nxp+2,ny,nz) ); Nu_tF = 0._rprec
-    allocate ( Cs_opt2F(nxp+2,ny,nz) ); Cs_opt2F = 0._rprec
-    allocate ( SF(nxp+2,ny) ); SF = 0._rprec
-endif
+!if (fourier) then
+!    allocate ( S11F(nxp+2,ny,nz) ); S11F = 0._rprec
+!    allocate ( S12F(nxp+2,ny,nz) ); S12F = 0._rprec
+!    allocate ( S13F(nxp+2,ny,nz) ); S13F = 0._rprec
+!    allocate ( S22F(nxp+2,ny,nz) ); S22F = 0._rprec
+!    allocate ( S23F(nxp+2,ny,nz) ); S23F = 0._rprec
+!    allocate ( S33F(nxp+2,ny,nz) ); S33F = 0._rprec
+!    allocate ( Nu_tF(nxp+2,ny,nz) ); Nu_tF = 0._rprec
+!    allocate ( Cs_opt2F(nxp+2,ny,nz) ); Cs_opt2F = 0._rprec
+!    allocate ( SF(nxp+2,ny) ); SF = 0._rprec
+!endif
 
 ! For dynamic models:
 if (sgs_model .ne. 1) then
