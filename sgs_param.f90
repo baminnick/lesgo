@@ -33,6 +33,7 @@ real(rprec), dimension(:,:,:),allocatable :: S11, S12, S22, S33, S13, S23
 real(rprec), dimension(:,:,:),allocatable :: Nu_t !! eddy viscosity
 real(rprec), dimension(:,:,:),allocatable :: Cs_opt2 !! (C_s)^2, Dynamic Smag Coef
 real(rprec), dimension(:,:),  allocatable :: S
+real(rprec), dimension(:,:),  allocatable :: nu_coef, nu_coef2
 
 ! RNL-LES only for sgs = 1
 !real(rprec), dimension(:,:,:), allocatable :: S11F, S22F, S33F, S12F, S13F, S23F
@@ -98,6 +99,8 @@ allocate ( S33(ld,ny,nz) ); S33 = 0._rprec
 allocate ( Nu_t(ld,ny,nz) ); Nu_t = 0._rprec
 allocate ( Cs_opt2(ld,ny,nz) ); Cs_opt2 = 0._rprec
 allocate ( S(ld,ny) ); S = 0._rprec
+allocate ( nu_coef(ld,ny) ); nu_coef = 0._rprec
+allocate ( nu_coef2(ld,ny) ); nu_coef2 = 0._rprec
 
 ! RNL-LES only for sgs = 1
 !if (fourier) then
@@ -208,7 +211,6 @@ if (molec) then
 else
     nu = 0._rprec
 end if
-
 
 end subroutine sgs_param_init
 

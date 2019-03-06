@@ -261,58 +261,35 @@ if (sgs) then
     end do
     end do
 
+else
+
+    ! define nu_coefs here since it does not change case-by-case for DNS
+    ! if sgs, nu_coefs defined case-by-case since it is dependent on Nu_t
+    if (.not. sgs) then
+        nu_coef(1:nx,:) = 2.0_rprec*nu
+        nu_coef2(1:nx,:) = 2.0_rprec*nu
+    endif
+
 end if !! if (sgs)
 
 ! Calculate txx, txy, tyy, tzz for bottom level: jz=1 node (coord==0 only)
 if (coord == 0) then
-    select case (lbc_mom)
+    if (sgs) then
+        select case (lbc_mom)
+            ! Stress free
+            case (0)
+                nu_coef(1:nx,:) = 2.0_rprec*0.5_rprec*(Nu_t(1:nx,:,1) + Nu_t(1:nx,:,2)) + nu
 
-        ! Stress free
-        ! txx,txy,tyy,tzz stored on uvp-nodes (for this and all levels)
-        !   recall: for this case, Sij are stored on w-nodes
-        case (0)
-            if (sgs) then
-                do jy = 1, ny
-                do jx = 1, nx
-                    ! Total viscosity
-                    const = 2.0_rprec*0.5_rprec*(Nu_t(jx,jy,1) + Nu_t(jx,jy,2)) + nu
-                    txx(jx,jy,1) = -const*dudx(jx,jy,1) !! uvp-node(1)
-                    txy(jx,jy,1) = -const*(0.5_rprec*(dudy(jx,jy,1)+dvdx(jx,jy,1))) !! uvp-node(1)
-                    tyy(jx,jy,1) = -const*dvdy(jx,jy,1) !! uvp-node(1)
-                    tzz(jx,jy,1) = -const*dwdz(jx,jy,1) !! uvp-node(1)
-                end do
-                end do
-            else
-                const = 0._rprec
-                txx(1:nx,:,1) = -2.0_rprec*(nu)*dudx(1:nx,:,1) !! uvp-node(1)
-                txy(1:nx,:,1) = -2.0_rprec*(nu)*(0.5_rprec*(dudy(1:nx,:,1)+dvdx(1:nx,:,1))) !! uvp-node(1)
-                tyy(1:nx,:,1) = -2.0_rprec*(nu)*dvdy(1:nx,:,1) !! uvp-node(1)
-                tzz(1:nx,:,1) = -2.0_rprec*(nu)*dwdz(1:nx,:,1) !! uvp-node(1)
-            end if
+            ! Wall
+            case (1:)
+                nu_coef(1:nx,:) = 2.0_rprec*(Nu_t(1:nx,:,1)+nu) !! Nu_t on uvp-node(1) here
 
-        ! Wall
-        ! txx,txy,tyy,tzz stored on uvp-nodes (for this and all levels)
-        !   recall: for this case, Sij are stored on uvp-nodes
-        case (1:)
-            if (sgs) then
-                do jy = 1, ny
-                do jx = 1, nx
-                    const = -2._rprec*(Nu_t(jx,jy,1)+nu) !! Nu_t on uvp-node(1) here
-                    txx(jx,jy,1) = const*dudx(jx,jy,1) !! uvp-node(1)
-                    txy(jx,jy,1) = const*(0.5_rprec*(dudy(jx,jy,1)+dvdx(jx,jy,1))) !! uvp-node(1)
-                    tyy(jx,jy,1) = const*dvdy(jx,jy,1) !! uvp-node(1)
-                    tzz(jx,jy,1) = const*dwdz(jx,jy,1) !! uvp-node(1)
-                end do
-                end do
-            else
-                const = 0._rprec
-                txx(1:nx,:,1) = -2._rprec*(nu)*dudx(1:nx,:,1) !! uvp-node(1)
-                txy(1:nx,:,1) = -2._rprec*(nu)*(0.5_rprec*(dudy(1:nx,:,1)+dvdx(1:nx,:,1))) !! uvp-node(1)
-                tyy(1:nx,:,1) = -2._rprec*(nu)*dvdy(1:nx,:,1) !! uvp-node(1)
-                tzz(1:nx,:,1) = -2._rprec*(nu)*dwdz(1:nx,:,1) !! uvp-node(1)
-            end if
-
-    end select
+        end select
+    endif
+    txx(1:nx,:,1) = -nu_coef(1:nx,:)*dudx(1:nx,:,1) !! uvp-node(1)
+    txy(1:nx,:,1) = -nu_coef(1:nx,:)*(0.5_rprec*(dudy(1:nx,:,1)+dvdx(1:nx,:,1))) !! uvp-node(1)
+    tyy(1:nx,:,1) = -nu_coef(1:nx,:)*dvdy(1:nx,:,1) !! uvp-node(1)
+    tzz(1:nx,:,1) = -nu_coef(1:nx,:)*dwdz(1:nx,:,1) !! uvp-node(1)
 
     ! since first level already calculated
     jz_min = 2
@@ -322,73 +299,27 @@ end if
 
 ! Calculate txx, txy, tyy, tzz for bottom level: jz=nz node (coord==nproc-1)
 if (coord == nproc-1) then
-    select case (ubc_mom)
+    if (sgs) then
+        select case (lbc_mom)
+            ! Stress free
+            case (0)
+                nu_coef(1:nx,:) = 2.0_rprec*(0.5_rprec*(Nu_t(1:nx,:,nz-1) + Nu_t(1:nx,:,nz)) + nu) !! uvp-node(nz-1)
+                nu_coef2(1:nx,:) = 2.0_rprec*(Nu_t(1:nx,:,nz-1) + nu) !! w-node(nz-1)
 
-        ! Stress free
-        ! txx,txy,tyy,tzz stored on uvp-nodes (for this and all levels)
-        !   recall: for this case, Sij are stored on w-nodes
-        case (0)
+            ! Wall
+            case (1:)
+                nu_coef(1:nx,:) = 2.0_rprec*(Nu_t(1:nx,:,nz) + nu) !! uvp-node
+                nu_coef2(1:nx,:) = 2.0_rprec*(Nu_t(1:nx,:,nz-1) + nu) !! w-node
 
-            if (sgs) then
-                do jy = 1, ny
-                do jx = 1, nx
-                    ! Total viscosity
-                    const  = 2._rprec*(0.5_rprec*(Nu_t(jx,jy,nz-1) + Nu_t(jx,jy,nz)) + nu) !! uvp-node(nz-1)
-                    const2 = 2._rprec*(Nu_t(jx,jy,nz-1) + nu) !! w-node(nz-1)
-
-                    ! for top wall, it is nz-1 on the uv-grid
-                    txx(jx,jy,nz-1) = -const*dudx(jx,jy,nz-1) !! uvp-node(nz-1)
-                    txy(jx,jy,nz-1) = -const*(0.5_rprec*(dudy(jx,jy,nz-1)+dvdx(jx,jy,nz-1))) !! uvp-node(nz-1)
-                    tyy(jx,jy,nz-1) = -const*dvdy(jx,jy,nz-1) !! uvp-node(nz-1)
-                    tzz(jx,jy,nz-1) = -const*dwdz(jx,jy,nz-1) !! uvp-node(nz-1)
-                    ! for top wall, include w-grid stress since we touched nz-1
-                    txz(jx,jy,nz-1) = -const2*(0.5_rprec*(dudz(jx,jy,nz-1)+dwdx(jx,jy,nz-1))) !! w-node(nz-1)
-                    tyz(jx,jy,nz-1) = -const2*(0.5_rprec*(dvdz(jx,jy,nz-1)+dwdy(jx,jy,nz-1))) !! w-node(nz-1)
-                end do
-                end do
-            else
-                const = 0._rprec
-                txx(1:nx,:,nz-1) = -2._rprec*(nu)*dudx(1:nx,:,nz-1) !! uvp-node(nz-1)
-                txy(1:nx,:,nz-1) = -2._rprec*(nu)*(0.5_rprec*(dudy(1:nx,:,nz-1)+dvdx(1:nx,:,nz-1))) !! uvp-node(nz-1)
-                tyy(1:nx,:,nz-1) = -2._rprec*(nu)*dvdy(1:nx,:,nz-1) !! uvp-node(nz-1)
-                tzz(1:nx,:,nz-1) = -2._rprec*(nu)*dwdz(1:nx,:,nz-1) !! uvp-node(nz-1)
-                ! for top wall, include w-grid stress since we touched nz-1
-                txz(1:nx,:,nz-1) = -2._rprec*(nu)*(0.5_rprec*(dudz(1:nx,:,nz-1)+dwdx(1:nx,:,nz-1))) !! w-node(nz-1)
-                tyz(1:nx,:,nz-1) = -2._rprec*(nu)*(0.5_rprec*(dvdz(1:nx,:,nz-1)+dwdy(1:nx,:,nz-1))) !! w-node(nz-1)
-            end if
-
-        ! Wall
-        ! txx,txy,tyy,tzz stored on uvp-nodes (for this and all levels)
-        !   recall: for this case, Sij are stored on uvp-nodes
-        case (1:)
-            if (sgs) then
-                do jy = 1, ny
-                do jx = 1, nx
-                    const  = -2._rprec*(Nu_t(jx,jy,nz) + nu) !! uvp-node
-                    const2 = -2._rprec*(Nu_t(jx,jy,nz-1) + nu) !! w-node
-
-                    ! Note: Sij(nz) is on uvp-node at nz-1
-                    txx(jx,jy,nz-1) = const*dudx(jx,jy,nz-1) !! uvp-node(nz-1)
-                    txy(jx,jy,nz-1) = const*(0.5_rprec*(dudy(jx,jy,nz-1)+dvdy(jx,jy,nz-1))) !! uvp-node(nz-1)
-                    tyy(jx,jy,nz-1) = const*dvdy(jx,jy,nz-1) !! uvp-node(nz-1)
-                    tzz(jx,jy,nz-1) = const*dwdz(jx,jy,nz-1) !! uvp-node(nz-1)
-                    ! for top wall, include w-grid stress since we touched nz-1
-                    txz(jx,jy,nz-1)= const2*(0.5_rprec*(dudz(jx,jy,nz-1)+dwdx(jx,jy,nz-1))) !! w-node(nz-1)
-                    tyz(jx,jy,nz-1)= const2*(0.5_rprec*(dvdz(jx,jy,nz-1)+dwdy(jx,jy,nz-1))) !! w-node(nz-1)
-                end do
-                end do
-            else
-                const = 0._rprec
-                txx(1:nx,:,nz-1) = -2._rprec*(nu)*dudx(1:nx,:,nz-1) !! uvp-node(nz-1)
-                txy(1:nx,:,nz-1) = -2._rprec*(nu)*(0.5_rprec*(dudy(1:nx,:,nz-1)+dvdx(1:nx,:,nz-1))) !! uvp-node(nz-1)
-                tyy(1:nx,:,nz-1) = -2._rprec*(nu)*dvdy(1:nx,:,nz-1) !! uvp-node(nz-1)
-                tzz(1:nx,:,nz-1) = -2._rprec*(nu)*dwdz(1:nx,:,nz-1) !! uvp-node(nz-1)
-                ! for top wall, include w-grid stress since we touched nz-1
-                txz(1:nx,:,nz-1)=-2._rprec*(nu)*(0.5_rprec*(dudz(1:nx,:,nz-1)+dwdx(1:nx,:,nz-1))) !! w-node(nz-1)
-                tyz(1:nx,:,nz-1)=-2._rprec*(nu)*(0.5_rprec*(dvdz(1:nx,:,nz-1)+dwdy(1:nx,:,nz-1))) !! w-node(nz-1)
-            end if
-
-    end select
+        end select
+    endif
+    txx(1:nx,:,nz-1) = -nu_coef(1:nx,:)*dudx(1:nx,:,nz-1) !! uvp-node(nz-1)
+    txy(1:nx,:,nz-1) = -nu_coef(1:nx,:)*(0.5_rprec*(dudy(1:nx,:,nz-1)+dvdx(1:nx,:,nz-1))) !! uvp-node(nz-1)
+    tyy(1:nx,:,nz-1) = -nu_coef(1:nx,:)*dvdy(1:nx,:,nz-1) !! uvp-node(nz-1)
+    tzz(1:nx,:,nz-1) = -nu_coef(1:nx,:)*dwdz(1:nx,:,nz-1) !! uvp-node(nz-1)
+    ! for top wall, include w-grid stress since we touched nz-1
+    txz(1:nx,:,nz-1) = -nu_coef2(1:nx,:)*(0.5_rprec*(dudz(1:nx,:,nz-1)+dwdx(1:nx,:,nz-1))) !! w-node(nz-1)
+    tyz(1:nx,:,nz-1) = -nu_coef2(1:nx,:)*(0.5_rprec*(dvdz(1:nx,:,nz-1)+dwdy(1:nx,:,nz-1))) !! w-node(nz-1)
 
     ! since last level already calculated
     jz_max = nz-2
@@ -400,39 +331,18 @@ end if
 !   txx, txy, tyy, tzz not needed at nz (so they aren't calculated)
 !     txz, tyz at nz will be done later
 !   txx, txy, tyy, tzz (uvp-nodes) and txz, tyz (w-nodes)
-
-if (sgs) then
-    const3=-2._rprec*nu
-    do jz=jz_min, jz_max
-    do jy=1,ny
-    do jx=1,nx
-
-       const =-2._rprec*0.5_rprec*(Nu_t(jx,jy,jz) + Nu_t(jx,jy,jz+1))
-       const2=-2._rprec*Nu_t(jx,jy,jz)
-
-       txx(jx,jy,jz)=(const+const3)*dudx(jx,jy,jz) !! uvp-node(jz)
-       txy(jx,jy,jz)=(const+const3)*(0.5_rprec*(dudy(jx,jy,jz)+dvdx(jx,jy,jz))) !! uvp-node(jz)
-       tyy(jx,jy,jz)=(const+const3)*dvdy(jx,jy,jz) !! uvp-node(jz)
-       tzz(jx,jy,jz)=(const+const3)*dwdz(jx,jy,jz) !! uvp-node(jz)
-       txz(jx,jy,jz)=(const2+const3)*(0.5_rprec*(dudz(jx,jy,jz)+dwdx(jx,jy,jz))) !! w-node(jz)
-       tyz(jx,jy,jz)=(const2+const3)*(0.5_rprec*(dvdz(jx,jy,jz)+dwdy(jx,jy,jz))) !! w-node(jz)
-
-    end do
-    end do
-    end do
-
-else
-    const=0._rprec  ! removed from tij expressions below since it's zero
-
-    do jz = jz_min, jz_max
-        txx(1:nx,:,jz)=-2._rprec*(nu)*dudx(1:nx,:,jz) !! uvp-node(jz)
-        txy(1:nx,:,jz)=-2._rprec*(nu)*(0.5_rprec*(dudy(1:nx,:,jz)+dvdx(1:nx,:,jz))) !! uvp-node(jz)
-        tyy(1:nx,:,jz)=-2._rprec*(nu)*dvdy(1:nx,:,jz) !! uvp-node(jz)
-        tzz(1:nx,:,jz)=-2._rprec*(nu)*dwdz(1:nx,:,jz) !! uvp-node(jz)
-        txz(1:nx,:,jz)=-2._rprec*(nu)*(0.5_rprec*(dudz(1:nx,:,jz)+dwdx(1:nx,:,jz))) !! w-node(jz)
-        tyz(1:nx,:,jz)=-2._rprec*(nu)*(0.5_rprec*(dvdz(1:nx,:,jz)+dwdy(1:nx,:,jz))) !! w-node(jz)
-    end do
-end if
+do jz = jz_min, jz_max
+    if (sgs) then
+        nu_coef(1:nx,:) = 2.0_rprec*(0.5_rprec*(Nu_t(1:nx,:,jz) + Nu_t(1:nx,:,jz+1)) + nu) !! uvp-node(jz)
+        nu_coef2(1:nx,:) = 2.0_rprec*(Nu_t(1:nx,:,jz) + nu) !! w-node(jz)
+    endif
+    txx(1:nx,:,jz)=-nu_coef(1:nx,:)*dudx(1:nx,:,jz) !! uvp-node(jz)
+    txy(1:nx,:,jz)=-nu_coef(1:nx,:)*(0.5_rprec*(dudy(1:nx,:,jz)+dvdx(1:nx,:,jz))) !! uvp-node(jz)
+    tyy(1:nx,:,jz)=-nu_coef(1:nx,:)*dvdy(1:nx,:,jz) !! uvp-node(jz)
+    tzz(1:nx,:,jz)=-nu_coef(1:nx,:)*dwdz(1:nx,:,jz) !! uvp-node(jz)
+    txz(1:nx,:,jz)=-nu_coef2(1:nx,:)*(0.5_rprec*(dudz(1:nx,:,jz)+dwdx(1:nx,:,jz))) !! w-node(jz)
+    tyz(1:nx,:,jz)=-nu_coef2(1:nx,:)*(0.5_rprec*(dvdz(1:nx,:,jz)+dwdy(1:nx,:,jz))) !! w-node(jz)
+enddo
 
 #ifdef PPLVLSET
 !--at this point tij are only set for 1:nz-1
@@ -441,7 +351,6 @@ end if
 !  separate from the rest of the code (at the risk of some redundancy)
 call level_set_BC ()
 #endif
-
 
 #ifdef PPMPI
 ! txz,tyz calculated for 1:nz-1 (on w-nodes) except bottom process
