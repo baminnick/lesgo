@@ -37,7 +37,6 @@ implicit none
 real(rprec),dimension(nz_tot) ::FIELD1
 real(rprec),dimension(nz_tot) ::FIELD2
 real(rprec),dimension(nz_tot) ::FIELD3
-real(rprec),dimension(nz_tot) ::FIELD4
 
 real(rprec), dimension(nz_tot) :: z_w, z_uv
 
@@ -63,12 +62,6 @@ if (load_stretch) then
     end do
     close(3)
 
-    open(4,file=path//'jaco104.dat')
-    do i=1,nz_tot
-        read(4,*) FIELD4(i)
-    end do
-    close(4)
-
 else
     ! Use tanh stretched grid
     ! Create unstretched grid to be mapped to new grid
@@ -88,11 +81,6 @@ else
         (1-(tanh(str_factor*(z_w(:)/L_z-1)))**2)/tanh(str_factor)
     FIELD2(:) = L_z*(str_factor/L_z)*                                       &
         (1-(tanh(str_factor*(z_uv(:)/L_z-1)))**2)/tanh(str_factor)
-
-    ! Compute d(1/J)/dz term for PPE, only on uv-grid
-    FIELD4(:) = 2.0_rprec*tanh(str_factor)*                                 &
-        tanh(str_factor*(z_uv(:)/L_z-1))/                                   &
-        ((1-tanh(str_factor*(z_uv(:)/L_z-1))**2))
 
 endif
 
