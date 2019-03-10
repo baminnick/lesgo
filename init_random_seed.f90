@@ -65,6 +65,11 @@ else
    end do
 end if
 
+! Overwrite seed values to give deterministic randomness for debugging
+!do i = 1, n
+!    seed(i) = 12
+!enddo
+
 call random_seed(put=seed)
 
 contains

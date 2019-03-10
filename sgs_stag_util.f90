@@ -51,6 +51,7 @@ use sim_param, only : dudx, dudy, dudz, dvdx, dvdy, dvdz, dwdx, dwdy, dwdz
 #ifdef PPMAPPING
 use sim_param, only : JACO2, mesh_stretch, delta_stretch
 #endif
+use sim_param, only : zhyb
 use sgs_param
 use messages
 
@@ -245,14 +246,23 @@ end if !! if (sgs)
 ! Define |S| and eddy viscosity (nu_t= c_s^2 l^2 |S|) for entire domain
 !   stored on w-nodes (on uvp node for jz=1 or nz for 'wall' BC only)
 do jz = 1, nz
-do jy = 1, ny
-do jx = 1, nx
-    S(jx,jy) = sqrt( 2._rprec*(S11(jx,jy,jz)**2 + S22(jx,jy,jz)**2 +           &
-        S33(jx,jy,jz)**2 + 2._rprec*(S12(jx,jy,jz)**2 +                        &
-        S13(jx,jy,jz)**2 + S23(jx,jy,jz)**2 )))
-    Nu_t(jx,jy,jz) = S(jx,jy)*Cs_opt2(jx,jy,jz)*l(jz)**2
-end do
-end do
+    if ((hybrid_baseline) .and. (zhyb(jz))) then !! assuming no sgs in fourier
+    do jy = 1, ny
+    do jx = 1, nx
+        Nu_t(jx,jy,jz) = 0.0_rprec
+    enddo
+    enddo
+    else !! fourier, not fourier, or hybrid_fourier in physical
+    do jy = 1, ny
+    do jx = 1, nx
+        S(jx,jy) = sqrt( 2._rprec*(S11(jx,jy,jz)**2 + S22(jx,jy,jz)**2 +           &
+            S33(jx,jy,jz)**2 + 2._rprec*(S12(jx,jy,jz)**2 +                        &
+            S13(jx,jy,jz)**2 + S23(jx,jy,jz)**2 )))
+        Nu_t(jx,jy,jz) = S(jx,jy)*Cs_opt2(jx,jy,jz)*l(jz)**2
+    end do
+    end do
+    endif
+
 end do
 
 ! Calculate txx, txy, tyy, tzz for bottom level: jz=1 node (coord==0 only)

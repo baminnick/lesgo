@@ -7,7 +7,6 @@ subroutine load_jacobian()
 ! JACO1        - Jacobian on the w-grid
 ! JACO2        - Jacobian on the uv-grid
 ! mesh_stretch - z-locations on the uv-grid
-! dj_dzeta     - Derivative involving Jacobian for PPE
 ! 
 use sim_param
 use param
@@ -17,7 +16,6 @@ implicit none
 real(kind=rprec),dimension(nz_tot) ::FIELD1
 real(kind=rprec),dimension(nz_tot) ::FIELD2
 real(kind=rprec),dimension(nz_tot) ::FIELD3
-real(kind=rprec),dimension(nz_tot) ::FIELD4
 
 real(rprec), dimension(nz_tot) :: z_w, z_uv
 
@@ -43,12 +41,6 @@ if (load_stretch) then
     end do
     close(3)
 
-    open(4,file=path//'jaco104.dat')
-    do i=1,nz_tot
-        read(4,*) FIELD4(i)
-    end do
-    close(4)
-
 else
     ! Use tanh stretched grid
     ! Create unstretched grid to be mapped to new grid
@@ -69,11 +61,6 @@ else
     FIELD2(:) = L_z*(str_factor/L_z)*                                       &
         (1-(tanh(str_factor*(z_uv(:)/L_z-1)))**2)/tanh(str_factor)
 
-    ! Compute d(1/J)/dz term for PPE, only on uv-grid
-    FIELD4(:) = 2.0_rprec*tanh(str_factor)*                                 &
-        tanh(str_factor*(z_uv(:)/L_z-1))/                                   &
-        ((1-tanh(str_factor*(z_uv(:)/L_z-1))**2))
-
 endif
 
 ! Store variables into what LESGO will use
@@ -89,22 +76,59 @@ do jz=1,nz
     mesh_stretch(jz) = FIELD3(coord*(nz-1)+jz)
 end do
 
-do jz=1,nz
-    dj_dzeta(jz) = FIELD4(coord*(nz-1)+jz)
-end do
-
 if (coord == 0) then
     JACO1(lbz)=JACO1(1)    
     JACO2(lbz)=JACO2(1)
     mesh_stretch(lbz)=mesh_stretch(1)     
-    dj_dzeta(lbz)=dj_dzeta(1)
     write(*,*) '--> Grid stretched using mapping function'
 else
     JACO1(lbz)=FIELD1((coord-1)*(nz-1)+nz-1)
     JACO2(lbz)=FIELD2((coord-1)*(nz-1)+nz-1)
     mesh_stretch(lbz)=FIELD3((coord-1)*(nz-1)+nz-1)
-    dj_dzeta(lbz)=FIELD4((coord-1)*(nz-1)+nz-1)
 end if
+
+! Specify which z-levels should be run in RNL-fourier mode
+! NOTE: since mesh-stretch is on uv-grid, the interface is
+! always located at a uv-point
+if ((hybrid_baseline) .or. (hybrid_natural)) then
+    do jz = lbz, nz
+        if (mesh_stretch(jz) .le. hwm) then !! z-level in RNL-Fourier mode
+            zhyb(jz) = .true.
+        else !! z-level in LES-Physical mode
+            zhyb(jz) = .false.
+        endif
+    enddo
+
+    ! Correct location of interface if being shared between processors
+    ! This forces the interface to be at jz = 2 for the processor above
+    if (zhyb(nz-1) .and. (.not. zhyb(nz))) then
+        zhyb(nz) = .true. !! entire processor now in fourier mode
+    elseif (zhyb(lbz) .and. (.not. zhyb(1))) then
+        zhyb(1) = .true.
+        zhyb(2) = .true. !! new location of interface
+    elseif (zhyb(1) .and. (.not. zhyb(2))) then
+        zhyb(2) = .true. !! new location of interface
+    endif
+
+    ! Enforce part of the grid to be physical/fourier
+    ! if specified hwm is too small or too large
+    if ((coord == 0) .and. (.not. zhyb(2))) then !! hwm too small
+        zhyb(lbz) = .true.
+        zhyb(1) = .true.
+        zhyb(2) = .true.
+    elseif ((coord == nproc-1) .and. (zhyb(nz-1))) then !! hwm too large
+        zhyb(nz) = .false.
+        zhyb(nz-1) = .false.
+    endif
+
+    ! Tell user location of interface
+    do jz = 2, nz-2
+        if ( (zhyb(jz)) .and. (.not. zhyb(jz+1)) ) then
+            write(*,*) '--> Hybrid Fourier: interface at, hwm = ', mesh_stretch(jz)
+        endif
+    enddo
+
+endif
 
 end subroutine load_jacobian
 

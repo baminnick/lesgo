@@ -310,6 +310,12 @@ do
                 read (buff(equal_pos+1:), *) nxp
             case ('THRX')
                 read (buff(equal_pos+1:), *) thrx
+            case ('HYBRID_BASELINE')
+                read (buff(equal_pos+1:), *) hybrid_baseline
+            case ('HYBRID_NATURAL')
+                read (buff(equal_pos+1:), *) hybrid_natural
+            case ('HWM')
+                read (buff(equal_pos+1:), *) hwm
             case default
                 ! if (coord == 0) write(*,*) 'Found unused data value in '       &
                 !     // block_name // ' block: ' // buff(1:equal_pos-1)
@@ -341,6 +347,24 @@ do
                 ld = 2 * lh
                 lh_big = nx2 / 2 + 1
                 ld_big = 2 * lh_big
+            endif
+        endif !! end of fourier setting interpretation
+
+        ! Interpret user input for hybrid RNL/LES setting
+        if (hybrid_baseline) then
+            if (nx .le. 2*maxval(kxs_in) ) then
+                nx = int( 2*(kxs_in(kx_num) + 1) )
+                if (coord == 0) then
+                    write(*,*) 'HYBRID FOURIER: Physical grid (nx) not large enough'
+                    write(*,*) '>>> Changing Nx to ', nx
+                endif
+            endif
+        endif !! end of hybrid RNL/LES setting interpretation
+
+        ! Warn user if both fourier and hybrid_fourier flags are on
+        if (fourier .and. hybrid_baseline) then
+            if (coord == 0) then
+                write(*,*) 'ERROR: BOTH FOURIER AND HYBRID_FOURIER ARE ON!'
             endif
         endif
 

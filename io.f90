@@ -780,6 +780,105 @@ end if
 end subroutine kx_energy_fourier
 
 !*******************************************************************************
+subroutine kx_energy_by_z ()
+!*******************************************************************************
+! 
+! Computes and writes the energy of the streamwise modes for each z-level.
+! 
+! This function is intended for not fourier
+! 
+use types, only: rprec
+use param
+use sim_param, only: u, v, w
+use messages
+use fft
+use functions, only: int2str
+
+implicit none
+
+integer :: jx, jy, jz
+real(rprec), dimension(ld,ny,lbz:nz) :: upert, vpert, wpert
+complex(rprec), dimension(nx/2+1) :: uhat, vhat, what
+real(rprec), dimension(nx/2+1) :: ke, uu, vv, ww
+character(len = 10), dimension(nx/2+1) :: fhead !! file header variable
+character(len = 20) :: fname
+
+! Initialize variables
+ke = 0.0_rprec
+uu = 0.0_rprec
+vv = 0.0_rprec
+ww = 0.0_rprec
+
+! Initialize file, write header
+if (jt_total == wbase) then
+    do jx = 1, nx/2 + 1
+        fhead(jx) = 'kx='//trim(int2str(jx-1))//' '
+    enddo
+endif
+
+! Take out spanwise mean, ky = 0
+call ypert(u,upert)
+call ypert(v,vpert)
+call ypert(w,wpert)
+
+! Sum across y, record at each z
+do jz = 1, nz-1
+    do jy = 1, ny
+
+        ! Take 1D Fourier transform
+        call dfftw_execute_dft_r2c( forw_x, upert(:,jy,jz), uhat)
+        call dfftw_execute_dft_r2c( forw_x, vpert(:,jy,jz), vhat)
+        call dfftw_execute_dft_r2c( forw_x, wpert(:,jy,jz), what)
+
+        ! Normalize transformed variables
+        uhat = uhat / nx
+        vhat = vhat / nx
+        what = what / nx
+
+        ! Sum over boundary points
+        uu(1) = uu(1) + 0.5d0*real(uhat(1)*conjg(uhat(1)))
+        vv(1) = vv(1) + 0.5d0*real(vhat(1)*conjg(vhat(1)))
+        ww(1) = ww(1) + 0.5d0*real(what(1)*conjg(what(1)))
+
+        uu(lh) = uu(lh) + 0.5d0*real(uhat(lh)*conjg(uhat(lh)))
+        vv(lh) = vv(lh) + 0.5d0*real(vhat(lh)*conjg(vhat(lh)))
+        ww(lh) = ww(lh) + 0.5d0*real(what(lh)*conjg(what(lh)))
+
+        ! Sum over interior points
+        do jx = 2, lh-1
+            uu(jx) = uu(jx) + real(uhat(jx)*conjg(uhat(jx)))
+            vv(jx) = vv(jx) + real(vhat(jx)*conjg(vhat(jx)))
+            ww(jx) = ww(jx) + real(what(jx)*conjg(what(jx)))
+        enddo
+
+    enddo
+
+    ! Normalize by spanwise length - treating as a spanwise average
+    uu = uu / L_y
+    vv = vv / L_y
+    ww = ww / L_y
+
+    ! Compute total kinetic energy
+    ke = uu + vv + ww
+
+    ! Create file name
+    fname = 'kx_y' !! refresh with each z
+    call string_concat( fname,'_c',coord )
+    call string_concat( fname,'_zi',jz )
+    call string_concat( fname,'.dat' )
+
+    ! Write data to file
+    open(2,file=path // fname, status='unknown',               &
+        form='formatted', position='append')
+    if (jt_total==wbase) write(2,*) 'jt_total ', fhead
+    write(2,*) jt_total, ke
+    close(2)
+
+enddo
+
+end subroutine kx_energy_by_z
+
+!*******************************************************************************
 subroutine kx_energy_by_z_fourier ()
 !*******************************************************************************
 ! 

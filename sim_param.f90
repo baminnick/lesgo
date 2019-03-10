@@ -38,7 +38,8 @@ real(rprec), dimension(:,:,:), allocatable :: u, v, w,                         &
 #ifdef PPRNL
 real(rprec), dimension(:,:,:), allocatable :: u_pert, v_pert, w_pert,          &
     dudy_pert, dudz_pert, dvdx_pert, dvdz_pert, dwdx_pert, dwdy_pert,          &
-    RHSx_pert, RHSy_pert, RHSz_pert
+    RHSx_pert, RHSy_pert, RHSz_pert,                                           &
+    RHSx_pert_avg, RHSy_pert_avg, RHSz_pert_avg
 #endif
 
 #ifdef PPGQL
@@ -54,8 +55,7 @@ real(rprec), target, dimension(:,:,:), allocatable :: p
 
 #ifdef PPMAPPING
 real(rprec), dimension(:), allocatable :: JACO1, JACO2
-real(rprec), dimension(:), allocatable :: mesh_stretch, dj_dzeta
-real(rprec), dimension(:), allocatable :: delta_stretch
+real(rprec), dimension(:), allocatable :: mesh_stretch, delta_stretch
 #endif
 
 real(rprec), dimension(:,:,:), allocatable :: uF, vF, wF
@@ -63,6 +63,8 @@ real(rprec), target, dimension(:,:,:), allocatable :: pF
 real(rprec), dimension(:,:,:), allocatable :: dudyF, dudzF,                    &
     dvdxF, dvdzF, dwdxF, dwdyF
 real(rprec), dimension(:,:,:), allocatable :: txzF, tyzF
+
+logical, dimension(:), allocatable :: zhyb
 
 contains
 
@@ -122,6 +124,9 @@ allocate ( dwdy_pert(ld, ny, lbz:nz) ); dwdy_pert = 0.0_rprec
 allocate ( RHSx_pert(ld, ny, lbz:nz) ); RHSx_pert = 0.0_rprec
 allocate ( RHSy_pert(ld, ny, lbz:nz) ); RHSy_pert = 0.0_rprec
 allocate ( RHSz_pert(ld, ny, lbz:nz) ); RHSz_pert = 0.0_rprec
+allocate ( RHSx_pert_avg(ld, ny, lbz:nz) ); RHSx_pert_avg = 0.0_rprec
+allocate ( RHSy_pert_avg(ld, ny, lbz:nz) ); RHSy_pert_avg = 0.0_rprec
+allocate ( RHSz_pert_avg(ld, ny, lbz:nz) ); RHSz_pert_avg = 0.0_rprec
 #endif
 
 #ifdef PPGQL
@@ -179,10 +184,11 @@ allocate ( fz(ld, ny, nz) ); fz = 0.0_rprec
 #ifdef PPMAPPING
 allocate ( JACO1(lbz:nz) ); JACO1 = 1/BOGUS
 allocate ( JACO2(lbz:nz) ); JACO2 = 1/BOGUS
-allocate ( dj_dzeta(lbz:nz)); dj_dzeta = BOGUS
 allocate ( mesh_stretch(lbz:nz)); mesh_stretch = BOGUS
 allocate ( delta_stretch(lbz:nz)); delta_stretch = BOGUS
 #endif
+
+allocate( zhyb(lbz:nz) ); zhyb = .false.
 
 sim_param_initialized = .true.
 

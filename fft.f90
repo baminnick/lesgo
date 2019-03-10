@@ -31,6 +31,7 @@ save
 public :: padd, unpadd, init_fft
 
 public :: kx, ky, k2
+public :: kxpi !! hybrid_baseline
 public :: forw, back, forw_big, back_big
 public :: forw_x, back_x, forw_y, forw_x_fourier
 public :: forw_fourier, back_fourier
@@ -38,6 +39,7 @@ public :: ycomp_forw_big, ycomp_back_big
 
 real(rprec), allocatable, dimension(:,:) :: kx, ky, k2
 integer, allocatable, dimension(:) :: kx_veci
+integer, allocatable, dimension(:) :: kxpi !! hybrid_baseline
 
 integer*8 :: forw, back, forw_big, back_big
 integer*8 :: forw_x, back_x, forw_y, forw_x_fourier
@@ -189,12 +191,15 @@ subroutine init_wavenumber()
 !*******************************************************************************
 use param, only : lh, ny, L_x, L_y, pi
 use param, only : kxs_in, fourier, kx_num, coord
+use param, only : hybrid_baseline
 implicit none
 integer :: jx,jy
+integer :: ii, ir, kcnt, k2cnt !! hybrid_baseline
 
 ! Allocate wavenumbers
 allocate( kx(lh,ny), ky(lh,ny), k2(lh,ny) )
 allocate(kx_veci ( kx_num ) )
+allocate( kxpi(ld-2*kx_num) ) !! hybrid_baseline
 
 ! Create wavenumber index
 do jx = 1, kx_num
@@ -209,6 +214,31 @@ if (fourier) then
     do jx = 1, kx_num
         kx(jx,:) = kxs_in(jx)
     end do
+endif
+
+! Make index array to access kx NOT in RNL
+if (hybrid_baseline) then
+    kcnt = 1
+    k2cnt = 1
+    do jx = 1, lh
+        if (kcnt .le. kx_num) then
+            if (jx == (kxs_in(kcnt)+1)) then
+                kcnt = kcnt + 1
+            else
+                ii = 2 * jx
+                ir = ii - 1
+                kxpi(k2cnt) = ir
+                kxpi(k2cnt+1) = ii
+                k2cnt = k2cnt + 2
+            endif
+        else
+            ii = 2 * jx
+            ir = ii - 1
+            kxpi(k2cnt) = ir
+            kxpi(k2cnt+1) = ii
+            k2cnt = k2cnt + 2
+        endif
+    enddo
 endif
 
 do jy = 1, ny

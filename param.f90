@@ -174,6 +174,11 @@ integer :: nxp = 32
 ! mode limiting options for GQL
 integer :: thrx = 0
 
+! mode limiting options for Hybrid RNL/LES
+logical :: hybrid_baseline = .false.
+logical :: hybrid_natural = .false.
+real(rprec) :: hwm = 0.050_rprec
+
 !---------------------------------------------------
 ! TIMESTEP PARAMETERS
 !---------------------------------------------------

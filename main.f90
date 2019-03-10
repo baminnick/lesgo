@@ -99,6 +99,8 @@ real(rprec) :: maxdummy ! Used to calculate maximum with mpi_allreduce
 real(rprec) :: tau_top   ! Used to write top wall stress at first proc
 #endif
 
+integer :: jz !! hybrid_baseline
+
 real(rprec), dimension(:,:,:), allocatable :: tempRHS
 allocate( tempRHS (ld, ny, lbz:nz) )
 
@@ -148,6 +150,26 @@ allocate( dummyRHSz  (ld    ,ny, lbz:nz) )
 
 ! BEGIN TIME LOOP
 time_loop: do jt_step = nstart, nsteps
+
+    ! Zero out modes not used in fourier mode
+    if (hybrid_baseline) then
+    do jz = lbz, nz
+    if (zhyb(jz)) then
+    call dfftw_execute_dft_r2c(forw, u(:,:,jz), u(:,:,jz))
+    call dfftw_execute_dft_r2c(forw, v(:,:,jz), v(:,:,jz))
+    call dfftw_execute_dft_r2c(forw, w(:,:,jz), w(:,:,jz))
+    u(kxpi,:,jz) = 0.0_rprec
+    v(kxpi,:,jz) = 0.0_rprec
+    w(kxpi,:,jz) = 0.0_rprec
+    u(:,:,jz) = u(:,:,jz) / (nx*ny)
+    v(:,:,jz) = v(:,:,jz) / (nx*ny)
+    w(:,:,jz) = w(:,:,jz) / (nx*ny)
+    call dfftw_execute_dft_c2r(back, u(:,:,jz), u(:,:,jz))
+    call dfftw_execute_dft_c2r(back, v(:,:,jz), v(:,:,jz))
+    call dfftw_execute_dft_c2r(back, w(:,:,jz), w(:,:,jz))
+    endif
+    enddo
+    endif
 
     ! Get the starting time for the iteration
     call clock%start
@@ -267,9 +289,22 @@ time_loop: do jt_step = nstart, nsteps
                 dudy_pert, dudz_pert, dvdx_pert, dvdz_pert, dwdx_pert, dwdy_pert, &
                 RHSx_pert, RHSy_pert, RHSz_pert)
 
-        RHSx = RHSx - RHSx_pert + x_avg(RHSx_pert)
-        RHSy = RHSy - RHSy_pert + x_avg(RHSy_pert)
-        RHSz = RHSz - RHSz_pert + x_avg(RHSz_pert)
+        if (hybrid_natural) then
+            RHSx_pert_avg = x_avg(RHSx_pert)
+            RHSy_pert_avg = x_avg(RHSy_pert)
+            RHSz_pert_avg = x_avg(RHSz_pert)
+            do jz = lbz, nz
+                if (zhyb(jz)) then
+                    RHSx(:,:,jz) = RHSx(:,:,jz) - RHSx_pert(:,:,jz) + RHSx_pert_avg(:,:,jz)
+                    RHSy(:,:,jz) = RHSy(:,:,jz) - RHSy_pert(:,:,jz) + RHSy_pert_avg(:,:,jz)
+                    RHSz(:,:,jz) = RHSz(:,:,jz) - RHSz_pert(:,:,jz) + RHSz_pert_avg(:,:,jz)
+                endif
+            enddo
+        else
+            RHSx = RHSx - RHSx_pert + x_avg(RHSx_pert)
+            RHSy = RHSy - RHSy_pert + x_avg(RHSy_pert)
+            RHSz = RHSz - RHSz_pert + x_avg(RHSz_pert)
+        endif
     endif
     ! if fourier and RNL, just run convec since convolution is used
 #else
@@ -437,6 +472,26 @@ time_loop: do jt_step = nstart, nsteps
     v(:,:,nz) = BOGUS
     if(coord < nproc-1) w(:,:,nz) = BOGUS
 #endif
+
+    ! Zero out modes not used in fourier mode
+    if (hybrid_baseline) then
+    do jz = lbz, nz
+    if (zhyb(jz)) then
+    call dfftw_execute_dft_r2c(forw, u(:,:,jz), u(:,:,jz))
+    call dfftw_execute_dft_r2c(forw, v(:,:,jz), v(:,:,jz))
+    call dfftw_execute_dft_r2c(forw, w(:,:,jz), w(:,:,jz))
+    u(kxpi,:,jz) = 0.0_rprec
+    v(kxpi,:,jz) = 0.0_rprec
+    w(kxpi,:,jz) = 0.0_rprec
+    u(:,:,jz) = u(:,:,jz) / (nx*ny)
+    v(:,:,jz) = v(:,:,jz) / (nx*ny)
+    w(:,:,jz) = w(:,:,jz) / (nx*ny)
+    call dfftw_execute_dft_c2r(back, u(:,:,jz), u(:,:,jz))
+    call dfftw_execute_dft_c2r(back, v(:,:,jz), v(:,:,jz))
+    call dfftw_execute_dft_c2r(back, w(:,:,jz), w(:,:,jz))
+    endif
+    enddo
+    endif
 
     !//////////////////////////////////////////////////////
     !/// PRESSURE SOLUTION                              ///
