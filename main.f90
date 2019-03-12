@@ -81,7 +81,7 @@ real(rprec), dimension(:,:,:), allocatable :: dummyRHSx, dummyRHSy, dummyRHSz
 character (*), parameter :: prog_name = 'main'
 
 integer :: jt_step, nstart
-real(rprec) :: rmsdivvel, ke, maxcfl, tt
+real(rprec) :: rmsdivvel, ke, maxcfl, tt, maxvisc
 
 type(clock_t) :: clock, clock_total
 !type(clock_t) :: clock_forcing
@@ -505,6 +505,7 @@ time_loop: do jt_step = nstart, nsteps
         ! only written to screen, not used otherwise
         call rmsdiv(rmsdivvel)
         maxcfl = get_max_cfl()
+        maxvisc = get_max_visc()
 
         ! This takes care of the clock times, to obtain the quantities based
         ! on all the processors, not just processor 0
@@ -543,6 +544,7 @@ time_loop: do jt_step = nstart, nsteps
             write(*,'(a,i9)') '  Iteration: ', jt_total
             write(*,'(a,E15.7)') '  Time step: ', dt
             write(*,'(a,E15.7)') '  CFL: ', maxcfl
+            write(*,'(a,E15.7)') '  VISC: ', maxvisc
             ! write(*,'(a,2E15.7)') '  AB2 TADV1, TADV2: ', tadv1, tadv2
             write(*,*)
             write(*,'(a)') 'Flow field information:'
