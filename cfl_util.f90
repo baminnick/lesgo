@@ -27,7 +27,7 @@ module cfl_util
 save
 private
 
-public get_max_cfl, get_cfl_dt
+public get_max_cfl, get_cfl_dt, get_max_visc
 
 contains
 
@@ -40,7 +40,7 @@ function get_max_cfl() result(cfl)
 !
 use types, only : rprec
 use param, only : dt, dx, dy, dz, nx, ny, nz, fourier, nxp
-use sim_param, only : u,v,w
+use sim_param, only : u, v, w
 use sim_param, only : uF, vF, wF
 #ifdef PPMAPPING
 use sim_param, only : JACO1
@@ -166,5 +166,74 @@ dt = dt_buf
 #endif
 
 end function get_cfl_dt
+
+!*******************************************************************************
+function get_max_visc() result(visc)
+!*******************************************************************************
+!
+! This function provides the value of the maximum viscous stability term,
+! (nu + nu_t)*dt/(dx^2)
+!
+use types, only : rprec
+use param, only : dt, dx, dy, dz, nx, ny, nz, fourier, nxp, nu_molec
+use param, only : coord, lbc_mom, sgs, molec
+use sgs_param, only : Nu_t, Nu_tF
+#ifdef PPMAPPING
+use sim_param, only : JACO1, JACO2
+#endif
+
+#ifdef PPMPI
+use mpi
+use param, only : ierr, MPI_RPREC
+#endif
+
+implicit none
+real(rprec) :: visc, visc_x, visc_y, visc_z, nu_eff
+#ifdef PPMAPPING
+real(rprec), dimension(1:nz-1) :: visc_z_temp
+integer :: jz
+#endif
+
+#ifdef PPMPI
+real(rprec) :: visc_buf
+#endif
+
+nu_eff = 0.0_rprec
+if (sgs) then
+    if (fourier) then
+        nu_eff = nu_eff + maxval( abs(Nu_tF(1:nxp,1:ny,1:nz-1)) )
+    else
+        nu_eff = nu_eff + maxval( abs(Nu_t(1:nx,1:ny,1:nz-1)) )
+    endif
+endif
+if (molec) then
+    nu_eff = nu_eff + nu_molec
+endif
+
+visc_x = nu_eff / (dx**2)
+visc_y = nu_eff / (dy**2)
+#ifdef PPMAPPING
+do jz = 1, (nz-1)
+    visc_z_temp(jz) = nu_eff / ((JACO1(jz)*dz)**2)
+enddo
+if ((coord == 0) .and. (lbc_mom > 0)) then !! Nu_t on uv-grid at wall
+    visc_z_temp(1) = nu_eff / ((JACO2(jz)*dz)**2)
+endif
+!! not considering upper wall since at nz
+#else
+visc_z = nu_eff / (dz**2)
+#endif
+
+#ifdef PPMAPPING
+visc_z = maxval( visc_z_temp(1:nz-1) )
+#endif
+visc = dt * maxval( (/ visc_x, visc_y, visc_z /) )
+
+#ifdef PPMPI
+call mpi_allreduce(visc, visc_buf, 1, MPI_RPREC, MPI_MAX, MPI_COMM_WORLD, ierr)
+visc = visc_buf
+#endif
+
+end function get_max_visc
 
 end module cfl_util
