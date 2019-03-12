@@ -175,9 +175,11 @@ function get_max_visc() result(visc)
 ! (nu + nu_t)*dt/(dx^2)
 !
 use types, only : rprec
-use param, only : dt, dx, dy, dz, nx, ny, nz, fourier, nxp, nu_molec
+use param, only : dt, dx, dy, dz, nx, ny, nz, nu_molec
+! use param, only : fourier, nxp
 use param, only : coord, lbc_mom, sgs, molec
-use sgs_param, only : Nu_t, Nu_tF
+use sgs_param, only : Nu_t
+! use sgs_param, only : Nu_tF
 #ifdef PPMAPPING
 use sim_param, only : JACO1, JACO2
 #endif
@@ -200,11 +202,11 @@ real(rprec) :: visc_buf
 
 nu_eff = 0.0_rprec
 if (sgs) then
-    if (fourier) then
-        nu_eff = nu_eff + maxval( abs(Nu_tF(1:nxp,1:ny,1:nz-1)) )
-    else
-        nu_eff = nu_eff + maxval( abs(Nu_t(1:nx,1:ny,1:nz-1)) )
-    endif
+! if (fourier) then
+!    nu_eff = nu_eff + maxval( abs(Nu_tF(1:nxp,1:ny,1:nz-1)) )
+! else
+    nu_eff = nu_eff + maxval( abs(Nu_t(1:nx,1:ny,1:nz-1)) )
+! endif
 endif
 if (molec) then
     nu_eff = nu_eff + nu_molec
