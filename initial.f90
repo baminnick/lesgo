@@ -69,7 +69,7 @@ logical :: iwm_file_flag !xiang: for iwm restart
 
 #ifdef PPMAPPING
 call load_jacobian ()
-! Initialize delta_stretch for SGS
+! Initialize delta_stretch for SGS, only for sgs = 1
 do jz = 1, nz
     delta_stretch(jz) = filter_size*(dx*dy*(JACO1(jz))*dz)**(1._rprec/3._rprec)
 enddo
@@ -137,8 +137,9 @@ else if (lbc_mom==1) then
     !     'field with DNS BCs'
     if (coord == 0) write(*,*) '--> Creating initial boundary layer velocity ',&
         'field with LES BCs... to become DNS'
-    ! call ic_dns( ) ! debug
-    call ic_les()
+    !call ic_dns( ) ! debug
+    !call ic_les()
+    call ic_blend()
 else
     if (coord == 0) write(*,*) '--> Creating initial boundary layer velocity ',&
     'field with LES BCs'
@@ -416,6 +417,9 @@ subroutine ic_dns()
 use types,only:rprec
 use param
 use sim_param,only:u,v,w
+#ifdef PPMAPPING
+use sim_param, only : mesh_stretch
+#endif
 implicit none
 
 real(rprec), dimension(nz) :: ubar
@@ -441,7 +445,11 @@ else
     !! parabolic laminar profile (channel) z and ubar are non-dimensional
     do jz = 1, nz
 #ifdef PPMPI
+#ifdef PPMAPPING
+        z = mesh_stretch(jz)
+#else
         z = (coord*(nz-1) + real(jz,rprec) - 0.5_rprec) * dz
+#endif
 #else
         z = (real(jz,rprec) - 0.5_rprec) * dz
 #endif
@@ -527,7 +535,7 @@ use sim_param, only : mesh_stretch
 implicit none
 integer :: jz, jz_abs
 real(rprec), dimension(nz) :: ubar
-real(rprec) :: rms, sigma_rv, arg, arg2, z
+real(rprec) :: rms, sigma_rv, arg, arg2, arg3, z
 real(rprec) :: angle
 character(*), parameter :: sub_name = 'ic'
 
@@ -563,10 +571,12 @@ do jz = 1, nz
         else
             arg2 = z*z_i*u_star/nu_molec !! viscous length-scale
         endif
+        arg3 = 5.0_rprec
     else
         arg2 = z/zo
+        arg3 = 0.0_rprec
     end if
-    arg = (1._rprec/vonk)*log(arg2) + 5.0_rprec !-1./(2.*vonk*z_i*z_i)*z*z
+    arg = (1._rprec/vonk)*log(arg2) + arg3 !-1./(2.*vonk*z_i*z_i)*z*z
 
 #ifdef PPLVLSET
     ! Kludge to adjust magnitude of velocity profile
@@ -667,5 +677,132 @@ end if
 #endif
 
 end subroutine ic_les
+
+!*******************************************************************************
+subroutine ic_blend()
+!*******************************************************************************
+!
+! This subroutine initializes the flow using a blended turbulent profile.
+! The blended profile is laminar near the wall, u^+ ~ z^+, and the turbulent
+! log-law away from the wall, u^+ ~ (1/vonk)*log(z^+) + 5.0.
+! 
+! Currently only to be used for lbc_mom = 1, ubc_mom = 0, and zo = 0
+!
+use types,only:rprec
+use param
+use sim_param, only : u, v, w
+use messages, only : error
+#ifdef PPMAPPING
+use sim_param, only : mesh_stretch
+#endif
+
+implicit none
+integer :: jz, jz_abs
+real(rprec), dimension(nz) :: ubar
+real(rprec) :: rms, sigma_rv, ulam, uturb, gam, z, nu_eff
+real(rprec) :: angle
+character(*), parameter :: sub_name = 'ic'
+
+do jz = 1, nz
+
+#ifdef PPMPI
+#ifdef PPMAPPING
+    z = mesh_stretch(jz)
+#else
+    z = (coord*(nz-1) + jz - 0.5_rprec) * dz
+#endif
+#else
+    z = (jz - 0.5_rprec) * dz
+#endif
+
+    if (trigger) then
+        nu_eff = nu_molec / trig_factor
+    else
+        nu_eff = nu_molec
+    endif
+
+    ulam = z * z_i * u_star / nu_eff !! ~ z^+
+    uturb = (1.0_rprec/vonk)*log(ulam) + 5.0_rprec !! log-law
+    gam = - 0.01_rprec*(ulam**4)/(1.0_rprec + 5.0_rprec*(ulam))
+
+    ubar(jz) = exp(gam)*ulam + exp(1.0_rprec/gam)*uturb
+
+end do
+
+!rms = 0.0_rprec !! Don't add noise for debugging
+rms = 3._rprec
+sigma_rv = 0.289_rprec
+
+! Fill u, v, and w with uniformly distributed random numbers between 0 and 1
+call init_random_seed
+call random_number(u)
+call random_number(v)
+call random_number(w)
+
+! Center random number about 0 and rescale
+u = rms / sigma_rv * (u - 0.5_rprec)
+v = rms / sigma_rv * (v - 0.5_rprec)
+w = rms / sigma_rv * (w - 0.5_rprec)
+
+! Modify angle of bulk flow based on pressure gradient
+if (mean_p_force_x == 0._rprec) then
+    angle = 3.14159265358979323846_rprec/2._rprec
+else
+    angle = atan(mean_p_force_y/mean_p_force_x)
+end if
+
+! Rescale noise depending on distance from wall and mean log profile
+! z is in meters
+do jz = 1, nz
+
+#ifdef PPMPI
+    jz_abs = coord * (nz-1) + jz
+#ifdef PPMAPPING
+    z = mesh_stretch(jz)
+#else
+    z = (coord * (nz-1) + jz - 0.5_rprec) * dz * z_i
+#endif
+#else
+    jz_abs = jz
+    z = (jz-.5_rprec) * dz * z_i
+#endif
+    ! For channel flow, choose closest wall
+    if(lbc_mom  > 0 .and. ubc_mom > 0) z = min(z, dz*nproc*(nz-1)*z_i - z)
+    ! For upside-down half-channel, choose upper wall
+    if(lbc_mom == 0 .and. ubc_mom > 0) z = dz*nproc*(nz-1)*z_i - z
+
+    if (z <= z_i) then
+        u(:,:,jz) = u(:,:,jz) * (1._rprec-z / z_i) + ubar(jz)*cos(angle)
+        v(:,:,jz) = v(:,:,jz) * (1._rprec-z / z_i) + ubar(jz)*sin(angle)
+        w(:,:,jz) = w(:,:,jz) * (1._rprec-z / z_i)
+    else
+        u(:,:,jz) = u(:,:,jz) * 0.01_rprec + ubar(jz)*cos(angle)
+        v(:,:,jz) = v(:,:,jz) * 0.01_rprec + ubar(jz)*sin(angle)
+        w(:,:,jz) = w(:,:,jz) * 0.01_rprec
+    end if
+end do
+
+! Bottom boundary conditions
+if (coord == 0) then
+    w(:, :, 1) = 0._rprec
+#ifdef PPMPI
+    u(:, :, 0) = 0._rprec
+    v(:, :, 0) = 0._rprec
+    w(:, :, 0) = 0._rprec
+#endif
+end if
+
+! Set upper boundary condition as zero for u, v, and w
+#ifdef PPMPI
+if (coord == nproc-1) then
+#endif
+    w(1:nx, 1:ny, nz) = 0._rprec
+    u(1:nx, 1:ny, nz) = 0._rprec
+    v(1:nx, 1:ny, nz) = 0._rprec
+#ifdef PPMPI
+end if
+#endif
+
+end subroutine ic_blend
 
 end subroutine initial
