@@ -81,7 +81,7 @@ real(rprec), dimension(:,:,:), allocatable :: dummyRHSx, dummyRHSy, dummyRHSz
 character (*), parameter :: prog_name = 'main'
 
 integer :: jt_step, nstart
-real(rprec) :: rmsdivvel, ke, maxcfl, tt, maxvisc
+real(rprec) :: rmsdivvel, maxcfl, tt, maxvisc
 
 type(clock_t) :: clock, clock_total
 !type(clock_t) :: clock_forcing
@@ -450,14 +450,14 @@ time_loop: do jt_step = nstart, nsteps
     !//////////////////////////////////////////////////////
     ! Calculate intermediate velocity field
     !   only 1:nz-1 are valid
-    u(:,:,1:nz-1) = u(:,:,1:nz-1) +                                            &
+    u(:,:,1:nz-1) = u(:,:,1:nz-1) +                                     &
         dt * ( tadv1 * RHSx(:,:,1:nz-1) + tadv2 * RHSx_f(:,:,1:nz-1) )
-    v(:,:,1:nz-1) = v(:,:,1:nz-1) +                                            &
+    v(:,:,1:nz-1) = v(:,:,1:nz-1) +                                     &
         dt * ( tadv1 * RHSy(:,:,1:nz-1) + tadv2 * RHSy_f(:,:,1:nz-1) )
-    w(:,:,1:nz-1) = w(:,:,1:nz-1) +                                            &
+    w(:,:,1:nz-1) = w(:,:,1:nz-1) +                                     &
         dt * ( tadv1 * RHSz(:,:,1:nz-1) + tadv2 * RHSz_f(:,:,1:nz-1) )
     if (coord == nproc-1) then
-        w(:,:,nz) = w(:,:,nz) +                                                &
+        w(:,:,nz) = w(:,:,nz) +                                         &
             dt * ( tadv1 * RHSz(:,:,nz) + tadv2 * RHSz_f(:,:,nz) )
     end if
 
@@ -528,9 +528,6 @@ time_loop: do jt_step = nstart, nsteps
     !   uses fx,fy,fz calculated above
     !   for MPI: syncs 1 -> Nz and Nz-1 -> 0 nodes info for u,v,w
     call project ()
-
-    ! Write ke to file
-    if (modulo (jt_total, nenergy) == 0) call energy(ke)
 
 #ifdef PPLVLSET
     if (global_CA_calc) call level_set_global_CA()
@@ -604,7 +601,6 @@ time_loop: do jt_step = nstart, nsteps
             write(*,*)
             write(*,'(a)') 'Flow field information:'
             write(*,'(a,E15.7)') '  Velocity divergence metric: ', rmsdivvel
-            write(*,'(a,E15.7)') '  Kinetic energy: ', ke
             write(*,'(a,E15.7)') '  Bot wall stress: ', get_tau_wall_bot()
             write(*,'(a,E15.7)') '  Turnovers: ', total_time_dim / ( L_x * z_i / u_star )
 #ifdef PPMPI

@@ -580,8 +580,6 @@ do
         select case (uppercase(buff(1:equal_pos-1)))
             case ('WBASE')
                 read (buff(equal_pos+1:), *) wbase
-            case ('NENERGY')
-                read (buff(equal_pos+1:), *) nenergy
             case ('LAG_CFL_COUNT')
                 read (buff(equal_pos+1:), *) lag_cfl_count
             case ('CHECKPOINT_DATA')
