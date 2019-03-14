@@ -59,9 +59,6 @@ character (64) :: fname_dyn_tn
 integer :: jz
 #endif
 
-! DEBUG
-integer :: jx, jy
-
 ! Flag to identify if file exists
 logical :: file_flag
 logical :: interp_flag
@@ -184,19 +181,6 @@ if (coord == 0) then
     w(:, :, lbz) = BOGUS
 end if
 #endif
-
-! DEBUG
-!if (coord == 0) then
-!do jz = 1, nz
-!do jy = 1, ny
-!do jx = 1, nx
-!write(*,*) 'u', jx, jy, jz, u(jx,jy,jz)
-!write(*,*) 'v', jx, jy, jz, v(jx,jy,jz)
-!write(*,*) 'w', jx, jy, jz, w(jx,jy,jz)
-!enddo
-!enddo
-!enddo
-!endif
 
 ! Transform velocities if starting a new simulation
 if ((.not. initu) .and. fourier) then
