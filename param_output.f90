@@ -178,7 +178,6 @@ inquire(2,convert=ch)
 write(2,x2c_fmt) 'read_endian : ', ch
 #endif
 write(2,i_fmt) 'wbase : ', wbase
-write(2,i_fmt) 'nenergy : ', nenergy
 write(2,i_fmt) 'lag_cfl_count : ', lag_cfl_count
 write(2,l_fmt) 'checkpoint_data : ', checkpoint_data
 write(2,i_fmt) 'checkpoint_nskip : ', checkpoint_nskip

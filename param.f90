@@ -257,9 +257,6 @@ real(rprec) :: rms_random_force = 0.4_rprec
 ! how often to display stdout
 integer :: wbase = 100
 
-! how often to write ke to check_ke.out
-integer :: nenergy = 100
-
 ! how often to display Lagrangian CFL condition of
 ! dynamic SGS models
 integer :: lag_cfl_count = 1000
