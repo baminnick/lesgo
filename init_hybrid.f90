@@ -67,7 +67,7 @@ z_uv => grid % z
 ! owns the interface, however seems to work OK if interface
 ! is at jz = 1 and jz = nz for two processors. Does not work 
 ! if interface is at jz = 0 and jz = nz-1.
- do jz = lbz, nz
+do jz = lbz, nz
     if (z_uv(jz) <= hwm) then !! z-level in fourier mode
         zhyb(jz) = .true.
         coord_int = -1

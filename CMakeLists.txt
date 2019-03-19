@@ -35,7 +35,7 @@ option(USE_MAPPING "Enable grid mapping transformation." ON)
 
 option(OUTPUT_SGS "Output time-averaging statistics on SGS model." OFF)
 option(OUTPUT_BUDGET "Output time-averaging statistics needed for budgets." OFF)
-option(OUTPUT_TURBSPEC "Output time-averaging spectra data." OFF)
+option(OUTPUT_TURBSPEC "Output time-averaging spectra data." ON)
 option(OUTPUT_WMLES "Output time-averaging statistics on wall model." OFF)
 option(OUTPUT_SSP "Output self-sustaining process analysis." OFF)
 

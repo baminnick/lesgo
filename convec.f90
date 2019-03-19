@@ -99,9 +99,9 @@ do jz = lbz, nz
         call dfftw_execute_dft_r2c(forw, RHSz(:,:,jz), RHSz(:,:,jz))
     else
         ! use RHSx,RHSy,RHSz for temp storage
-        RHSx(:,:,jz)=u(:,:,jz)
-        RHSy(:,:,jz)=v(:,:,jz)
-        RHSz(:,:,jz)=w(:,:,jz)
+        RHSx(kxi,:,jz)=u(kxi,:,jz)
+        RHSy(kxi,:,jz)=v(kxi,:,jz)
+        RHSz(kxi,:,jz)=w(kxi,:,jz)
 
         ! no need to transform, already in fourier space
     endif
@@ -190,17 +190,17 @@ do jz = 1, nz
             !! remove const since it should be 1.0_rprec for fourier
             if (sgs) then
                 ! dwdy(jz=1) should be 0, so we can use this
-                RHSx(:, :, 1) = ( 0.5_rprec * (dwdy(:, :, 1) +             &
-                    dwdy(:, :, 2))  - dvdz(:, :, 1) )
+                RHSx(kxi, :, 1) = ( 0.5_rprec * (dwdy(kxi, :, 1) +             &
+                    dwdy(kxi, :, 2))  - dvdz(kxi, :, 1) )
                 ! dwdx(jz=1) should be 0, so we can use this
-                RHSy(:, :, 1) = ( dudz(:, :, 1) -                          &
-                    0.5_rprec * (dwdx(:, :, 1) + dwdx(:, :, 2)) )
+                RHSy(kxi, :, 1) = ( dudz(kxi, :, 1) -                          &
+                    0.5_rprec * (dwdx(kxi, :, 1) + dwdx(kxi, :, 2)) )
             else ! for DNS, dudz(1) and dvdz(1) located at the w-node(1)
-                RHSx(:, :, 1) = ( 0.5_rprec *(dwdy(:, :, 1)+ dwdy(:, :,2)) &
-                    - 0.5_rprec *(dvdz(:, :, 1)+dvdz(:, :, 2)))
+                RHSx(kxi, :, 1) = ( 0.5_rprec *(dwdy(kxi, :, 1)+ dwdy(kxi, :,2)) &
+                    - 0.5_rprec *(dvdz(kxi, :, 1)+dvdz(kxi, :, 2)))
                 ! RHSx(:, :, 1) located at uv-node(1)
-                RHSy(:, :, 1) = (0.5_rprec *(dudz(:, :, 1)+ dudz(:, :, 2)) &
-                    -0.5_rprec *(dwdx(:, :, 1)+ dwdx(:, :, 2)))
+                RHSy(kxi, :, 1) = (0.5_rprec *(dudz(kxi, :, 1)+ dudz(kxi, :, 2)) &
+                    -0.5_rprec *(dwdx(kxi, :, 1)+ dwdx(kxi, :, 2)))
                 ! RHSy(:, :, 1) located at uv-node(1)
             endif
             else !! fourier or not fourier
@@ -251,8 +251,8 @@ do jz = 1, nz
         coord==nproc-1 .and. jz==nz)  ) then
         if (hybrid_fourier) then !! be careful of the const here!
             if (zhyb(jz)) then !! const = 1
-                RHSx(:,:,jz)=(dwdy(:,:,jz)-dvdz(:,:,jz))
-                RHSy(:,:,jz)=(dudz(:,:,jz)-dwdx(:,:,jz))
+                RHSx(kxi,:,jz)=(dwdy(kxi,:,jz)-dvdz(kxi,:,jz))
+                RHSy(kxi,:,jz)=(dudz(kxi,:,jz)-dwdx(kxi,:,jz))
             else !! const = 1 / (nx*ny)
                 RHSx(:,:,jz)=const*(dwdy(:,:,jz)-dvdz(:,:,jz))
                 RHSy(:,:,jz)=const*(dudz(:,:,jz)-dwdx(:,:,jz))
@@ -265,7 +265,7 @@ do jz = 1, nz
 
     if (hybrid_fourier) then
         if (zhyb(jz)) then !! const = 1
-            RHSz(:,:,jz)=(dvdx(:,:,jz)-dudy(:,:,jz))
+            RHSz(kxi,:,jz)=(dvdx(kxi,:,jz)-dudy(kxi,:,jz))
         else !! const = 1 / (nx*ny)
             RHSz(:,:,jz)=const*(dvdx(:,:,jz)-dudy(:,:,jz))
         endif

@@ -54,6 +54,7 @@ use sim_param, only : JACO2, mesh_stretch, delta_stretch
 #endif
 use sgs_param
 use messages
+use fft, only : kxi
 
 #ifdef PPMPI
 use mpi_defs, only : mpi_sync_real_array, MPI_SYNC_DOWN
@@ -68,8 +69,7 @@ implicit none
 character (*), parameter :: sub_name = 'sgs_stag'
 
 real(rprec), dimension(nz) :: l, ziko, zz
-integer :: jx, jy, jz
-integer :: jz_min, jz_max
+integer :: jz, jz_min, jz_max
 
 if (sgs) then
     ! Cs is Smagorinsky's constant. l is a filter size (non-dim.)
@@ -282,10 +282,18 @@ if (coord == 0) then
 
         end select
     endif
-    txx(1:nx,:,1) = -nu_coef(1:nx,:)*dudx(1:nx,:,1) !! uvp-node(1)
-    txy(1:nx,:,1) = -nu_coef(1:nx,:)*(0.5_rprec*(dudy(1:nx,:,1)+dvdx(1:nx,:,1))) !! uvp-node(1)
-    tyy(1:nx,:,1) = -nu_coef(1:nx,:)*dvdy(1:nx,:,1) !! uvp-node(1)
-    tzz(1:nx,:,1) = -nu_coef(1:nx,:)*dwdz(1:nx,:,1) !! uvp-node(1)
+
+    if (hybrid_fourier) then
+        txx(kxi,:,1) = -2.0_rprec*nu*dudx(kxi,:,1) !! uvp-node(1)
+        txy(kxi,:,1) = -2.0_rprec*nu*(0.5_rprec*(dudy(kxi,:,1)+dvdx(kxi,:,1))) !! uvp-node(1)
+        tyy(kxi,:,1) = -2.0_rprec*nu*dvdy(kxi,:,1) !! uvp-node(1)
+        tzz(kxi,:,1) = -2.0_rprec*nu*dwdz(kxi,:,1) !! uvp-node(1)
+    else !! fourier or not fourier
+        txx(1:nx,:,1) = -nu_coef(1:nx,:)*dudx(1:nx,:,1) !! uvp-node(1)
+        txy(1:nx,:,1) = -nu_coef(1:nx,:)*(0.5_rprec*(dudy(1:nx,:,1)+dvdx(1:nx,:,1))) !! uvp-node(1)
+        tyy(1:nx,:,1) = -nu_coef(1:nx,:)*dvdy(1:nx,:,1) !! uvp-node(1)
+        tzz(1:nx,:,1) = -nu_coef(1:nx,:)*dwdz(1:nx,:,1) !! uvp-node(1)
+    endif
 
     ! since first level already calculated
     jz_min = 2
@@ -309,6 +317,7 @@ if (coord == nproc-1) then
 
         end select
     endif
+    ! proceed as normal in fourier, and not fourier, for hybrid_fourier, top is in physical domain
     txx(1:nx,:,nz-1) = -nu_coef(1:nx,:)*dudx(1:nx,:,nz-1) !! uvp-node(nz-1)
     txy(1:nx,:,nz-1) = -nu_coef(1:nx,:)*(0.5_rprec*(dudy(1:nx,:,nz-1)+dvdx(1:nx,:,nz-1))) !! uvp-node(nz-1)
     tyy(1:nx,:,nz-1) = -nu_coef(1:nx,:)*dvdy(1:nx,:,nz-1) !! uvp-node(nz-1)
@@ -332,12 +341,21 @@ do jz = jz_min, jz_max
         nu_coef(1:nx,:) = 2.0_rprec*(0.5_rprec*(Nu_t(1:nx,:,jz) + Nu_t(1:nx,:,jz+1)) + nu) !! uvp-node(jz)
         nu_coef2(1:nx,:) = 2.0_rprec*(Nu_t(1:nx,:,jz) + nu) !! w-node(jz)
     endif
-    txx(1:nx,:,jz)=-nu_coef(1:nx,:)*dudx(1:nx,:,jz) !! uvp-node(jz)
-    txy(1:nx,:,jz)=-nu_coef(1:nx,:)*(0.5_rprec*(dudy(1:nx,:,jz)+dvdx(1:nx,:,jz))) !! uvp-node(jz)
-    tyy(1:nx,:,jz)=-nu_coef(1:nx,:)*dvdy(1:nx,:,jz) !! uvp-node(jz)
-    tzz(1:nx,:,jz)=-nu_coef(1:nx,:)*dwdz(1:nx,:,jz) !! uvp-node(jz)
-    txz(1:nx,:,jz)=-nu_coef2(1:nx,:)*(0.5_rprec*(dudz(1:nx,:,jz)+dwdx(1:nx,:,jz))) !! w-node(jz)
-    tyz(1:nx,:,jz)=-nu_coef2(1:nx,:)*(0.5_rprec*(dvdz(1:nx,:,jz)+dwdy(1:nx,:,jz))) !! w-node(jz)
+    if ((hybrid_fourier) .and. (zhyb(jz))) then
+        txx(kxi,:,jz)=-2.0_rprec*nu*dudx(kxi,:,jz) !! uvp-node(jz)
+        txy(kxi,:,jz)=-2.0_rprec*nu*(0.5_rprec*(dudy(kxi,:,jz)+dvdx(kxi,:,jz))) !! uvp-node(jz)
+        tyy(kxi,:,jz)=-2.0_rprec*nu*dvdy(kxi,:,jz) !! uvp-node(jz)
+        tzz(kxi,:,jz)=-2.0_rprec*nu*dwdz(kxi,:,jz) !! uvp-node(jz)
+        txz(kxi,:,jz)=-2.0_rprec*nu*(0.5_rprec*(dudz(kxi,:,jz)+dwdx(kxi,:,jz))) !! w-node(jz)
+        tyz(kxi,:,jz)=-2.0_rprec*nu*(0.5_rprec*(dvdz(kxi,:,jz)+dwdy(kxi,:,jz))) !! w-node(jz)
+    else ! fourier or not fourier or physical grid of hybrid_fourier
+        txx(1:nx,:,jz)=-nu_coef(1:nx,:)*dudx(1:nx,:,jz) !! uvp-node(jz)
+        txy(1:nx,:,jz)=-nu_coef(1:nx,:)*(0.5_rprec*(dudy(1:nx,:,jz)+dvdx(1:nx,:,jz))) !! uvp-node(jz)
+        tyy(1:nx,:,jz)=-nu_coef(1:nx,:)*dvdy(1:nx,:,jz) !! uvp-node(jz)
+        tzz(1:nx,:,jz)=-nu_coef(1:nx,:)*dwdz(1:nx,:,jz) !! uvp-node(jz)
+        txz(1:nx,:,jz)=-nu_coef2(1:nx,:)*(0.5_rprec*(dudz(1:nx,:,jz)+dwdx(1:nx,:,jz))) !! w-node(jz)
+        tyz(1:nx,:,jz)=-nu_coef2(1:nx,:)*(0.5_rprec*(dvdz(1:nx,:,jz)+dwdy(1:nx,:,jz))) !! w-node(jz)
+    endif
 enddo
 
 #ifdef PPLVLSET
@@ -392,6 +410,8 @@ use sgs_param
 #ifdef PPMPI
 use mpi_defs, only : mpi_sync_real_array, MPI_SYNC_DOWN
 #endif
+use sim_param, only : zhyb
+use fft, only : kxi
 implicit none
 
 integer :: jz, jz_min, jz_max
@@ -407,12 +427,21 @@ if (coord == 0) then
             ! Sij values are supposed to be on w-nodes for this case
             !   does that mean they (Sij) should all be zero?
             ! these values are stored on w-nodes
-            S11(1:nx,:,1) = dudx(1:nx,:,1) ! was 0.5_rprec*(dudx(1:nx,:,1) + dudx(1:nx,:,1))
-            S12(1:nx,:,1) = 0.5_rprec*(dudy(1:nx,:,1)+dvdx(1:nx,:,1))
-            S13(1:nx,:,1) = 0.5_rprec*(dudz(1:nx,:,1)+dwdx(1:nx,:,1))
-            S22(1:nx,:,1) = dvdy(1:nx,:,1)
-            S23(1:nx,:,1) = 0.5_rprec*(dvdy(1:nx,:,1)+dwdy(1:nx,:,1))
-            S33(1:nx,:,1) = 0.5_rprec*(dwdz(1:nx,:,1) + 0.0_rprec)
+            if (hybrid_fourier) then
+                S11(kxi,:,1) = dudx(kxi,:,1) ! was 0.5_rprec*(dudx(1:nx,:,1) + dudx(1:nx,:,1))
+                S12(kxi,:,1) = 0.5_rprec*(dudy(kxi,:,1)+dvdx(kxi,:,1))
+                S13(kxi,:,1) = 0.5_rprec*(dudz(kxi,:,1)+dwdx(kxi,:,1))
+                S22(kxi,:,1) = dvdy(kxi,:,1)
+                S23(kxi,:,1) = 0.5_rprec*(dvdy(kxi,:,1)+dwdy(kxi,:,1))
+                S33(kxi,:,1) = 0.5_rprec*(dwdz(kxi,:,1) + 0.0_rprec)
+            else !! fourier or not fourier
+                S11(1:nx,:,1) = dudx(1:nx,:,1) ! was 0.5_rprec*(dudx(1:nx,:,1) + dudx(1:nx,:,1))
+                S12(1:nx,:,1) = 0.5_rprec*(dudy(1:nx,:,1)+dvdx(1:nx,:,1))
+                S13(1:nx,:,1) = 0.5_rprec*(dudz(1:nx,:,1)+dwdx(1:nx,:,1))
+                S22(1:nx,:,1) = dvdy(1:nx,:,1)
+                S23(1:nx,:,1) = 0.5_rprec*(dvdy(1:nx,:,1)+dwdy(1:nx,:,1))
+                S33(1:nx,:,1) = 0.5_rprec*(dwdz(1:nx,:,1) + 0.0_rprec)
+            endif
 
         ! Wall
         ! recall dudz and dvdz are stored on uvp-nodes for first level only,
@@ -421,14 +450,25 @@ if (coord == 0) then
         ! All Sij near wall are put on uv1 node
         case (1:)
             ! these values stored on uvp-nodes
-            S11(1:nx,:,1) = dudx(1:nx,:,1) !! uvp_node(1)
-            S12(1:nx,:,1) = 0.5_rprec*(dudy(1:nx,:,1)+dvdx(1:nx,:,1)) !! uvp_node(1)
-            S13(1:nx,:,1) = 0.5_rprec*(dudz(1:nx,:,1) +                            & 
-                (0.5_rprec*(dwdx(1:nx,:,1)+dwdx(1:nx,:,2))) ) !! uvp_node(1)
-            S22(1:nx,:,1) = dvdy(1:nx,:,1) !! uvp_node(1)
-            S23(1:nx,:,1) = 0.5_rprec*(dvdz(1:nx,:,1) +                            &
-                (0.5_rprec*(dwdy(1:nx,:,1)+dwdy(1:nx,:,2))) ) !! uvp_node(1)
-            S33(1:nx,:,1) = dwdz(1:nx,:,1) !! uvp_node(1)
+            if (hybrid_fourier) then
+                S11(kxi,:,1) = dudx(kxi,:,1) !! uvp_node(1)
+                S12(kxi,:,1) = 0.5_rprec*(dudy(kxi,:,1)+dvdx(kxi,:,1)) !! uvp_node(1)
+                S13(kxi,:,1) = 0.5_rprec*(dudz(kxi,:,1) +                            & 
+                    (0.5_rprec*(dwdx(kxi,:,1)+dwdx(kxi,:,2))) ) !! uvp_node(1)
+                S22(kxi,:,1) = dvdy(kxi,:,1) !! uvp_node(1)
+                S23(kxi,:,1) = 0.5_rprec*(dvdz(kxi,:,1) +                            &
+                    (0.5_rprec*(dwdy(kxi,:,1)+dwdy(kxi,:,2))) ) !! uvp_node(1)
+                S33(kxi,:,1) = dwdz(kxi,:,1) !! uvp_node(1)
+            else !! fourier or not fourier
+                S11(1:nx,:,1) = dudx(1:nx,:,1) !! uvp_node(1)
+                S12(1:nx,:,1) = 0.5_rprec*(dudy(1:nx,:,1)+dvdx(1:nx,:,1)) !! uvp_node(1)
+                S13(1:nx,:,1) = 0.5_rprec*(dudz(1:nx,:,1) +                            & 
+                    (0.5_rprec*(dwdx(1:nx,:,1)+dwdx(1:nx,:,2))) ) !! uvp_node(1)
+                S22(1:nx,:,1) = dvdy(1:nx,:,1) !! uvp_node(1)
+                S23(1:nx,:,1) = 0.5_rprec*(dvdz(1:nx,:,1) +                            &
+                    (0.5_rprec*(dwdy(1:nx,:,1)+dwdy(1:nx,:,2))) ) !! uvp_node(1)
+                S33(1:nx,:,1) = dwdz(1:nx,:,1) !! uvp_node(1)
+            endif
 
     end select
 
@@ -444,7 +484,7 @@ end if
 !   stored on w-nodes (all) for 'stress free'
 if (coord == nproc-1) then
     select case (ubc_mom)
-
+        ! proceed as normal in fourier, and not fourier, for hybrid_fourier, top is in physical domain
         ! Stress free
         case (0)
             ! Sij values are supposed to be on w-nodes for this case
@@ -503,13 +543,23 @@ call mpi_sync_real_array( dwdz(:,:,1:), 1, MPI_SYNC_DOWN )
 !   values are stored on w-nodes
 !   dudz, dvdz, dwdx, dwdy are already stored on w-nodes
 do jz = jz_min, jz_max
-    S11(1:nx,:,jz) = 0.5_rprec*(dudx(1:nx,:,jz) + dudx(1:nx,:,jz-1)) !! w-node(jz)
-    S12(1:nx,:,jz) = 0.25_rprec*(dudy(1:nx,:,jz) + dudy(1:nx,:,jz-1) +           &
-        dvdx(1:nx,:,jz) + dvdx(1:nx,:,jz-1))                         !! w-node(jz)
-    S13(1:nx,:,jz) = 0.5_rprec*(dudz(1:nx,:,jz) + dwdx(1:nx,:,jz))   !! w-node(jz)
-    S22(1:nx,:,jz) = 0.5_rprec*(dvdy(1:nx,:,jz) + dvdy(1:nx,:,jz-1)) !! w-node(jz)
-    S23(1:nx,:,jz) = 0.5_rprec*(dvdz(1:nx,:,jz) + dwdy(1:nx,:,jz))   !! w-node(jz)
-    S33(1:nx,:,jz) = 0.5_rprec*(dwdz(1:nx,:,jz) + dwdz(1:nx,:,jz-1)) !! w-node(jz)
+    if ((hybrid_fourier) .and. (zhyb(jz))) then
+        S11(kxi,:,jz) = 0.5_rprec*(dudx(kxi,:,jz) + dudx(kxi,:,jz-1)) !! w-node(jz)
+        S12(kxi,:,jz) = 0.25_rprec*(dudy(kxi,:,jz) + dudy(kxi,:,jz-1) +           &
+            dvdx(kxi,:,jz) + dvdx(kxi,:,jz-1))                         !! w-node(jz)
+        S13(kxi,:,jz) = 0.5_rprec*(dudz(kxi,:,jz) + dwdx(kxi,:,jz))   !! w-node(jz)
+        S22(kxi,:,jz) = 0.5_rprec*(dvdy(kxi,:,jz) + dvdy(kxi,:,jz-1)) !! w-node(jz)
+        S23(kxi,:,jz) = 0.5_rprec*(dvdz(kxi,:,jz) + dwdy(kxi,:,jz))   !! w-node(jz)
+        S33(kxi,:,jz) = 0.5_rprec*(dwdz(kxi,:,jz) + dwdz(kxi,:,jz-1)) !! w-node(jz)
+    else !! fourier or not fourier or physical grid of hybrid_fourier
+        S11(1:nx,:,jz) = 0.5_rprec*(dudx(1:nx,:,jz) + dudx(1:nx,:,jz-1)) !! w-node(jz)
+        S12(1:nx,:,jz) = 0.25_rprec*(dudy(1:nx,:,jz) + dudy(1:nx,:,jz-1) +           &
+            dvdx(1:nx,:,jz) + dvdx(1:nx,:,jz-1))                         !! w-node(jz)
+        S13(1:nx,:,jz) = 0.5_rprec*(dudz(1:nx,:,jz) + dwdx(1:nx,:,jz))   !! w-node(jz)
+        S22(1:nx,:,jz) = 0.5_rprec*(dvdy(1:nx,:,jz) + dvdy(1:nx,:,jz-1)) !! w-node(jz)
+        S23(1:nx,:,jz) = 0.5_rprec*(dvdz(1:nx,:,jz) + dwdy(1:nx,:,jz))   !! w-node(jz)
+        S33(1:nx,:,jz) = 0.5_rprec*(dwdz(1:nx,:,jz) + dwdz(1:nx,:,jz-1)) !! w-node(jz)
+    endif
 end do
 
 end subroutine calc_Sij

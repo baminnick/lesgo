@@ -84,7 +84,9 @@ integer :: jt_step, nstart
 real(rprec) :: rmsdivvel, maxcfl, tt
 ! real(rprec) :: ke
 
-integer :: jz, jc !! for hybrid_fourier
+! For hybrid_fourier
+integer :: jz, jc
+! integer :: fourier_time_coord, phys_time_coord !! for DEBUG
 
 !integer :: jx, jy !! DEBUG
 
@@ -392,6 +394,10 @@ time_loop: do jt_step = nstart, nsteps
     ! Calculates u x (omega) term in physical space. Uses 3/2 rule for
     ! dealiasing. Stores this term in RHS (right hand side) variable
 
+! DEBUG
+!call clock%start
+!if (hybrid_fourier) call clock_hybrid%start
+
 #ifdef PPRNL
     ! Use RNL equations
     call convec(u,v,w,dudy,dudz,dvdx,dvdz,dwdx,dwdy,RHSx,RHSy,RHSz)
@@ -469,6 +475,10 @@ time_loop: do jt_step = nstart, nsteps
 #endif
 
 #endif
+
+! DEBUG
+!call clock%stop
+!if (hybrid_fourier) call clock_hybrid%stop
 
 ! DEBUG - AFTER CONVEC
 !if (coord == 0) then
@@ -785,7 +795,7 @@ time_loop: do jt_step = nstart, nsteps
         ! Get the ending time for the iteration
         call clock%stop
         call clock_total%stop
-        call clock_hybrid%stop
+        if (hybrid_fourier) call clock_hybrid%stop
 
         ! Calculate rms divergence of velocity
         ! only written to screen, not used otherwise
@@ -809,17 +819,24 @@ time_loop: do jt_step = nstart, nsteps
                 fourier_time = 0.0_rprec
                 int_time = 0.0_rprec
                 phys_time = 0.0_rprec
+                !fourier_time_coord = -1
+                !phys_time_coord = -1
                 ! Grab max time variables from each part
                 do jc = 1, nproc
                     if (coord_intv(jc) == -1) then !! processor in fourier mode
-                        if (gatherdummy(jc) > fourier_time)                    &
+                        if (gatherdummy(jc) > fourier_time) then
                             fourier_time = gatherdummy(jc)
+                            !fourier_time_coord = jc-1
+                         endif
                     elseif (coord_intv(jc) == 0) then !! processor owns int
-                        if (gatherdummy(jc) > int_time)                        &
+                        if (gatherdummy(jc) > int_time) then
                             int_time = gatherdummy(jc)
+                        endif
                     else !! processor in physical mode
-                        if (gatherdummy(jc) > phys_time)                       &
+                        if (gatherdummy(jc) > phys_time) then
                             phys_time = gatherdummy(jc)
+                            !phys_time_coord = jc-1
+                        endif
                     endif
                 enddo
             endif
@@ -879,8 +896,10 @@ time_loop: do jt_step = nstart, nsteps
             if (hybrid_fourier) then
                 write(*,*)
                 write(*,'(1a)') 'Hybrid Fourier wall times (s): '
+                !write(*,'(1a,E15.7,i9)') '  Fourier mode: ', fourier_time, fourier_time_coord
                 write(*,'(1a,E15.7)') '  Fourier mode: ', fourier_time
                 write(*,'(1a,E15.7)') '  Interface: ', int_time
+                !write(*,'(1a,E15.7,i9)') '  Physical mode: ', phys_time, phys_time_coord
                 write(*,'(1a,E15.7)') '  Physical mode: ', phys_time
             endif
 #ifdef PPOUTPUT_WMLES

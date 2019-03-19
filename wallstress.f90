@@ -154,6 +154,10 @@ end subroutine ws_free_ubc
 !*******************************************************************************
 subroutine ws_dns_lbc
 !*******************************************************************************
+! 
+! fourier and hybrid_fourier cases only work with ubot = 0
+! to correct this, would have to apply ubot /= 0 only to kx=ky=0 mode
+! 
 use param, only : nx, ny, nu_molec, z_i, u_star, ubot 
 use param, only : hybrid_fourier
 #ifdef PPMAPPING
