@@ -7,7 +7,6 @@ subroutine load_jacobian()
 ! JACO1        - Jacobian on the w-grid
 ! JACO2        - Jacobian on the uv-grid
 ! mesh_stretch - z-locations on the uv-grid
-! dj_dzeta     - Derivative involving Jacobian for PPE
 ! 
 use sim_param
 use param
@@ -89,21 +88,15 @@ do jz=1,nz
     mesh_stretch(jz) = FIELD3(coord*(nz-1)+jz)
 end do
 
-do jz=1,nz
-    dj_dzeta(jz) = FIELD4(coord*(nz-1)+jz)
-end do
-
 if (coord == 0) then
     JACO1(lbz)=JACO1(1)    
     JACO2(lbz)=JACO2(1)
     mesh_stretch(lbz)=mesh_stretch(1)     
-    dj_dzeta(lbz)=dj_dzeta(1)
     write(*,*) '--> Grid stretched using mapping function'
 else
     JACO1(lbz)=FIELD1((coord-1)*(nz-1)+nz-1)
     JACO2(lbz)=FIELD2((coord-1)*(nz-1)+nz-1)
     mesh_stretch(lbz)=FIELD3((coord-1)*(nz-1)+nz-1)
-    dj_dzeta(lbz)=FIELD4((coord-1)*(nz-1)+nz-1)
 end if
 
 end subroutine load_jacobian

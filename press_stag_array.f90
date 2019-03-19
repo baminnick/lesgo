@@ -30,7 +30,7 @@ use messages
 use sim_param, only : u, v, w, divtz, p, dpdx, dpdy, dpdz
 use fft
 #ifdef PPMAPPING
-use sim_param, only : JACO1, JACO2, dj_dzeta
+use sim_param, only : JACO1, JACO2
 #endif
 
 implicit none
@@ -39,7 +39,7 @@ real(rprec) :: const, const2, const3, const4
 integer :: jx, jy, jz
 integer :: ir, ii
 integer :: jz_min
-integer :: end_kx, jx_s
+integer :: end_kx
 
 real(rprec), save, dimension(:,:,:), allocatable :: rH_x, rH_y, rH_z
 real(rprec), save, dimension(:,:), allocatable :: rtopw, rbottomw
@@ -232,19 +232,16 @@ do jy = 1, ny
 
         if (jx*jy == 1) cycle
 
-        if (.not. fourier) then
-
         ii = 2*jx   ! imaginary index
         ir = ii - 1 ! real index
 
         ! JDA dissertation, eqn(2.85) a,b,c=coefficients and RHS_col=r_m
 #ifdef PPMAPPING
-        a(jx, jy, jz) = const3*(1._rprec/(JACO2(jz-1)**2)) -                   &
-            0.5_rprec*(1/JACO2(jz-1))*dj_dzeta(jz-1)*const4
-        b(jx, jy, jz) = -(kx(jx, jy)**2 + ky(jx, jy)**2 +                      &
-            2._rprec*const3*(1._rprec/(JACO2(jz-1)**2)))
-        c(jx, jy, jz) = const3*(1._rprec/(JACO2(jz-1)**2)) +                   &
-            0.5_rprec*(1/JACO2(jz-1))*dj_dzeta(jz-1)*const4
+        a(jx, jy, jz) = const3*(1._rprec/(JACO2(jz-1)))*(1._rprec/(JACO1(jz-1)))
+        b(jx, jy, jz) = -(kx(jx,jy)**2 + ky(jx,jy)**2                          &
+            + const3*(1._rprec/(JACO2(jz-1)))*                                 &
+            (1._rprec/(JACO1(jz-1))+1._rprec/(JACO1(jz))))
+        c(jx, jy, jz) = const3*(1._rprec/(JACO2(jz-1)))*(1._rprec/(JACO1(jz)))
 #else
         a(jx, jy, jz) = const3
         b(jx, jy, jz) = -(kx(jx, jy)**2 + ky(jx, jy)**2 + 2._rprec*const3)
@@ -264,43 +261,6 @@ do jy = 1, ny
         RHS_col(ir:ii,jy,jz) =  aH_x + aH_y + (rH_z(ir:ii, jy, jz) -           &
             rH_z(ir:ii, jy, jz-1))*const4
 #endif
-
-        else !! fourier
-
-        jx_s = kx_veci(jx)
-
-        ii = 2*jx_s ! imaginary index
-        ir = ii - 1 ! real index
-
-        ! JDA dissertation, eqn(2.85) a,b,c=coefficients and RHS_col=r_m
-#ifdef PPMAPPING
-        a(jx_s, jy, jz) = const3*(1._rprec/(JACO2(jz-1)**2)) -                   &
-            0.5_rprec*(1/JACO2(jz-1))*dj_dzeta(jz-1)*const4
-        b(jx_s, jy, jz) = -(kx(jx_s, jy)**2 + ky(jx_s, jy)**2 +                  &
-            2._rprec*const3*(1._rprec/(JACO2(jz-1)**2)))
-        c(jx_s, jy, jz) = const3*(1._rprec/(JACO2(jz-1)**2)) +                   &
-            0.5_rprec*(1/JACO2(jz-1))*dj_dzeta(jz-1)*const4
-#else
-        a(jx_s, jy, jz) = const3
-        b(jx_s, jy, jz) = -(kx(jx_s, jy)**2 + ky(jx_s, jy)**2 + 2._rprec*const3)
-        c(jx_s, jy, jz) = const3
-#endif
-
-        !  Compute eye * kx * H_x
-        aH_x(1) = -rH_x(ii,jy,jz-1) * kx(jx_s,jy)
-        aH_x(2) =  rH_x(ir,jy,jz-1) * kx(jx_s,jy)
-        aH_y(1) = -rH_y(ii,jy,jz-1) * ky(jx_s,jy)
-        aH_y(2) =  rH_y(ir,jy,jz-1) * ky(jx_s,jy)
-
-#ifdef PPMAPPING
-        RHS_col(ir:ii,jy,jz) = aH_x + aH_y + (rH_z(ir:ii, jy, jz) -            &
-            rH_z(ir:ii, jy, jz-1))*const4/JACO2(jz-1)
-#else
-        RHS_col(ir:ii,jy,jz) =  aH_x + aH_y + (rH_z(ir:ii, jy, jz) -           &
-            rH_z(ir:ii, jy, jz-1))*const4
-#endif
-
-        endif
 
     end do
 end do
@@ -359,22 +319,12 @@ endif
 do jz = 1, nz-1
     do jy = 1, ny
     do jx = 1, end_kx
-        if (.not. fourier) then
-            ii = 2*jx   ! imaginary index
-            ir = ii - 1 ! real index
-            dpdx(ir,jy,jz) = -p(ii,jy,jz) * kx(jx,jy)
-            dpdx(ii,jy,jz) =  p(ir,jy,jz) * kx(jx,jy)
-            dpdy(ir,jy,jz) = -p(ii,jy,jz) * ky(jx,jy)
-            dpdy(ii,jy,jz) =  p(ir,jy,jz) * ky(jx,jy)
-        else
-            jx_s = kx_veci(jx)
-            ii = 2*jx_s ! imaginary index
-            ir = ii - 1 ! real index
-            dpdx(ir,jy,jz) = -p(ii,jy,jz) * kx(jx_s,jy)
-            dpdx(ii,jy,jz) =  p(ir,jy,jz) * kx(jx_s,jy)
-            dpdy(ir,jy,jz) = -p(ii,jy,jz) * ky(jx_s,jy)
-            dpdy(ii,jy,jz) =  p(ir,jy,jz) * ky(jx_s,jy)
-        endif
+        ii = 2*jx   ! imaginary index
+        ir = ii - 1 ! real index
+        dpdx(ir,jy,jz) = -p(ii,jy,jz) * kx(jx,jy)
+        dpdx(ii,jy,jz) =  p(ir,jy,jz) * kx(jx,jy)
+        dpdy(ir,jy,jz) = -p(ii,jy,jz) * ky(jx,jy)
+        dpdy(ii,jy,jz) =  p(ir,jy,jz) * ky(jx,jy)
     end do
     end do
 
