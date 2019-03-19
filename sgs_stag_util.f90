@@ -67,8 +67,7 @@ implicit none
 character (*), parameter :: sub_name = 'sgs_stag'
 
 real(rprec), dimension(nz) :: l, ziko, zz
-integer :: jx, jy, jz
-integer :: jz_min, jz_max
+integer :: jz, jz_min, jz_max
 
 if (sgs) then
     ! Cs is Smagorinsky's constant. l is a filter size (non-dim.)
