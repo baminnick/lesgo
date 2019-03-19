@@ -545,7 +545,7 @@ use param, only: ny2, kx_num
 use fft
 implicit none
 
-integer :: jx, jy, ii, ir, jx_s
+integer :: jx, jy, ii, ir
 real(rprec), dimension(:,:), intent(inout) :: f
 real(rprec) :: const
 complex(rprec), dimension(ny2) :: fhat
@@ -556,8 +556,7 @@ fhat(:) = ( 0._rprec, 0._rprec )
 
 do jx = 1, kx_num
     ! un-interleave the real array into a complex array
-    jx_s = kx_veci( jx )
-    ii = 2*jx_s ! imag index
+    ii = 2*jx ! imag index
     ir = ii-1 ! real index
 
     do jy = 1, ny2
@@ -589,7 +588,7 @@ use param, only: ny2, kx_num
 use fft
 implicit none
 
-integer :: jx, jy, ii, ir, jx_s
+integer :: jx, jy, ii, ir
 real(rprec), dimension(:,:), intent(inout) :: f
 complex(rprec), dimension(ny2) :: fhat
 
@@ -597,8 +596,7 @@ fhat(:) = ( 0._rprec, 0._rprec )
 
 do jx = 1, kx_num
     ! un-interleave the real array into a complex array
-    jx_s = kx_veci( jx )
-    ii = 2*jx_s ! imag index
+    ii = 2*jx ! imag index
     ir = ii-1 ! real index
 
     do jy = 1, ny2

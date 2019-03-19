@@ -1086,13 +1086,12 @@ function interleave_c2r(fc) result(f)
 
 use types, only : rprec
 use param, only : kx_num
-use fft, only : kx_veci
 
 implicit none
 
 complex(rprec), dimension(:,:), intent(in) :: fc
 real(rprec), allocatable, dimension(:,:) :: f
-integer :: jx, jx_s, ii, ir, ldh, nyh
+integer :: jx, ii, ir, ldh, nyh
 
 ldh = size(fc,1) + 2 !! ld or ld_big
 nyh = size(fc,2) !! ny or ny2
@@ -1102,12 +1101,11 @@ allocate( f(ldh, nyh) )
 f(:,:) = 0._rprec
 
 do jx = 1, kx_num
-    jx_s = kx_veci( jx )
-    ii = 2*jx_s ! imag index
+    ii = 2*jx ! imag index
     ir = ii - 1 ! real index
 
-    f(ir,:) = real( fc(jx_s,:), rprec )
-    f(ii,:) = aimag( fc(jx_s,:) )
+    f(ir,:) = real( fc(jx,:), rprec )
+    f(ii,:) = aimag( fc(jx,:) )
 enddo
 
 return
@@ -1124,13 +1122,12 @@ function interleave_r2c(f) result(fc)
 
 use types, only : rprec
 use param, only : nx, kx_num
-use fft, only : kx_veci
 
 implicit none
 
 real(rprec), dimension(:,:), intent(in) :: f
 complex(rprec), allocatable, dimension(:,:) :: fc
-integer :: jx, jx_s, ii, ir, nyh
+integer :: jx, ii, ir, nyh
 
 nyh = size(f,2) !! ny or ny2
 
@@ -1139,11 +1136,10 @@ allocate( fc(nx, nyh) )
 fc(:,:) = (0._rprec, 0._rprec)
 
 do jx = 1, kx_num
-    jx_s = kx_veci( jx )
-    ii = 2*jx_s ! imag index
+    ii = 2*jx ! imag index
     ir = ii - 1 ! real index
 
-    fc(jx_s,:) = cmplx( f(ir,:), f(ii,:), rprec )
+    fc(jx,:) = cmplx( f(ir,:), f(ii,:), rprec )
 enddo
 
 return

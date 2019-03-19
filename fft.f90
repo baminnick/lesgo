@@ -37,7 +37,6 @@ public :: forw_fourier, back_fourier
 public :: ycomp_forw_big, ycomp_back_big
 
 real(rprec), allocatable, dimension(:,:) :: kx, ky, k2
-integer, allocatable, dimension(:) :: kx_veci
 
 integer*8 :: forw, back, forw_big, back_big
 integer*8 :: forw_x, back_x, forw_y, forw_x_fourier
@@ -194,12 +193,6 @@ integer :: jx,jy
 
 ! Allocate wavenumbers
 allocate( kx(lh,ny), ky(lh,ny), k2(lh,ny) )
-allocate(kx_veci ( kx_num ) )
-
-! Create wavenumber index
-do jx = 1, kx_num
-    kx_veci(jx) = int( jx ) !! note: starts at 1, not 0
-enddo
 
 do jx = 1, lh-1
     kx(jx,:) = real(jx-1,kind=rprec)
