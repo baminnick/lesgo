@@ -32,7 +32,7 @@ use sim_param
 use grid_m
 use io, only : energy, output_loop, output_final, jt_total
 use io, only : write_tau_wall_bot, write_tau_wall_top, kx_energy, kx_energy_fourier
-use io, only : ky_energy
+!use io, only : ky_energy
 use fft
 use derivatives, only : filt_da, ddz_uv, ddz_w
 use derivatives, only : wave2physF
@@ -613,7 +613,7 @@ time_loop: do jt_step = nstart, nsteps
 
         if (.not. fourier) then
             call kx_energy()
-            call ky_energy()
+            !call ky_energy()
         else
             call kx_energy_fourier()
         endif
