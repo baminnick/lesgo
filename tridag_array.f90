@@ -44,7 +44,11 @@ real(rprec), dimension(lh,ny,nz+1) :: gam
 
 ! Initialize variables
 n = nz + 1
-nchunks = ny
+if ((ny > 256) .and. (fourier)) then
+    nchunks = ny/2
+else
+    nchunks = ny
+endif
 
 ! make sure nchunks divides ny evenly
 chunksize = ny / nchunks
