@@ -97,6 +97,7 @@ enddo
 write(2,i_fmt) 'nxp : ', nxp
 #ifdef PPGQL
 write(2,i_fmt) 'thrx : ', thrx
+write(2,x3l_fmt) 'gql_v2 : ', gql_v2
 #endif
 endif
 write(2,x3l_fmt) 'molec, sgs : ', molec, sgs

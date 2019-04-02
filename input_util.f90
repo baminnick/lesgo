@@ -310,6 +310,8 @@ do
                 read (buff(equal_pos+1:), *) nxp
             case ('THRX')
                 read (buff(equal_pos+1:), *) thrx
+             case ('GQL_V2')
+                read (buff(equal_pos+1:), *) gql_v2
             case default
                 ! if (coord == 0) write(*,*) 'Found unused data value in '       &
                 !     // block_name // ' block: ' // buff(1:equal_pos-1)
@@ -342,7 +344,18 @@ do
                 lh_big = nx2 / 2 + 1
                 ld_big = 2 * lh_big
             endif
-        endif
+
+#ifdef PPGQL
+            if (gql_v2) then
+                if (kx_num .ne. 5) write(*,*) 'GQL FOURIER: Convolution incorrect!'
+            endif
+#endif
+
+        endif !! end of fourier setting check
+
+#ifdef PPGQL
+        if ((gql_v2) .and. (.not. fourier)) write(*,*) 'GQLv2: Fourier setting must be on!'
+#endif
 
         return
     else
