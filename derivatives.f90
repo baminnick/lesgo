@@ -56,50 +56,6 @@ real(rprec), dimension(:,:,lbz:), intent(inout) :: dfdx
 real(rprec) :: const
 integer :: jz
 
-!real(rprec) :: xx, yy
-!real(rprec), dimension(ld,ny) :: FF
-!integer :: jx
-
-!if (coord == 0) then
-!    write(*,*) '----------------------------------'
-!    ! Create FF
-!    do jx = 1, nx
-!    do jz = 1, ny
-!        xx = (2.0_rprec*3.1415926535_rprec)*real(jx-1,rprec)/real(nx-1,rprec)
-!        yy = (2.0_rprec*3.1415926535_rprec)*real(jz-1,rprec)/real(ny-1,rprec)
-!        ! FF(jx,jz) = cos(5.0_rprec*xx) + cos(2.0_rprec*yy) + 5.0_rprec
-!        FF(jx,jz) = cos(5.0_rprec*xx) + cos(2.0_rprec*yy)
-!        ! FF(jx,jz) = cos(5.0_rprec*xx) 
-!        ! FF(jx,jz) = cos(5.0_rprec*yy)
-!        ! FF(jx,jz) = 5.0_rprec
-!    enddo
-!    enddo
-!
-!    call dfftw_execute_dft_r2c(forw,FF(:,:),FF(:,:))
-!    FF(:,:) = FF(:,:) / ( nx * ny )
-!    write(*,*) FF(:,1)
-!    write(*,*) '***'
-!    write(*,*) FF(:,2)
-!    write(*,*) '***'
-!    write(*,*) FF(:,3)
-!    write(*,*) '***'
-!    write(*,*) FF(:,4)
-!    write(*,*) '***'
-!    write(*,*) FF(:,5)
-!    write(*,*) '***'
-!    write(*,*) FF(:,6)
-!    write(*,*) '***'
-!    write(*,*) FF(:,7)
-!    write(*,*) '***'
-!    write(*,*) FF(:,8)
-!    write(*,*) '***'
-!    write(*,*) FF(:,9)
-!    write(*,*) '***'
-!    write(*,*) FF(:,10)
-!
-!    write(*,*) '----------------------------------'
-!endif
-
 const = 1._rprec !! if fourier
 if (.not. fourier) const = 1._rprec / ( nx * ny )
 
