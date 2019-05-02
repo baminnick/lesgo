@@ -52,6 +52,8 @@ if (fourier) then
         nchunks = ny/4
     elseif (ny > 256) then
         nchunks = ny/2
+    else
+        nchunks = ny
     endif
 endif
 

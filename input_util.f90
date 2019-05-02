@@ -345,12 +345,6 @@ do
                 ld_big = 2 * lh_big
             endif
 
-#ifdef PPGQL
-            if (gql_v2) then
-                if (kx_num .ne. 5) write(*,*) 'GQL FOURIER: Convolution incorrect!'
-            endif
-#endif
-
         endif !! end of fourier setting check
 
 #ifdef PPGQL

@@ -702,7 +702,8 @@ if (.not. gql_v2) then
 else !! gql_v2
     ! This version considers the set kxs_in = {0,Kx,kx1,kx2}, with kx1+Kx=kx2
     ! where Kx is the only nonzero large-scale and kx1, kx2 are small-scales
-    ! For simplicity, ONLY FOUR wavenumbers are considered
+    ! Other small-scale wavenumbers can be included between kx1 and kx2, but 
+    ! they are not involved in the code below
 
     ! Kxi+Kxi -> Kx, Add large scales to get large scales (Kxi,Kxi) only
     ! --> Assuming only one non-zero large-scale Kx
@@ -714,16 +715,18 @@ else !! gql_v2
     ! --> Assuming only one non-zero large-scale Kx
 
     ! kxj-kxi -> Kx, Subtract small scales to get large scales
-    outc(2,:) = outc(2,:) + fc(4,:) * conjg( gc(3,:) )
-    outc(2,:) = outc(2,:) + conjg( fc(3,:) ) * gc(4,:)
+    outc(2,:) = outc(2,:) + fc(nx/2,:) * conjg( gc(3,:) )
+    outc(2,:) = outc(2,:) + conjg( fc(3,:) ) * gc(nx/2,:)
 
     ! kxi+Kxj -> kx, Add large and small scales to get small scales
-    outc(4,:) = outc(4,:) + fc(2,:) * gc(3,:)
-    outc(4,:) = outc(4,:) + fc(3,:) * gc(2,:)
+    outc(nx/2,:) = outc(nx/2,:) + fc(2,:) * gc(3,:)
+    outc(nx/2,:) = outc(nx/2,:) + fc(3,:) * gc(2,:)
 
     ! kxj-Kxi -> kx, Subtract large and small scales to get small scales
-    outc(3,:) = outc(3,:) + fc(4,:) * conjg( gc(2,:) )
-    outc(3,:) = outc(3,:) + conjg( fc(2,:) ) * gc(4,:)
+    outc(3,:) = outc(3,:) + fc(nx/2,:) * conjg( gc(2,:) )
+    outc(3,:) = outc(3,:) + conjg( fc(2,:) ) * gc(nx/2,:)
+
+! NOTE: USING NX INSTEAD OF NXH, BE CAREFUL AND SHOULD FIX THIS!
 
 endif
 
