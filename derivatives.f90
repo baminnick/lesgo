@@ -582,8 +582,7 @@ function convolve_rnl(f,g) result(out)
 ! This function is intended to be used for fourier.
 ! 
 ! This function mimics convolve_rnl_old as was done in Joel's work, however
-! reduces amount of space allocated for arrays. This function should eventually
-! replace convolve_rnl_old.
+! reduces amount of space allocated for arrays. 
 ! 
 ! Now edited to perform band-limited GQL in Fourier space.
 ! 
@@ -700,10 +699,13 @@ if (.not. gql_v2) then
     enddo
 
 else !! gql_v2
-    ! This version considers the set kxs_in = {0,Kx,kx1,kx2}, with kx1+Kx=kx2
-    ! where Kx is the only nonzero large-scale and kx1, kx2 are small-scales
-    ! Other small-scale wavenumbers can be included between kx1 and kx2, but 
-    ! they are not involved in the code below
+    ! This version considers the set kxs_in = {0,Kx,k1,...,kn} where
+    ! Kx is the only nonzero large-scale, and k1, k2, ..., kn are all
+    ! small-scales separated by Kx, i.e. k2-k1=k3-k2=...=kn-k(n-1)=Kx.
+    ! 
+    ! I have tried running with {0,Kx,k1,k2,k3} and k2 did not interact 
+    ! with Kx, doing so the energy of k2 approached zero asymptotically.
+    ! 
 
     ! Kxi+Kxi -> Kx, Add large scales to get large scales (Kxi,Kxi) only
     ! --> Assuming only one non-zero large-scale Kx
@@ -715,16 +717,28 @@ else !! gql_v2
     ! --> Assuming only one non-zero large-scale Kx
 
     ! kxj-kxi -> Kx, Subtract small scales to get large scales
-    outc(2,:) = outc(2,:) + fc(nx/2,:) * conjg( gc(3,:) )
-    outc(2,:) = outc(2,:) + conjg( fc(3,:) ) * gc(nx/2,:)
+    do jx = 3, ((nx/2)-1)
+        outc(2,:) = outc(2,:) + fc(jx+1,:) * conjg( gc(jx,:) )
+        outc(2,:) = outc(2,:) + conjg( fc(jx,:) ) * gc(jx+1,:)
+    enddo
+    ! outc(2,:) = outc(2,:) + fc(nx/2,:) * conjg( gc(3,:) )
+    ! outc(2,:) = outc(2,:) + conjg( fc(3,:) ) * gc(nx/2,:)
 
     ! kxi+Kxj -> kx, Add large and small scales to get small scales
-    outc(nx/2,:) = outc(nx/2,:) + fc(2,:) * gc(3,:)
-    outc(nx/2,:) = outc(nx/2,:) + fc(3,:) * gc(2,:)
+    do jx = 3, ((nx/2)-1)
+        outc(jx+1,:) = outc(jx+1,:) + fc(2,:) * gc(jx,:)
+        outc(jx+1,:) = outc(jx+1,:) + fc(jx,:) * gc(2,:)
+    enddo
+    ! outc(nx/2,:) = outc(nx/2,:) + fc(2,:) * gc(3,:)
+    ! outc(nx/2,:) = outc(nx/2,:) + fc(3,:) * gc(2,:)
 
     ! kxj-Kxi -> kx, Subtract large and small scales to get small scales
-    outc(3,:) = outc(3,:) + fc(nx/2,:) * conjg( gc(2,:) )
-    outc(3,:) = outc(3,:) + conjg( fc(2,:) ) * gc(nx/2,:)
+    do jx = 3, ((nx/2)-1)
+        outc(jx,:) = outc(jx,:) + fc(jx+1,:) * conjg( gc(2,:) )
+        outc(jx,:) = outc(jx,:) + conjg( fc(2,:) ) * gc(jx+1,:)
+    enddo
+    ! outc(3,:) = outc(3,:) + fc(nx/2,:) * conjg( gc(2,:) )
+    ! outc(3,:) = outc(3,:) + conjg( fc(2,:) ) * gc(nx/2,:)
 
 ! NOTE: USING NX INSTEAD OF NXH, BE CAREFUL AND SHOULD FIX THIS!
 
@@ -738,86 +752,6 @@ out(:,:) = interleave_c2r( outc(1:nx,:) )
 return
 
 end function convolve_rnl
-
-
-
-
-
-
-
-
-!*******************************************************************************
-function convolve_rnl_old(f,g) result(out)
-!*******************************************************************************
-! 
-! This function computes the convolution of f and g, which are both in Fourier
-! space. The f and g arrays contain complex numbers stored as interleaved real
-! arrays.
-! 
-! This function is intended to be used for fourier
-! 
-use types, only: rprec
-use param, only: nx
-use fft
-use functions, only: interleave_r2c, interleave_c2r
-implicit none
-
-real(rprec), dimension(:,:), intent(in) :: f, g
-real(rprec), allocatable, dimension(:,:) :: out
-
-complex(rprec), allocatable, dimension(:,:) :: fc, gc, outc
-integer :: jx
-
-integer :: ldh, nxh, nyh
-
-ldh = size(f,1)    !! either ld or ld_big
-nxh = ldh - 2      !! either nx or nx2
-nyh = size(f,2)    !! either ny or ny2
-
-allocate( out(ldh, nyh) )
-allocate( fc(2*nxh - 1, nyh) )
-allocate( gc(2*nxh - 1, nyh) )
-allocate( outc(2*nxh - 1, nyh) )
-
-fc(:,:) = (0._rprec, 0._rprec )
-gc(:,:) = (0._rprec, 0._rprec )
-outc(:,:) = (0._rprec, 0._rprec )
-out(:,:) = 0._rprec
-
-! f, g are in kx space, structured as real arrays
-! now re-structure as complex arrays
-fc(1:nx,:) = interleave_r2c( f(:,:) )
-gc(1:nx,:) = interleave_r2c( g(:,:) )
-
-! get the -kx modes from the +kx modes
-do jx = 2, nxh/2
-    fc(nxh-jx+2,:) = conjg(fc(jx,:))
-    gc(nxh-jx+2,:) = conjg(gc(jx,:))
-enddo
-
-! UV part
-outc(1,:) = outc(1,:) + fc(1,:) * gc(1,:)
-
-! Uv, vU parts
-do jx = 2, (2*nxh - 1)
-    outc(jx,:) = outc(jx,:) + fc(1,:) * gc(jx,:)
-    outc(jx,:) = outc(jx,:) + fc(jx,:) * gc(1,:)
-enddo
-
-! < uv > part
-do jx = 2, nxh/2
-    outc(1,:) = outc(1,:) + fc(jx,:) * conjg( gc(jx,:) )
-    outc(1,:) = outc(1,:) + conjg( fc(jx,: )) * gc(jx,:)
-enddo
-
-outc(1:nxh-1,:) = outc(1:nxh-1,:) + outc(nxh+1:2*nxh-1,:)
-
-! re-structure the complex array into a real array
-out(:,:) = interleave_c2r( outc(1:nx,:) )
-
-return
-
-end function convolve_rnl_old
 
 end module derivatives
 
