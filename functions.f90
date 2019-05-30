@@ -1004,20 +1004,22 @@ function gql_filter( f ) result( ft )
 ! This filter is used in main.f90 when RNL is on and fourier = .false.
 ! 
 use types, only : rprec
-use param, only : nx, ny, nz, lbz
+use param, only : nx, ny, nz, lbz, thrx
 use fft
 implicit none
 
 real(rprec), dimension(:,:,lbz:), intent(in) :: f
 real(rprec), dimension(ld,ny,lbz:nz) :: ft
 real(rprec) :: const
-integer :: jx, jy, jz
-integer :: kx_thresh = 6
+integer :: jx, jz
+integer :: kx_thresh
+!integer :: jy
 !integer :: ky_thresh = 1
 ! kx_thresh = 1 keeps only the mean kx = 0 mode, 
 ! and if ky_thresh > (ny-1)/2, then RNL
 ! 
 
+kx_thresh = thrx + 1
 const = 1._rprec / ( nx * ny )
 ft(:,:,:) = f(:,:,:)
 
@@ -1032,6 +1034,7 @@ do jz = lbz, nz
     do jx = (2*kx_thresh+1), ld
         ft(jx,:,jz) = 0.0_rprec ! zero out kx modes above threshold
     enddo
+    ! Uncomment this to truncate in the spanwise direction
     !do jy = (2*ky_thresh+1), ny
     !    ft(:,jy,jz) = 0.0_rprec ! zero out ky modes above threshold
     !enddo
