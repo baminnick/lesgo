@@ -72,6 +72,10 @@ do jz = 1, nz
 enddo
 #endif
 
+#ifdef PPLVLSET_STRETCH
+call load_topography ()
+#endif
+
 #ifdef PPTURBINES
 fxa = 0._rprec
 fya = 0._rprec

@@ -16,6 +16,9 @@ implicit none
 real(kind=rprec),dimension(nz_tot) ::FIELD1
 real(kind=rprec),dimension(nz_tot) ::FIELD2
 real(kind=rprec),dimension(nz_tot) ::FIELD3
+#ifdef PPLVLSET_STRETCH
+real(kind=rprec),dimension(nz_tot) ::FIELD4
+#endif
 
 real(rprec), dimension(nz_tot) :: z_w, z_uv
 
@@ -41,6 +44,14 @@ if (load_stretch) then
     end do
     close(3)
 
+#ifdef PPLVLSET_STRETCH
+    open(4,file=path//'jaco104.dat')
+    do i=1,nz_tot
+        read(4,*) FIELD4(i)
+    end do
+    close(4)
+#endif
+
 else
     ! Use tanh stretched grid
     ! Create unstretched grid to be mapped to new grid
@@ -50,9 +61,14 @@ else
     z_uv(:) = z_w(:) + 0.5_rprec*dz !! z-locations on uv-grid
 
     ! Map to stretched grid
-    ! Only need to do this for the uv-grid
+    ! For the uv-grid
     FIELD3(:) = L_z*(1.0_rprec+(tanh(str_factor*(z_uv(:)/L_z-1.0_rprec))    &
         /tanh(str_factor)))
+    ! For the w-grid
+#ifdef PPLVLSET_STRETCH
+    FIELD4(:) = L_z*(1.0_rprec+(tanh(str_factor*(z_w(:)/L_z-1.0_rprec))    &
+        /tanh(str_factor)))
+#endif
 
     ! Compute Jacobian values for both w- and uv-grids
     ! Using analytical derivative expression
@@ -76,15 +92,27 @@ do jz=1,nz
     mesh_stretch(jz) = FIELD3(coord*(nz-1)+jz)
 end do
 
+#ifdef PPLVLSET_STRETCH
+do jz=1,nz
+    mesh_stretch_w(jz) = FIELD4(coord*(nz-1)+jz)
+end do
+#endif
+
 if (coord == 0) then
-    JACO1(lbz)=JACO1(1)    
+    JACO1(lbz)=JACO1(1)
     JACO2(lbz)=JACO2(1)
-    mesh_stretch(lbz)=mesh_stretch(1)     
+    mesh_stretch(lbz)=-mesh_stretch(1)
+#ifdef PPLVLSET_STRETCH
+    mesh_stretch_w(lbz)=-mesh_stretch_w(1)
+#endif
     write(*,*) '--> Grid stretched using mapping function'
 else
     JACO1(lbz)=FIELD1((coord-1)*(nz-1)+nz-1)
     JACO2(lbz)=FIELD2((coord-1)*(nz-1)+nz-1)
     mesh_stretch(lbz)=FIELD3((coord-1)*(nz-1)+nz-1)
+#ifdef PPLVLSET_STRETCH
+    mesh_stretch_w(lbz)=FIELD4((coord-1)*(nz-1)+nz-1)
+#endif
 end if
 
 end subroutine load_jacobian

@@ -220,7 +220,7 @@ real(rprec) :: RHS, tconst
 ! Caching
 tconst = tadv1 * dt
 
-do jz = 1, nz - 1
+do jz = 1, nz
 do jy = 1, ny
 do jx = 1, nx
 #ifdef PPLVLSET
@@ -228,6 +228,13 @@ do jx = 1, nx
     u(jx, jy, jz) = (u(jx, jy, jz) + dt * (RHS + fx(jx, jy, jz)))
     RHS = -tadv1 * dpdy(jx, jy, jz)
     v(jx, jy, jz) = (v(jx, jy, jz) + dt * (RHS + fy(jx, jy, jz)))
+#elif PPLVLSET_STRETCH
+    RHS = -tadv1 * dpdx(jx, jy, jz)
+    u(jx, jy, jz) = (u(jx, jy, jz) + dt * (RHS + IBFx(jx, jy, jz)))
+    !u(jx, jy, jz) = (u(jx, jy, jz) + dt * (RHS                 ))
+    RHS = -tadv1 * dpdy(jx, jy, jz)
+    v(jx, jy, jz) = (v(jx, jy, jz) + dt * (RHS + IBFy(jx, jy, jz)))
+    !v(jx, jy, jz) = (v(jx, jy, jz) + dt * (RHS                 ))
 #else
     RHS = -tadv1 * dpdx(jx, jy, jz)
     u(jx, jy, jz) = (u(jx, jy, jz) + dt * (RHS                 ))
@@ -250,6 +257,10 @@ do jx = 1, nx
 #ifdef PPLVLSET
     RHS = -tadv1 * dpdz(jx, jy, jz)
     w(jx, jy, jz) = (w(jx, jy, jz) + dt * (RHS + fz(jx, jy, jz)))
+#elif PPLVLSET_STRETCH
+    RHS = -tadv1 * dpdz(jx, jy, jz)
+    w(jx, jy, jz) = (w(jx, jy, jz) + dt * (RHS + IBFz(jx, jy, jz)))
+    !w(jx, jy, jz) = (w(jx, jy, jz) + dt * (RHS                 ))
 #else
     RHS = -tadv1 * dpdz(jx, jy, jz)
     w(jx, jy, jz) = (w(jx, jy, jz) + dt * (RHS                 ))
