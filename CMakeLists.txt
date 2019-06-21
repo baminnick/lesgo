@@ -32,7 +32,7 @@ option(USE_CGNS "Enable CGNS data output." OFF)
 option(USE_RNL "Enable restricted nonlinear model." OFF)
 option(USE_GQL "Enable generalized quasilinear model." OFF)
 option(USE_MAPPING "Enable grid mapping transformation." ON)
-option(USE_LVLSET_STRETCH "Enable simplified level set with mapping." ON)
+option(USE_LVLSET_STRETCH "Enable simplified level set with mapping." OFF)
 
 option(OUTPUT_SGS "Output time-averaging statistics on SGS model." OFF)
 option(OUTPUT_BUDGET "Output time-averaging statistics needed for budgets." OFF)
