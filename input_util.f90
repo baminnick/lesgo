@@ -310,8 +310,10 @@ do
                 read (buff(equal_pos+1:), *) nxp
             case ('THRX')
                 read (buff(equal_pos+1:), *) thrx
-             case ('GQL_V2')
+            case ('GQL_V2')
                 read (buff(equal_pos+1:), *) gql_v2
+            case ('NLS')
+                read (buff(equal_pos+1:), *) nls
             case default
                 ! if (coord == 0) write(*,*) 'Found unused data value in '       &
                 !     // block_name // ' block: ' // buff(1:equal_pos-1)

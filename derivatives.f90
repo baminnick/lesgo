@@ -591,7 +591,7 @@ use param, only: nx
 use fft
 use functions, only: interleave_r2c, interleave_c2r
 #ifdef PPGQL
-use param, only: thrx, gql_v2
+use param, only: thrx, gql_v2, nls
 #endif
 implicit none
 
@@ -699,46 +699,98 @@ if (.not. gql_v2) then
     enddo
 
 else !! gql_v2
-    ! This version considers the set kxs_in = {0,Kx,k1,...,kn} where
-    ! Kx is the only nonzero large-scale, and k1, k2, ..., kn are all
-    ! small-scales separated by Kx, i.e. k2-k1=k3-k2=...=kn-k(n-1)=Kx.
-    ! 
-    ! I have tried running with {0,Kx,k1,k2,k3} and k2 did not interact 
-    ! with Kx, doing so the energy of k2 approached zero asymptotically.
-    ! 
+    if (nls == 1) then
+        ! This version considers the set kxs_in = {0,Kx,k1,...,kn} where
+        ! Kx is the only nonzero large-scale, and k1, k2, ..., kn are all
+        ! small-scales separated by Kx, i.e. k2-k1=k3-k2=...=kn-k(n-1)=Kx.
+        ! 
+        ! I have tried running with {0,Kx,k1,k2,k3} and k2 did not interact 
+        ! with Kx, doing so the energy of k2 approached zero asymptotically.
+        ! 
 
-    ! Kxi+Kxi -> Kx, Add large scales to get large scales (Kxi,Kxi) only
-    ! --> Assuming only one non-zero large-scale Kx
+        ! Kxi+Kxi -> Kx, Add large scales to get large scales (Kxi,Kxi) only
+        ! --> Assuming only one non-zero large-scale Kx
 
-    ! Kxi+Kxj -> Kx, Add large scales to get large scales (Kxi,Kxj) Kxi ~= Kxj only
-    ! --> Assuming only one non-zero large-scale Kx
+        ! Kxi+Kxj -> Kx, Add large scales to get large scales (Kxi,Kxj) Kxi ~= Kxj only
+        ! --> Assuming only one non-zero large-scale Kx
 
-    ! Kxj-Kxi -> Kx, Subtract large scales to get large scales
-    ! --> Assuming only one non-zero large-scale Kx
+        ! Kxj-Kxi -> Kx, Subtract large scales to get large scales
+        ! --> Assuming only one non-zero large-scale Kx
 
-    ! kxj-kxi -> Kx, Subtract small scales to get large scales
-    do jx = 3, ((nx/2)-1)
-        outc(2,:) = outc(2,:) + fc(jx+1,:) * conjg( gc(jx,:) )
-        outc(2,:) = outc(2,:) + conjg( fc(jx,:) ) * gc(jx+1,:)
-    enddo
-    ! outc(2,:) = outc(2,:) + fc(nx/2,:) * conjg( gc(3,:) )
-    ! outc(2,:) = outc(2,:) + conjg( fc(3,:) ) * gc(nx/2,:)
+        ! kxj-kxi -> Kx, Subtract small scales to get large scales
+        do jx = 3, ((nx/2)-1)
+            outc(2,:) = outc(2,:) + fc(jx+1,:) * conjg( gc(jx,:) )
+            outc(2,:) = outc(2,:) + conjg( fc(jx,:) ) * gc(jx+1,:)
+        enddo
+        ! outc(2,:) = outc(2,:) + fc(nx/2,:) * conjg( gc(3,:) )
+        ! outc(2,:) = outc(2,:) + conjg( fc(3,:) ) * gc(nx/2,:)
 
-    ! kxi+Kxj -> kx, Add large and small scales to get small scales
-    do jx = 3, ((nx/2)-1)
-        outc(jx+1,:) = outc(jx+1,:) + fc(2,:) * gc(jx,:)
-        outc(jx+1,:) = outc(jx+1,:) + fc(jx,:) * gc(2,:)
-    enddo
-    ! outc(nx/2,:) = outc(nx/2,:) + fc(2,:) * gc(3,:)
-    ! outc(nx/2,:) = outc(nx/2,:) + fc(3,:) * gc(2,:)
+        ! kxi+Kxj -> kx, Add large and small scales to get small scales
+        do jx = 3, ((nx/2)-1)
+            outc(jx+1,:) = outc(jx+1,:) + fc(2,:) * gc(jx,:)
+            outc(jx+1,:) = outc(jx+1,:) + fc(jx,:) * gc(2,:)
+        enddo
+        ! outc(nx/2,:) = outc(nx/2,:) + fc(2,:) * gc(3,:)
+        ! outc(nx/2,:) = outc(nx/2,:) + fc(3,:) * gc(2,:)
 
-    ! kxj-Kxi -> kx, Subtract large and small scales to get small scales
-    do jx = 3, ((nx/2)-1)
-        outc(jx,:) = outc(jx,:) + fc(jx+1,:) * conjg( gc(2,:) )
-        outc(jx,:) = outc(jx,:) + conjg( fc(2,:) ) * gc(jx+1,:)
-    enddo
-    ! outc(3,:) = outc(3,:) + fc(nx/2,:) * conjg( gc(2,:) )
-    ! outc(3,:) = outc(3,:) + conjg( fc(2,:) ) * gc(nx/2,:)
+        ! kxj-Kxi -> kx, Subtract large and small scales to get small scales
+        do jx = 3, ((nx/2)-1)
+            outc(jx,:) = outc(jx,:) + fc(jx+1,:) * conjg( gc(2,:) )
+            outc(jx,:) = outc(jx,:) + conjg( fc(2,:) ) * gc(jx+1,:)
+        enddo
+        ! outc(3,:) = outc(3,:) + fc(nx/2,:) * conjg( gc(2,:) )
+        ! outc(3,:) = outc(3,:) + conjg( fc(2,:) ) * gc(nx/2,:)
+
+    else !! nls == 2
+        ! This version considers the set kxs_in = {0,Kx1,Kx2,kx1,kx2,kx3} where
+        ! Kx1 and Kx2 are large-scales and kx1, kx2, and kx3 are small and 
+        ! Kx1+Kx1=Kx2, kx3-kx2=kx2-kx1=Kx1, and kx3-kx1=Kx2
+        ! 
+        ! This version assumes kx_num = 7 (including Nyquist) therefore
+        ! nx = 12 and nx/2 = 6 so {2,3} are non-zero large-scales 
+        ! and {4,5,6} are small-scales
+
+        ! Kxi+Kxi -> Kx, Add large scales to get large scales (Kxi,Kxi) only
+        outc(3,:) = outc(3,:) + fc(2,:) * gc(2,:)
+
+        ! Kxi+Kxj -> Kx, Add large scales to get large scales (Kxi,Kxj) Kxi ~= Kxj only
+        ! --> Assuming Kx1 + Kx1 = Kx2 where Kx1 = Kx1
+
+        ! Kxj-Kxi -> Kx, Subtract large scales to get large scales
+        outc(2,:) = outc(2,:) + conjg( fc(2,:) ) * gc(3,:)
+        outc(2,:) = outc(2,:) + fc(3,:) * conjg( gc(2,:) )
+
+        ! kxj-kxi -> Kx, Subtract small scales to get large scales
+        outc(2,:) = outc(2,:) + conjg( fc(5,:) ) * gc(6,:)
+        outc(2,:) = outc(2,:) + fc(6,:) * conjg( gc(5,:) )
+
+        outc(2,:) = outc(2,:) + conjg( fc(4,:) ) * gc(5,:)
+        outc(2,:) = outc(2,:) + fc(5,:) * conjg( gc(4,:) )
+
+        outc(3,:) = outc(3,:) + conjg( fc(4,:) ) * gc(6,:)
+        outc(3,:) = outc(3,:) + fc(6,:) * conjg( gc(4,:) )
+
+        ! kxi+Kxj -> kx, Add large and small scales to get small scales
+        outc(5,:) = outc(5,:) + fc(2,:) * gc(4,:)
+        outc(5,:) = outc(5,:) + fc(4,:) * gc(2,:)
+
+        outc(6,:) = outc(6,:) + fc(2,:) * gc(5,:)
+        outc(6,:) = outc(6,:) + fc(5,:) * gc(2,:)
+
+        outc(6,:) = outc(6,:) + fc(3,:) * gc(4,:)
+        outc(6,:) = outc(6,:) + fc(4,:) * gc(3,:)
+
+        ! kxj-Kxi -> kx, Subtract large and small scales to get small scales
+        outc(4,:) = outc(4,:) + fc(5,:) * conjg( gc(2,:) )
+        outc(4,:) = outc(4,:) + conjg( fc(2,:) ) * gc(5,:)
+
+        outc(5,:) = outc(5,:) + fc(6,:) * conjg( gc(2,:) )
+        outc(5,:) = outc(5,:) + conjg( fc(2,:) ) * gc(6,:)
+
+        outc(4,:) = outc(4,:) + fc(6,:) * conjg( gc(3,:) )
+        outc(4,:) = outc(4,:) + conjg( fc(3,:) ) * gc(6,:)
+
+    endif
 
 ! NOTE: USING NX INSTEAD OF NXH, BE CAREFUL AND SHOULD FIX THIS!
 
