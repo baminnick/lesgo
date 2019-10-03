@@ -56,50 +56,6 @@ real(rprec), dimension(:,:,lbz:), intent(inout) :: dfdx
 real(rprec) :: const
 integer :: jz
 
-!real(rprec) :: xx, yy
-!real(rprec), dimension(ld,ny) :: FF
-!integer :: jx
-
-!if (coord == 0) then
-!    write(*,*) '----------------------------------'
-!    ! Create FF
-!    do jx = 1, nx
-!    do jz = 1, ny
-!        xx = (2.0_rprec*3.1415926535_rprec)*real(jx-1,rprec)/real(nx-1,rprec)
-!        yy = (2.0_rprec*3.1415926535_rprec)*real(jz-1,rprec)/real(ny-1,rprec)
-!        ! FF(jx,jz) = cos(5.0_rprec*xx) + cos(2.0_rprec*yy) + 5.0_rprec
-!        FF(jx,jz) = cos(5.0_rprec*xx) + cos(2.0_rprec*yy)
-!        ! FF(jx,jz) = cos(5.0_rprec*xx) 
-!        ! FF(jx,jz) = cos(5.0_rprec*yy)
-!        ! FF(jx,jz) = 5.0_rprec
-!    enddo
-!    enddo
-!
-!    call dfftw_execute_dft_r2c(forw,FF(:,:),FF(:,:))
-!    FF(:,:) = FF(:,:) / ( nx * ny )
-!    write(*,*) FF(:,1)
-!    write(*,*) '***'
-!    write(*,*) FF(:,2)
-!    write(*,*) '***'
-!    write(*,*) FF(:,3)
-!    write(*,*) '***'
-!    write(*,*) FF(:,4)
-!    write(*,*) '***'
-!    write(*,*) FF(:,5)
-!    write(*,*) '***'
-!    write(*,*) FF(:,6)
-!    write(*,*) '***'
-!    write(*,*) FF(:,7)
-!    write(*,*) '***'
-!    write(*,*) FF(:,8)
-!    write(*,*) '***'
-!    write(*,*) FF(:,9)
-!    write(*,*) '***'
-!    write(*,*) FF(:,10)
-!
-!    write(*,*) '----------------------------------'
-!endif
-
 const = 1._rprec !! if fourier
 if (.not. fourier) const = 1._rprec / ( nx * ny )
 
@@ -545,7 +501,7 @@ use param, only: ny2, kx_num
 use fft
 implicit none
 
-integer :: jx, jy, ii, ir, jx_s
+integer :: jx, jy, ii, ir
 real(rprec), dimension(:,:), intent(inout) :: f
 real(rprec) :: const
 complex(rprec), dimension(ny2) :: fhat
@@ -556,8 +512,7 @@ fhat(:) = ( 0._rprec, 0._rprec )
 
 do jx = 1, kx_num
     ! un-interleave the real array into a complex array
-    jx_s = kx_veci( jx )
-    ii = 2*jx_s ! imag index
+    ii = 2*jx ! imag index
     ir = ii-1 ! real index
 
     do jy = 1, ny2
@@ -589,7 +544,7 @@ use param, only: ny2, kx_num
 use fft
 implicit none
 
-integer :: jx, jy, ii, ir, jx_s
+integer :: jx, jy, ii, ir
 real(rprec), dimension(:,:), intent(inout) :: f
 complex(rprec), dimension(ny2) :: fhat
 
@@ -597,8 +552,7 @@ fhat(:) = ( 0._rprec, 0._rprec )
 
 do jx = 1, kx_num
     ! un-interleave the real array into a complex array
-    jx_s = kx_veci( jx )
-    ii = 2*jx_s ! imag index
+    ii = 2*jx ! imag index
     ir = ii-1 ! real index
 
     do jy = 1, ny2
@@ -628,8 +582,7 @@ function convolve_rnl(f,g) result(out)
 ! This function is intended to be used for fourier.
 ! 
 ! This function mimics convolve_rnl_old as was done in Joel's work, however
-! reduces amount of space allocated for arrays. This function should eventually
-! replace convolve_rnl_old.
+! reduces amount of space allocated for arrays. 
 ! 
 ! Now edited to perform band-limited GQL in Fourier space.
 ! 
@@ -638,7 +591,7 @@ use param, only: nx
 use fft
 use functions, only: interleave_r2c, interleave_c2r
 #ifdef PPGQL
-use param, only: thrx
+use param, only: thrx, gql_v2, nls
 #endif
 implicit none
 
@@ -691,54 +644,157 @@ enddo
 ! GQL has the same interactions as RNL above, only adding more interactions
 ! These interactions involve only nonzero wavenumbers
 
-! Kxi+Kxi -> Kx, Add large scales to get large scales (Kxi,Kxi) only
-do ix = 2, floor((thrx+2.0_rprec)/2.0_rprec)
-    outc(ix+ix-1,:) = outc(ix+ix-1,:) + fc(ix,:) * gc(ix,:)
-enddo
+if (.not. gql_v2) then
+    ! This version considers the set kxs_in = {0,1,2,...,thrx,"small-scales"}
+    ! where the wavenumbers 0,1,2,...,thrx are the "large-scales" and they
+    ! MUST be successive
 
-! Kxi+Kxj -> Kx, Add large scales to get large scales (Kxi,Kxj) Kxi ~= Kxj only
-do ix = 2, thrx
-    do jx = (ix+1), (thrx-ix+2)
-        outc(ix+jx-1,:) = outc(ix+jx-1,:) + fc(ix,:) * gc(jx,:)
-        outc(ix+jx-1,:) = outc(ix+jx-1,:) + fc(jx,:) * gc(ix,:)
+    ! Kxi+Kxi -> Kx, Add large scales to get large scales (Kxi,Kxi) only
+    do ix = 2, floor((thrx+2.0_rprec)/2.0_rprec)
+        outc(ix+ix-1,:) = outc(ix+ix-1,:) + fc(ix,:) * gc(ix,:)
     enddo
-enddo
 
-! Kxj-Kxi -> Kx, Subtract large scales to get large scales
-do ix = 2, (thrx)
-    do jx = (ix+1), thrx+1
-        outc(jx-ix+1,:) = outc(jx-ix+1,:) + conjg( fc(ix,: )) * gc(jx,:)
-        outc(jx-ix+1,:) = outc(jx-ix+1,:) + fc(jx,:) * conjg( gc(ix,:) )
+    ! Kxi+Kxj -> Kx, Add large scales to get large scales (Kxi,Kxj) Kxi ~= Kxj only
+    do ix = 2, thrx
+        do jx = (ix+1), (thrx-ix+2)
+            outc(ix+jx-1,:) = outc(ix+jx-1,:) + fc(ix,:) * gc(jx,:)
+            outc(ix+jx-1,:) = outc(ix+jx-1,:) + fc(jx,:) * gc(ix,:)
+        enddo
     enddo
-enddo
 
-! kxj-kxi -> Kx, Subtract small scales to get large scales
-do ix = (thrx+2), ((nxh/2)-1)
-    jx_end = ix + thrx
-    if ( jx_end > (nxh/2) ) then
-        jx_end = (nxh/2)
+    ! Kxj-Kxi -> Kx, Subtract large scales to get large scales
+    do ix = 2, (thrx)
+        do jx = (ix+1), thrx+1
+            outc(jx-ix+1,:) = outc(jx-ix+1,:) + conjg( fc(ix,: )) * gc(jx,:)
+            outc(jx-ix+1,:) = outc(jx-ix+1,:) + fc(jx,:) * conjg( gc(ix,:) )
+        enddo
+    enddo
+
+    ! kxj-kxi -> Kx, Subtract small scales to get large scales
+    do ix = (thrx+2), ((nxh/2)-1)
+        jx_end = ix + thrx
+        if ( jx_end > (nxh/2) ) then
+            jx_end = (nxh/2)
+        endif
+        do jx = (ix+1), jx_end
+            outc(jx-ix+1,:) = outc(jx-ix+1,:) + conjg( fc(ix,:) ) * gc(jx,:)
+            outc(jx-ix+1,:) = outc(jx-ix+1,:) + fc(jx,:) * conjg( gc(ix,:) )
+        enddo
+    enddo
+
+    ! kxi+Kxj -> kx, Add large and small scales to get small scales
+    do ix = 2, (thrx+1)
+        do jx = (thrx+2), ( (nxh/2)-ix+1 )
+            outc(ix+jx-1,:) = outc(ix+jx-1,:) + fc(ix,:) * gc(jx,:)
+            outc(ix+jx-1,:) = outc(ix+jx-1,:) + fc(jx,:) * gc(ix,:)
+        enddo
+    enddo
+
+    ! kxj-Kxi -> kx, Subtract large and small scales to get small scales
+    do ix = 2, (thrx+1)
+        do jx = (thrx+ix+1), (nxh/2)
+            outc(jx-ix+1,:) = outc(jx-ix+1,:) + conjg( fc(ix,:) ) * gc(jx,:)
+            outc(jx-ix+1,:) = outc(jx-ix+1,:) + fc(jx,:) * conjg( gc(ix,:) )
+        enddo
+    enddo
+
+else !! gql_v2
+    if (nls == 1) then
+        ! This version considers the set kxs_in = {0,Kx,k1,...,kn} where
+        ! Kx is the only nonzero large-scale, and k1, k2, ..., kn are all
+        ! small-scales separated by Kx, i.e. k2-k1=k3-k2=...=kn-k(n-1)=Kx.
+        ! 
+        ! I have tried running with {0,Kx,k1,k2,k3} and k2 did not interact 
+        ! with Kx, doing so the energy of k2 approached zero asymptotically.
+        ! 
+
+        ! Kxi+Kxi -> Kx, Add large scales to get large scales (Kxi,Kxi) only
+        ! --> Assuming only one non-zero large-scale Kx
+
+        ! Kxi+Kxj -> Kx, Add large scales to get large scales (Kxi,Kxj) Kxi ~= Kxj only
+        ! --> Assuming only one non-zero large-scale Kx
+
+        ! Kxj-Kxi -> Kx, Subtract large scales to get large scales
+        ! --> Assuming only one non-zero large-scale Kx
+
+        ! kxj-kxi -> Kx, Subtract small scales to get large scales
+        do jx = 3, ((nx/2)-1)
+            outc(2,:) = outc(2,:) + fc(jx+1,:) * conjg( gc(jx,:) )
+            outc(2,:) = outc(2,:) + conjg( fc(jx,:) ) * gc(jx+1,:)
+        enddo
+        ! outc(2,:) = outc(2,:) + fc(nx/2,:) * conjg( gc(3,:) )
+        ! outc(2,:) = outc(2,:) + conjg( fc(3,:) ) * gc(nx/2,:)
+
+        ! kxi+Kxj -> kx, Add large and small scales to get small scales
+        do jx = 3, ((nx/2)-1)
+            outc(jx+1,:) = outc(jx+1,:) + fc(2,:) * gc(jx,:)
+            outc(jx+1,:) = outc(jx+1,:) + fc(jx,:) * gc(2,:)
+        enddo
+        ! outc(nx/2,:) = outc(nx/2,:) + fc(2,:) * gc(3,:)
+        ! outc(nx/2,:) = outc(nx/2,:) + fc(3,:) * gc(2,:)
+
+        ! kxj-Kxi -> kx, Subtract large and small scales to get small scales
+        do jx = 3, ((nx/2)-1)
+            outc(jx,:) = outc(jx,:) + fc(jx+1,:) * conjg( gc(2,:) )
+            outc(jx,:) = outc(jx,:) + conjg( fc(2,:) ) * gc(jx+1,:)
+        enddo
+        ! outc(3,:) = outc(3,:) + fc(nx/2,:) * conjg( gc(2,:) )
+        ! outc(3,:) = outc(3,:) + conjg( fc(2,:) ) * gc(nx/2,:)
+
+    else !! nls == 2
+        ! This version considers the set kxs_in = {0,Kx1,Kx2,kx1,kx2,kx3} where
+        ! Kx1 and Kx2 are large-scales and kx1, kx2, and kx3 are small and 
+        ! Kx1+Kx1=Kx2, kx3-kx2=kx2-kx1=Kx1, and kx3-kx1=Kx2
+        ! 
+        ! This version assumes kx_num = 7 (including Nyquist) therefore
+        ! nx = 12 and nx/2 = 6 so {2,3} are non-zero large-scales 
+        ! and {4,5,6} are small-scales
+
+        ! Kxi+Kxi -> Kx, Add large scales to get large scales (Kxi,Kxi) only
+        outc(3,:) = outc(3,:) + fc(2,:) * gc(2,:)
+
+        ! Kxi+Kxj -> Kx, Add large scales to get large scales (Kxi,Kxj) Kxi ~= Kxj only
+        ! --> Assuming Kx1 + Kx1 = Kx2 where Kx1 = Kx1
+
+        ! Kxj-Kxi -> Kx, Subtract large scales to get large scales
+        outc(2,:) = outc(2,:) + conjg( fc(2,:) ) * gc(3,:)
+        outc(2,:) = outc(2,:) + fc(3,:) * conjg( gc(2,:) )
+
+        ! kxj-kxi -> Kx, Subtract small scales to get large scales
+        outc(2,:) = outc(2,:) + conjg( fc(5,:) ) * gc(6,:)
+        outc(2,:) = outc(2,:) + fc(6,:) * conjg( gc(5,:) )
+
+        outc(2,:) = outc(2,:) + conjg( fc(4,:) ) * gc(5,:)
+        outc(2,:) = outc(2,:) + fc(5,:) * conjg( gc(4,:) )
+
+        outc(3,:) = outc(3,:) + conjg( fc(4,:) ) * gc(6,:)
+        outc(3,:) = outc(3,:) + fc(6,:) * conjg( gc(4,:) )
+
+        ! kxi+Kxj -> kx, Add large and small scales to get small scales
+        outc(5,:) = outc(5,:) + fc(2,:) * gc(4,:)
+        outc(5,:) = outc(5,:) + fc(4,:) * gc(2,:)
+
+        outc(6,:) = outc(6,:) + fc(2,:) * gc(5,:)
+        outc(6,:) = outc(6,:) + fc(5,:) * gc(2,:)
+
+        outc(6,:) = outc(6,:) + fc(3,:) * gc(4,:)
+        outc(6,:) = outc(6,:) + fc(4,:) * gc(3,:)
+
+        ! kxj-Kxi -> kx, Subtract large and small scales to get small scales
+        outc(4,:) = outc(4,:) + fc(5,:) * conjg( gc(2,:) )
+        outc(4,:) = outc(4,:) + conjg( fc(2,:) ) * gc(5,:)
+
+        outc(5,:) = outc(5,:) + fc(6,:) * conjg( gc(2,:) )
+        outc(5,:) = outc(5,:) + conjg( fc(2,:) ) * gc(6,:)
+
+        outc(4,:) = outc(4,:) + fc(6,:) * conjg( gc(3,:) )
+        outc(4,:) = outc(4,:) + conjg( fc(3,:) ) * gc(6,:)
+
     endif
-    do jx = (ix+1), jx_end
-        outc(jx-ix+1,:) = outc(jx-ix+1,:) + conjg( fc(ix,:) ) * gc(jx,:)
-        outc(jx-ix+1,:) = outc(jx-ix+1,:) + fc(jx,:) * conjg( gc(ix,:) )
-    enddo
-enddo
 
-! kxi+Kxj -> kx, Add large and small scales to get small scales
-do ix = 2, (thrx+1)
-    do jx = (thrx+2), ( (nxh/2)-ix+1 )
-        outc(ix+jx-1,:) = outc(ix+jx-1,:) + fc(ix,:) * gc(jx,:)
-        outc(ix+jx-1,:) = outc(ix+jx-1,:) + fc(jx,:) * gc(ix,:)
-    enddo
-enddo
+! NOTE: USING NX INSTEAD OF NXH, BE CAREFUL AND SHOULD FIX THIS!
 
-! kxj-Kxi -> kx, Subtract large and small scales to get small scales
-do ix = 2, (thrx+1)
-    do jx = (thrx+ix+1), (nxh/2)
-        outc(jx-ix+1,:) = outc(jx-ix+1,:) + conjg( fc(ix,:) ) * gc(jx,:)
-        outc(jx-ix+1,:) = outc(jx-ix+1,:) + fc(jx,:) * conjg( gc(ix,:) )
-    enddo
-enddo
+endif
 
 #endif
 
@@ -748,86 +804,6 @@ out(:,:) = interleave_c2r( outc(1:nx,:) )
 return
 
 end function convolve_rnl
-
-
-
-
-
-
-
-
-!*******************************************************************************
-function convolve_rnl_old(f,g) result(out)
-!*******************************************************************************
-! 
-! This function computes the convolution of f and g, which are both in Fourier
-! space. The f and g arrays contain complex numbers stored as interleaved real
-! arrays.
-! 
-! This function is intended to be used for fourier
-! 
-use types, only: rprec
-use param, only: nx
-use fft
-use functions, only: interleave_r2c, interleave_c2r
-implicit none
-
-real(rprec), dimension(:,:), intent(in) :: f, g
-real(rprec), allocatable, dimension(:,:) :: out
-
-complex(rprec), allocatable, dimension(:,:) :: fc, gc, outc
-integer :: jx
-
-integer :: ldh, nxh, nyh
-
-ldh = size(f,1)    !! either ld or ld_big
-nxh = ldh - 2      !! either nx or nx2
-nyh = size(f,2)    !! either ny or ny2
-
-allocate( out(ldh, nyh) )
-allocate( fc(2*nxh - 1, nyh) )
-allocate( gc(2*nxh - 1, nyh) )
-allocate( outc(2*nxh - 1, nyh) )
-
-fc(:,:) = (0._rprec, 0._rprec )
-gc(:,:) = (0._rprec, 0._rprec )
-outc(:,:) = (0._rprec, 0._rprec )
-out(:,:) = 0._rprec
-
-! f, g are in kx space, structured as real arrays
-! now re-structure as complex arrays
-fc(1:nx,:) = interleave_r2c( f(:,:) )
-gc(1:nx,:) = interleave_r2c( g(:,:) )
-
-! get the -kx modes from the +kx modes
-do jx = 2, nxh/2
-    fc(nxh-jx+2,:) = conjg(fc(jx,:))
-    gc(nxh-jx+2,:) = conjg(gc(jx,:))
-enddo
-
-! UV part
-outc(1,:) = outc(1,:) + fc(1,:) * gc(1,:)
-
-! Uv, vU parts
-do jx = 2, (2*nxh - 1)
-    outc(jx,:) = outc(jx,:) + fc(1,:) * gc(jx,:)
-    outc(jx,:) = outc(jx,:) + fc(jx,:) * gc(1,:)
-enddo
-
-! < uv > part
-do jx = 2, nxh/2
-    outc(1,:) = outc(1,:) + fc(jx,:) * conjg( gc(jx,:) )
-    outc(1,:) = outc(1,:) + conjg( fc(jx,: )) * gc(jx,:)
-enddo
-
-outc(1:nxh-1,:) = outc(1:nxh-1,:) + outc(nxh+1:2*nxh-1,:)
-
-! re-structure the complex array into a real array
-out(:,:) = interleave_c2r( outc(1:nx,:) )
-
-return
-
-end function convolve_rnl_old
 
 end module derivatives
 

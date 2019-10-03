@@ -172,7 +172,6 @@ function mul_real_complex_imag_2D( a, a_c ) result(b)
 ! is kx_num if fourier is on.
 ! 
 use param, only : fourier, kx_num 
-use fft, only : kx_veci
 implicit none
 
 real(rprec), dimension( :, : ), intent(in) :: a
@@ -185,7 +184,6 @@ real(rprec) ::  a_c_i, cache
 
 integer :: i,j,ii,ir
 integer :: nx_r, nx_c, ny
-integer :: i_s
 
 ! Get the size of the incoming arrays
 nx_r = size(a,1)
@@ -205,18 +203,12 @@ endif
 do j = 1, ny !  Using outer loop to get contiguous memory access
 do i = 1, nx_c
 
-    if (fourier) then
-        i_s = kx_veci(i)
-    else
-        i_s = i
-    endif
-
     !  Real and imaginary indicies of a
-    ii = 2*i_s
+    ii = 2*i
     ir = ii-1
 
     !  Cache multi-usage variables
-    a_c_i = a_c(i_s,j)
+    a_c_i = a_c(i,j)
 
     !  Perform multiplication (cache data to ensure sequential access)
     cache = a(ir,j) * a_c_i

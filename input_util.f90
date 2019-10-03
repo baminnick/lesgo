@@ -310,6 +310,10 @@ do
                 read (buff(equal_pos+1:), *) nxp
             case ('THRX')
                 read (buff(equal_pos+1:), *) thrx
+            case ('GQL_V2')
+                read (buff(equal_pos+1:), *) gql_v2
+            case ('NLS')
+                read (buff(equal_pos+1:), *) nls
             case ('HYBRID_BASELINE')
                 read (buff(equal_pos+1:), *) hybrid_baseline
             case ('HYBRID_NATURAL')
@@ -348,7 +352,12 @@ do
                 lh_big = nx2 / 2 + 1
                 ld_big = 2 * lh_big
             endif
-        endif !! end of fourier setting interpretation
+
+        endif !! end of fourier setting check
+
+#ifdef PPGQL
+        if ((gql_v2) .and. (.not. fourier)) write(*,*) 'GQLv2: Fourier setting must be on!'
+#endif
 
         ! Interpret user input for hybrid RNL/LES setting
         if (hybrid_baseline) then
@@ -542,6 +551,12 @@ do
                 !     // block_name // ' block: ' // buff(1:equal_pos-1)
         end select
     elseif (block_exit_pos == 1) then
+        ! Interpret user input for zo and lbc_mom
+        if ((zo < thresh) .and. (lbc_mom == 2)) then
+            zo = 0.0001_rprec
+            if (coord == 0) write(*,*) 'Resetting zo to: ', zo
+        endif
+
         if( use_mean_p_force .AND. eval_mean_p_force ) then
             val_read = mean_p_force_x
             ! Evaluate the mean pressure force

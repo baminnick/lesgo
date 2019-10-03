@@ -173,6 +173,8 @@ integer :: nxp = 32
 
 ! mode limiting options for GQL
 integer :: thrx = 0
+logical :: gql_v2 = .false.
+integer :: nls = 1
 
 ! mode limiting options for Hybrid RNL/LES
 logical :: hybrid_baseline = .false.

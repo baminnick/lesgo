@@ -45,6 +45,15 @@ real(rprec), dimension(lh,ny,nz+1) :: gam
 ! Initialize variables
 n = nz + 1
 nchunks = ny
+if (fourier) then
+    if (ny > 1024) then
+        nchunks = ny/8
+    elseif (ny > 512) then
+        nchunks = ny/4
+    elseif (ny > 256) then
+        nchunks = ny/2
+    endif
+endif
 
 ! make sure nchunks divides ny evenly
 chunksize = ny / nchunks

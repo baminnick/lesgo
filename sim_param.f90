@@ -56,6 +56,15 @@ real(rprec), target, dimension(:,:,:), allocatable :: p
 #ifdef PPMAPPING
 real(rprec), dimension(:), allocatable :: JACO1, JACO2
 real(rprec), dimension(:), allocatable :: mesh_stretch, delta_stretch
+#ifdef PPLVLSET_STRETCH
+real(rprec), dimension(:), allocatable :: mesh_stretch_w
+#endif
+#endif
+
+#ifdef PPLVLSET_STRETCH
+real(rprec), dimension(:,:,:), allocatable :: phi_uv, phi_w
+real(rprec), dimension(:,:), allocatable :: hij
+real(rprec), dimension(:,:,:), allocatable :: IBFx, IBFy, IBFz
 #endif
 
 real(rprec), dimension(:,:,:), allocatable :: uF, vF, wF
@@ -184,8 +193,20 @@ allocate ( fz(ld, ny, nz) ); fz = 0.0_rprec
 #ifdef PPMAPPING
 allocate ( JACO1(lbz:nz) ); JACO1 = 1/BOGUS
 allocate ( JACO2(lbz:nz) ); JACO2 = 1/BOGUS
-allocate ( mesh_stretch(lbz:nz)); mesh_stretch = BOGUS
-allocate ( delta_stretch(lbz:nz)); delta_stretch = BOGUS
+allocate ( mesh_stretch(lbz:nz) ); mesh_stretch = BOGUS
+allocate ( delta_stretch(lbz:nz) ); delta_stretch = BOGUS
+#ifdef PPLVLSET_STRETCH
+allocate ( mesh_stretch_w(lbz:nz) ); mesh_stretch_w = BOGUS
+#endif
+#endif
+
+#ifdef PPLVLSET_STRETCH
+allocate ( phi_uv(ld, ny, lbz:nz) ); phi_uv = 1.0_rprec
+allocate ( phi_w(ld, ny, lbz:nz) ); phi_w = 1.0_rprec
+allocate ( hij(ld-2, ny) ); hij = 0.0_rprec
+allocate ( IBFx(ld, ny, nz) ); IBFx = 0.0_rprec
+allocate ( IBFy(ld, ny, nz) ); IBFy = 0.0_rprec
+allocate ( IBFz(ld, ny, nz) ); IBFz = 0.0_rprec
 #endif
 
 allocate( zhyb(lbz:nz) ); zhyb = .false.

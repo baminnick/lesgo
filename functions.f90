@@ -1004,20 +1004,22 @@ function gql_filter( f ) result( ft )
 ! This filter is used in main.f90 when RNL is on and fourier = .false.
 ! 
 use types, only : rprec
-use param, only : nx, ny, nz, lbz
+use param, only : nx, ny, nz, lbz, thrx
 use fft
 implicit none
 
 real(rprec), dimension(:,:,lbz:), intent(in) :: f
 real(rprec), dimension(ld,ny,lbz:nz) :: ft
 real(rprec) :: const
-integer :: jx, jy, jz
-integer :: kx_thresh = 6
+integer :: jx, jz
+integer :: kx_thresh
+!integer :: jy
 !integer :: ky_thresh = 1
 ! kx_thresh = 1 keeps only the mean kx = 0 mode, 
 ! and if ky_thresh > (ny-1)/2, then RNL
 ! 
 
+kx_thresh = thrx + 1
 const = 1._rprec / ( nx * ny )
 ft(:,:,:) = f(:,:,:)
 
@@ -1032,6 +1034,7 @@ do jz = lbz, nz
     do jx = (2*kx_thresh+1), ld
         ft(jx,:,jz) = 0.0_rprec ! zero out kx modes above threshold
     enddo
+    ! Uncomment this to truncate in the spanwise direction
     !do jy = (2*ky_thresh+1), ny
     !    ft(:,jy,jz) = 0.0_rprec ! zero out ky modes above threshold
     !enddo
@@ -1086,13 +1089,12 @@ function interleave_c2r(fc) result(f)
 
 use types, only : rprec
 use param, only : kx_num
-use fft, only : kx_veci
 
 implicit none
 
 complex(rprec), dimension(:,:), intent(in) :: fc
 real(rprec), allocatable, dimension(:,:) :: f
-integer :: jx, jx_s, ii, ir, ldh, nyh
+integer :: jx, ii, ir, ldh, nyh
 
 ldh = size(fc,1) + 2 !! ld or ld_big
 nyh = size(fc,2) !! ny or ny2
@@ -1102,12 +1104,11 @@ allocate( f(ldh, nyh) )
 f(:,:) = 0._rprec
 
 do jx = 1, kx_num
-    jx_s = kx_veci( jx )
-    ii = 2*jx_s ! imag index
+    ii = 2*jx ! imag index
     ir = ii - 1 ! real index
 
-    f(ir,:) = real( fc(jx_s,:), rprec )
-    f(ii,:) = aimag( fc(jx_s,:) )
+    f(ir,:) = real( fc(jx,:), rprec )
+    f(ii,:) = aimag( fc(jx,:) )
 enddo
 
 return
@@ -1124,13 +1125,12 @@ function interleave_r2c(f) result(fc)
 
 use types, only : rprec
 use param, only : nx, kx_num
-use fft, only : kx_veci
 
 implicit none
 
 real(rprec), dimension(:,:), intent(in) :: f
 complex(rprec), allocatable, dimension(:,:) :: fc
-integer :: jx, jx_s, ii, ir, nyh
+integer :: jx, ii, ir, nyh
 
 nyh = size(f,2) !! ny or ny2
 
@@ -1139,11 +1139,10 @@ allocate( fc(nx, nyh) )
 fc(:,:) = (0._rprec, 0._rprec)
 
 do jx = 1, kx_num
-    jx_s = kx_veci( jx )
-    ii = 2*jx_s ! imag index
+    ii = 2*jx ! imag index
     ir = ii - 1 ! real index
 
-    fc(jx_s,:) = cmplx( f(ir,:), f(ii,:), rprec )
+    fc(jx,:) = cmplx( f(ir,:), f(ii,:), rprec )
 enddo
 
 return

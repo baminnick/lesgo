@@ -244,7 +244,6 @@ if (sgs) then
         S(1:nx,:) = sqrt( 2.0_rprec*(S11(1:nx,:,jz)**2 + S22(1:nx,:,jz)**2 +       &
             S33(1:nx,:,jz)**2 + 2.0_rprec*(S12(1:nx,:,jz)**2 +                     &
             S13(1:nx,:,jz)**2 + S23(1:nx,:,jz)**2 )))
-
         if ((hybrid_baseline) .and. (zhyb(jz))) then !! assuming no sgs in fourier
             Nu_t(1:nx,:,jz) = 0.0_rprec
         else !! fourier, not fourier, or hybrid_fourier in physical
@@ -277,7 +276,6 @@ if (coord == 0) then
 
         end select
     endif
-
     txx(1:nx,:,1) = -nu_coef(1:nx,:)*dudx(1:nx,:,1) !! uvp-node(1)
     txy(1:nx,:,1) = -nu_coef(1:nx,:)*(0.5_rprec*(dudy(1:nx,:,1)+dvdx(1:nx,:,1))) !! uvp-node(1)
     tyy(1:nx,:,1) = -nu_coef(1:nx,:)*dvdy(1:nx,:,1) !! uvp-node(1)
