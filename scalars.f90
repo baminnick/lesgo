@@ -325,7 +325,10 @@ call mpi_sync_real_array(dTdz, 0, MPI_SYNC_DOWNUP)
 #endif
 
 ! Top boundary condition
-if (coord == nproc-1) dTdz(:,:,nz) = lapse_rate
+if (ubc_mom == 0) then
+    if (coord == nproc-1) dTdz(:,:,nz) = lapse_rate
+endif
+!! lapse_rate not applied if there is a top wall
 
 end subroutine scalars_deriv
 
@@ -400,7 +403,7 @@ use param, only : lbz, nx, nz, nx2, ny2, nproc, coord, dt, tadv1, tadv2,       &
     jt_total, dt, use_cfl_dt, jt, initu
 use param, only : lbc_mom, ubc_mom, dz
 use sim_param, only : u, v, w
-use sgs_param, only : Nu_t, delta, S,S11, S12, S13, S22, S23, S33
+use sgs_param, only : nu, Nu_t, delta, S,S11, S12, S13, S22, S23, S33
 use derivatives, only : filt_da, ddx, ddy, ddz_uv, ddz_w
 use mpi_defs, only :  mpi_sync_real_array, MPI_SYNC_DOWNUP
 use test_filtermodule
@@ -486,7 +489,11 @@ end do
 
 ! Calculate eddy diffusivity
 if (sgs_model_scal == 1) then
-    Kappa_t = Nu_t*Pr_sgs
+    if ((sgs) .and. (.not. molec)) then
+        Kappa_t = Nu_t/Pr_sgs
+    elseif ((molec) .and. (.not. sgs)) then
+        Kappa_t = nu/Pr_sgs
+    endif
 
 else if (sgs_model_scal == 5) then
     if (use_cfl_dt) then
@@ -581,6 +588,11 @@ div_pi = div_pi + temp_var
 call ddz_w(pi_z, temp_var, lbz)
 div_pi = div_pi + temp_var
 
+! Added a factor of 2 for the LES case, changing this for pure DNS case
+if ((molec) .and. (.not. sgs)) then
+    div_pi = 0.5_rprec * div_pi
+end if
+
 do k = 1, nz-1
     RHS_T(1:nx,:,k) = -RHS_T(1:nx,:,k) - div_pi(1:nx,:,k)
 end do
@@ -599,9 +611,12 @@ call mpi_sync_real_array(theta, 0, MPI_SYNC_DOWNUP)
 #endif
 
 ! Use gradient at top to project temperature above domain
+if (ubc_mom == 0) then
 if (coord == nproc-1) then
     theta(:,:,nz) = theta(:,:,nz-1) + lapse_rate*dz
 end if
+end if
+! lapse_rate not applied if there is a top wall
 
 end subroutine scalars_transport
 
