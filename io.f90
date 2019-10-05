@@ -1621,6 +1621,9 @@ use derivatives, only : wave2physF
 use sim_param, only : uF, vF, wF, pF
 use sim_param, only : dudyF, dudzF, dvdxF, dvdzF, dwdxF, dwdyF
 use param, only : nxp
+#ifdef PPSCALARS
+use scalars, only : theta
+#endif
 
 use stat_defs, only : xplane, yplane
 #ifdef PPMPI
@@ -1918,6 +1921,27 @@ endif
      deallocate(pres_real)
      deallocate(presF_real)
 
+#ifdef PPSCALARS
+    ! Common file name for all output types
+    call string_splice(fname, path //'output/theta.', jt_total)
+#if defined(PPCGNS) && defined(PPMPI)
+    ! Write CGNS Output
+    call string_concat(fname, '.cgns')
+    call write_parallel_cgns(fname, nx, ny, nz - nz_end, nz_tot,               &
+     (/ 1, 1,   (nz-1)*coord + 1 /),                                           &
+     (/ nx, ny, (nz-1)*(coord+1) + 1 - nz_end /),                              &
+     x(1:nx) , y(1:ny) , z(1:(nz-nz_end) ),                                    &
+     1, (/ 'Theta' /), (/ theta(1:nx,1:ny,1:(nz-nz_end)) /) )
+#else
+    ! Write binary Output
+    call string_concat(fname, bin_ext)
+    open(unit=13, file=fname, form='unformatted', convert=write_endian,        &
+     access='direct', recl=nx*ny*nz*rprec)
+    write(13,rec=1) theta(:nx,:ny,1:nz)
+    close(13)
+#endif
+#endif
+
 !  Write instantaneous x-plane values
 elseif(itype==3) then
 
@@ -2199,6 +2223,9 @@ use string_util, only : string_concat
 #if PPUSE_TURBINES
 use turbines, only : turbines_checkpoint
 #endif
+#ifdef PPSCALARS
+use scalars, only : scalars_checkpoint
+#endif
 
 ! HIT Inflow
 #ifdef PPHIT
@@ -2257,6 +2284,10 @@ end if
 
 #if PPUSE_TURBINES
 call turbines_checkpoint
+#endif
+
+#ifdef PPSCALARS
+call scalars_checkpoint
 #endif
 
 !  Update total_time.dat after simulation

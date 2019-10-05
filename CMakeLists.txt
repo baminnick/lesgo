@@ -33,6 +33,7 @@ option(USE_RNL "Enable restricted nonlinear model." OFF)
 option(USE_GQL "Enable generalized quasilinear model." OFF)
 option(USE_MAPPING "Enable grid mapping transformation." ON)
 option(USE_LVLSET_STRETCH "Enable simplified level set with mapping." OFF)
+option(USE_SCALARS "Enable scalar transport module." ON)
 
 option(OUTPUT_SGS "Output time-averaging statistics on SGS model." OFF)
 option(OUTPUT_BUDGET "Output time-averaging statistics needed for budgets." OFF)
@@ -217,6 +218,12 @@ if (USE_LVLSET_STRETCH)
     set(Sources ${Sources} load_topography.f90 level_set2.f90)
     set(exec_name "${exec_name}-ls2")
 endif (USE_LVLSET_STRETCH)
+
+if (USE_SCALARS)
+    add_definitions(-DPPSCALARS)
+    set(exec_name "${exec_name}-scalars")
+    set(Sources ${Sources} scalars.f90 stability.f90)
+endif (USE_SCALARS
 
 if (OUTPUT_SGS)
     add_definitions(-DPPOUTPUT_SGS)

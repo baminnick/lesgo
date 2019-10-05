@@ -69,6 +69,11 @@ use functions, only : x_avg
 use functions, only : gql_filter
 #endif
 
+#ifdef PPSCALARS
+! use scalars, only : buoyancy_force, scalars_transport, scalars_deriv
+use scalars, only : scalars_transport, scalars_deriv
+#endif
+
 use messages
 
 implicit none
@@ -210,6 +215,10 @@ time_loop: do jt_step = nstart, nsteps
     !  except bottom coord, only 1:nz-1
     call ddz_w(w, dwdz, lbz)
 
+#ifdef PPSCALARS
+    call scalars_deriv()
+#endif
+
     ! Calculate wall stress and derivatives at the wall
     ! (txz, tyz, dudz, dvdz at jz=1)
     ! MPI: bottom and top processes only
@@ -333,6 +342,11 @@ time_loop: do jt_step = nstart, nsteps
     RHSy(:,:,1:nz-1) = -RHSy(:,:,1:nz-1) - divty(:,:,1:nz-1)
     RHSz(:,:,1:nz-1) = -RHSz(:,:,1:nz-1) - divtz(:,:,1:nz-1)
     if (coord == nproc-1) RHSz(:,:,nz) = -RHSz(:,:,nz)-divtz(:,:,nz)
+
+#ifdef PPSCALARS
+    call scalars_transport()
+!    call buoyancy_force()
+#endif
 
     ! Coriolis: add forcing to RHS
     if (coriolis_forcing) then

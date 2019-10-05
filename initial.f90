@@ -43,6 +43,9 @@ use string_util, only : string_concat
 #ifdef PPMPI
 use mpi_defs, only : mpi_sync_real_array, MPI_SYNC_DOWNUP
 #endif
+#ifdef PPSCALARS
+use scalars, only : ic_scal, theta
+#endif
 use derivatives, only: phys2wave
 
 implicit none
@@ -128,10 +131,18 @@ if (initu) then
 else if (interp_flag) then
     if (coord == 0) write(*,*) '--> Interpolating initial velocity field from file'
     call ic_interp
+#ifdef PPSCALARS
+    if (coord == 0) write(*,*) "Interpolation of restart files with scalars is not yet supported."
+    stop 9
+#endif
 #ifndef PPCPS
 else if (inflow) then
         if (coord == 0) write(*,*) '--> Creating initial uniform velocity field'
         call ic_uniform
+#ifdef PPSCALARS
+    if (coord == 0) write(*,*) "Uniform inflow with scalars is not yet supported."
+    stop 9
+#endif
 #endif
 else if (lbc_mom==1) then
     ! if (coord == 0) write(*,*) '--> Creating initial laminar profile ',&
@@ -161,16 +172,31 @@ if (cumulative_time) then
 end if
 #endif
 
+#ifdef PPSCALARS
+call ic_scal()
+#endif
+
 ! call mpi_barrier(comm, ierr)
 ! stop
 
 ! Write averaged vertical profiles to standard output
 !do jz = 1, nz
+!#ifdef PPSCALARS
+!    write(6,7780) jz, sum (u(1:nx, :, jz)) / (nx * ny),                        &
+!                  sum (v(1:nx, :, jz)) / (nx * ny),                            &
+!                  sum (w(1:nx, :, jz)) / (nx * ny)                             &
+!                  sum (theta(1:nx, :, jz) / (nx * ny)
+!#else
 !    write(6,7780) jz, sum (u(1:nx, :, jz)) / (nx * ny),                        &
 !                  sum (v(1:nx, :, jz)) / (nx * ny),                            &
 !                  sum (w(1:nx, :, jz)) / (nx * ny)
+!#endif
 !end do
+!#ifdef PPSCALARS
+!7780 format('jz, ubar, vbar, wbar, thetabar:',(1x,I3,1x,F9.4,1x,F9.4,1x,F9.4,1x,F9.4))
+!#else
 !7780 format('jz, ubar, vbar, wbar:',(1x,I3,1x,F9.4,1x,F9.4,1x,F9.4))
+!#endif
 
 #ifdef PPMPI
 ! Exchange ghost node information for u, v, and w

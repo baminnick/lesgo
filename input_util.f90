@@ -108,6 +108,10 @@ do
         case ('TURBINES')
             call turbines_block()
 #endif
+#ifdef PPSCALARS
+        case ('SCALARS')
+            call scalars_block()
+#endif
         case default
             ! if (coord == 0) write(*,*) 'Found unused input block: '//          &
             !     buff(1:block_entry_pos-1)
@@ -808,6 +812,73 @@ do
 enddo
 
 end subroutine turbines_block
+#endif
+
+#ifdef PPSCALARS
+!*******************************************************************************
+subroutine scalars_block()
+!*******************************************************************************
+use scalars
+implicit none
+
+character(*), parameter :: block_name = 'SCALARS'
+
+do
+    call readline( lun, line, buff, block_entry_pos, block_exit_pos,           &
+        equal_pos, ios )
+
+    if (ios /= 0) call error( sub_name, 'Bad read in block')
+
+    if (block_exit_pos == 0) then
+
+        ! Check that the data entry conforms to correct format
+        call checkentry()
+
+        select case (uppercase(buff(1:equal_pos-1)))
+
+            case ('LBC_SCAL')
+                read (buff(equal_pos+1:), *) lbc_scal
+            case ('SCAL_BOT')
+                read (buff(equal_pos+1:), *) scal_bot
+            case ('FLUX_BOT')
+                read (buff(equal_pos+1:), *) flux_bot
+            case ('READ_LBC_SCAL')
+                read (buff(equal_pos+1:), *) read_lbc_scal
+            case ('LAPSE_RATE')
+                read (buff(equal_pos+1:), *) lapse_rate
+            case ('IC_Z')
+                call parse_vector( buff(equal_pos+1:), ic_nloc, ic_z )
+            case ('IC_THETA')
+                call parse_vector( buff(equal_pos+1:), ic_nloc, ic_theta )
+            case ('G')
+                read (buff(equal_pos+1:), *) g
+            case ('ZO_S')
+                read (buff(equal_pos+1:), *) zo_s
+            case ('T_SCALE')
+                read (buff(equal_pos+1:), *) T_scale
+            case ('PASSIVE_SCALAR')
+                read (buff(equal_pos+1:), *) passive_scalar
+            case ('SGS_MODEL_SCAL')
+                read (buff(equal_pos+1:), *) sgs_model_scal
+            case ('PR_SGS')
+                read (buff(equal_pos+1:), *) Pr_sgs
+            case ('CS_COUNT_SCAL')
+                read (buff(equal_pos+1:), *) cs_count_scal
+            case ('DYN_INIT_SCAL')
+                read (buff(equal_pos+1:), *) dyn_init_scal
+            case default
+                if (coord == 0) write(*,*) 'Found unused data value in '       &
+                    // block_name // ' block: ' // buff(1:equal_pos-1)
+        end select
+    elseif (block_exit_pos == 1) then
+        return
+    else
+        call error( sub_name, block_name //                                    &
+            ' data block not formatted correctly: ' // buff(1:equal_pos-1) )
+    endif
+enddo
+
+end subroutine scalars_block
 #endif
 
 !*******************************************************************************
