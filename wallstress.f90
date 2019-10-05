@@ -183,16 +183,25 @@ end subroutine ws_dns_lbc
 !*******************************************************************************
 subroutine ws_dns_ubc
 !*******************************************************************************
-use param, only : nx, ny, nu_molec, z_i, u_star, dz
-use param, only : utop
+use param, only : nx, ny, nu_molec, z_i, u_star, utop
+#ifdef PPMAPPING
+use sim_param, only : mesh_stretch
+#else
+use param, only : dz
+#endif
 use sim_param , only : u, v
 implicit none
 integer :: i, j
 
 do j = 1, ny
     do i = 1, nx
+#ifdef PPMAPPING
+        dudz(i,j,nz) = ( utop - u(i,j,nz-1) ) / (mesh_stretch(nz-1))
+        dvdz(i,j,nz) = -v(i,j,nz-1) / (mesh_stretch(nz-1))
+#else
         dudz(i,j,nz) = ( utop - u(i,j,nz-1) ) / (0.5_rprec*dz)
         dvdz(i,j,nz) = -v(i,j,nz-1) / (0.5_rprec*dz)
+#endif
         txz(i,j,nz) = -nu_molec/(z_i*u_star)*dudz(i,j,nz)
         tyz(i,j,nz) = -nu_molec/(z_i*u_star)*dvdz(i,j,nz)
     end do
