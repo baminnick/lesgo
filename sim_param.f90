@@ -21,6 +21,9 @@ module sim_param
 !*******************************************************************************
 use types, only : rprec
 use param, only : ld, ny, nz, lbz, nxp, BOGUS
+#ifdef PPSCALARS
+use param, only : nx, u_star
+#endif
 implicit none
 
 save
@@ -71,6 +74,10 @@ real(rprec), target, dimension(:,:,:), allocatable :: pF
 real(rprec), dimension(:,:,:), allocatable :: dudyF, dudzF,                    &
     dvdxF, dvdzF, dwdxF, dwdyF
 real(rprec), dimension(:,:,:), allocatable :: txzF, tyzF
+
+#ifdef PPSCALARS
+real(rprec), dimension(:,:), allocatable :: ustar_lbc
+#endif
 
 contains
 
@@ -201,6 +208,10 @@ allocate ( hij(ld-2, ny) ); hij = 0.0_rprec
 allocate ( IBFx(ld, ny, nz) ); IBFx = 0.0_rprec
 allocate ( IBFy(ld, ny, nz) ); IBFy = 0.0_rprec
 allocate ( IBFz(ld, ny, nz) ); IBFz = 0.0_rprec
+#endif
+
+#ifdef PPSCALARS
+allocate( ustar_lbc(nx,ny) ); ustar_lbc = u_star
 #endif
 
 sim_param_initialized = .true.

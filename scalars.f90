@@ -199,7 +199,7 @@ end subroutine scalars_init
 subroutine ic_scal
 !*******************************************************************************
 ! Set initial profile for scalar
-use param, only : coord
+use param, only : coord, lbc_mom
 use string_util
 use grid_m
 
@@ -270,24 +270,33 @@ end subroutine ic_scal_les
 subroutine ic_scal_dns
 !*******************************************************************************
 use types, only : rprec
-use param, only : nx, ny, nz, lbz, 
+use param, only : nx, ny, nz, lbz
+#ifdef PPMAPPING
+use sim_param, only : mesh_stretch
+#endif
 
 integer :: jx, jy, jz
+real(rprec) :: z
+real(rprec), dimension(nz) :: theta_temp
 
 !! parabolic profile (full channel)
 do jz = 1, nz
 #ifdef PPMPI
+#ifdef PPMAPPING
+    z = mesh_stretch(jz)
+#else
     z = (coord*(nz-1) + real(jz,rprec) - 0.5_rprec) * dz
+#endif
 #else
     z = (real(jz,rprec) - 0.5_rprec) * dz
 #endif
-    theta_bar(jz) = z * (1._rprec - 0.5_rprec*z)
+    theta_temp(jz) = z * (1._rprec - 0.5_rprec*z)
 end do
 
 do jz = 1, nz
 do jy = 1, ny
 do jx = 1, nx
-    theta(jx,jy,jz) = theta_bar(jz)
+    theta(jx,jy,jz) = theta_temp(jz)
 end do
 end do
 end do
@@ -312,7 +321,7 @@ end subroutine scalars_checkpoint
 !*******************************************************************************
 subroutine scalars_deriv
 !*******************************************************************************
-use param, only : lbz, nz, coord, nproc
+use param, only : lbz, nz, coord, nproc, ubc_mom
 use mpi_defs, only :  mpi_sync_real_array, MPI_SYNC_DOWNUP
 use derivatives, only : filt_da, ddz_uv
 
@@ -401,7 +410,7 @@ subroutine scalars_transport()
 !*******************************************************************************
 use param, only : lbz, nx, nz, nx2, ny2, nproc, coord, dt, tadv1, tadv2,       &
     jt_total, dt, use_cfl_dt, jt, initu
-use param, only : lbc_mom, ubc_mom, dz
+use param, only : lbc_mom, ubc_mom, dz, molec, sgs
 use sim_param, only : u, v, w
 use sgs_param, only : nu, Nu_t, delta, S,S11, S12, S13, S22, S23, S33
 use derivatives, only : filt_da, ddx, ddy, ddz_uv, ddz_w
