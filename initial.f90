@@ -139,8 +139,8 @@ else if (lbc_mom==1) then
     if (coord == 0) write(*,*) '--> Creating initial boundary layer velocity ',&
         'field with LES BCs... to become DNS'
     !call ic_dns( ) ! debug
-    !call ic_les()
-    call ic_blend()
+    call ic_les()
+    !call ic_blend()
 else
     if (coord == 0) write(*,*) '--> Creating initial boundary layer velocity ',&
     'field with LES BCs'
