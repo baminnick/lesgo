@@ -183,7 +183,7 @@ end subroutine ws_dns_lbc
 !*******************************************************************************
 subroutine ws_dns_ubc
 !*******************************************************************************
-use param, only : nx, ny, nu_molec, z_i, u_star, utop
+use param, only : nx, ny, nu_molec, z_i, u_star, utop, L_z
 #ifdef PPMAPPING
 use sim_param, only : mesh_stretch
 #else

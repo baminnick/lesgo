@@ -222,8 +222,8 @@ endif (USE_LVLSET_STRETCH)
 if (USE_SCALARS)
     add_definitions(-DPPSCALARS)
     set(exec_name "${exec_name}-scalars")
-    set(Sources ${Sources} scalars.f90 stability.f90)
-endif (USE_SCALARS
+    set(Sources ${Sources} scalars.f90 stability.f90 coriolis.f90 pid.f90)
+endif (USE_SCALARS)
 
 if (OUTPUT_SGS)
     add_definitions(-DPPOUTPUT_SGS)
