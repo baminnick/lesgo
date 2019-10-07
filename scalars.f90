@@ -59,6 +59,8 @@ real(rprec), public, dimension(:,:), allocatable :: psi_m, phi_m, psi_h, phi_h,&
 
 ! Gravitational acceleration
 real(rprec), public :: g = 9.81_rprec
+! Heat source
+real(rprec), public :: scal_source = 0.0_rprec
 ! Roughness length for scalars. typically zo/10
 real(rprec), public :: zo_s = 0.00001_rprec
 ! Treat theta as passive_scalar (no buoyancy)
@@ -172,6 +174,7 @@ allocate ( Ds_opt2_4d(ld,ny) ); Ds_opt2_4d = 0._rprec
 
 ! Nondimensionalize variables
 g = g*(z_i/(u_star**2))
+scal_source = scal_source/(T_scale*u_star/z_i)
 flux_bot = flux_bot/u_star/T_scale
 scal_bot = scal_bot/T_scale
 lapse_rate = lapse_rate/T_scale*z_i
@@ -604,6 +607,11 @@ end if
 
 do k = 1, nz-1
     RHS_T(1:nx,:,k) = -RHS_T(1:nx,:,k) - div_pi(1:nx,:,k)
+end do
+
+! Add heat source
+do k = 1, nz-1
+    RHS_T(1:nx,:,k) = RHS_T(1:nx,:,k) + scal_source
 end do
 
 ! Euler integration check

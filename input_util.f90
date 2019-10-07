@@ -852,6 +852,8 @@ do
                 call parse_vector( buff(equal_pos+1:), ic_nloc, ic_theta )
             case ('G')
                 read (buff(equal_pos+1:), *) g
+            case ('SCAL_SOURCE')
+                read (buff(equal_pos+1:), *) scal_source
             case ('ZO_S')
                 read (buff(equal_pos+1:), *) zo_s
             case ('T_SCALE')
