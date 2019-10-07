@@ -196,8 +196,8 @@ integer :: i, j
 do j = 1, ny
     do i = 1, nx
 #ifdef PPMAPPING
-        dudz(i,j,nz) = ( utop - u(i,j,nz-1) ) / (mesh_stretch(nz-1))
-        dvdz(i,j,nz) = -v(i,j,nz-1) / (mesh_stretch(nz-1))
+        dudz(i,j,nz) = ( utop - u(i,j,nz-1) ) / (L_z - mesh_stretch(nz-1))
+        dvdz(i,j,nz) = -v(i,j,nz-1) / (L_z - mesh_stretch(nz-1))
 #else
         dudz(i,j,nz) = ( utop - u(i,j,nz-1) ) / (0.5_rprec*dz)
         dvdz(i,j,nz) = -v(i,j,nz-1) / (0.5_rprec*dz)
