@@ -216,15 +216,15 @@ call string_concat( fname, '.c', coord )
 inquire (file=fname, exist=inits)
 
 if (inits) then
-    write(*,*)  "--> Reading initial scalar field from file"
+    if (coord == 0) write(*,*)  "--> Reading initial scalar field from file"
     call ic_scal_file
     inilag_scalar = .false.
 else
     if (lbc_mom==1) then
-        write(*,*)  "--> Creating initial scalar field with DNS BCs"
+        if (coord == 0) write(*,*)  "--> Creating initial scalar field with DNS BCs"
         call ic_scal_dns
     else
-        write(*,*)  "--> Creating initial boundary layer scalar field with LES BCs"
+        if (coord == 0) write(*,*)  "--> Creating initial boundary layer scalar field with LES BCs"
         call ic_scal_les
     end if
     inilag_scalar = .true.
@@ -456,7 +456,7 @@ end subroutine obukhov
 subroutine scalars_transport()
 !*******************************************************************************
 use param, only : lbz, nx, nz, nx2, ny2, nproc, coord, dt, tadv1, tadv2,       &
-    jt_total, dt, use_cfl_dt, jt, initu, comm, ierr
+    jt_total, dt, use_cfl_dt, jt, initu, comm, ierr, wbase
 use param, only : lbc_mom, ubc_mom, dz, molec, sgs
 use sim_param, only : u, v, w
 use sgs_param, only : nu, Nu_t, delta, S,S11, S12, S13, S22, S23, S33
@@ -668,23 +668,25 @@ end if
 theta(1:nx,:,1:nz-1) = theta(1:nx,:,1:nz-1)                                    &
     + dt*(tadv1*RHS_T(1:nx,:,1:nz-1) + tadv2*RHS_Tf(1:nx,:,1:nz-1))
 
+if (modulo (jt_total, wbase) == 0) then
 #ifdef PPMPI
 if(coord == 0) then
-    write(*,'(a)') '======================= SCALARS ========================='
+    write(*,'(a)') '======================= SCALARS ========================'
     write(*,*) 'Bottom theta: ', theta(nx/2,ny/2,1:2)
 end if
 call mpi_barrier(comm, ierr)
 if(coord == nproc-1) then
     write(*,*) 'Top theta: ', theta(nx/2,ny/2,nz-2:nz-1)
-    write(*,'(a)') '======================= SCALARS ========================='
+    write(*,'(a)') '======================= SCALARS ========================'
 end if
 call mpi_barrier(comm, ierr)
 #else
-write(*,'(a)') '======================= SCALARS ========================='
+write(*,'(a)') '======================= SCALARS ========================'
 write(*,*) 'Bottom theta: ', theta(nx/2,ny/2,1:2)
 write(*,*) 'Top theta: ', theta(nx/2,ny/2,nz-2:nz-1)
-write(*,'(a)') '======================= SCALARS ========================='
+write(*,'(a)') '======================= SCALARS ========================'
 #endif
+endif
 
 #ifdef PPMPI
 call mpi_sync_real_array(theta, 0, MPI_SYNC_DOWNUP)
