@@ -412,7 +412,7 @@ end subroutine obukhov
 subroutine scalars_transport()
 !*******************************************************************************
 use param, only : lbz, nx, nz, nx2, ny2, nproc, coord, dt, tadv1, tadv2,       &
-    jt_total, dt, use_cfl_dt, jt, initu
+    jt_total, dt, use_cfl_dt, jt, initu, comm, ierr
 use param, only : lbc_mom, ubc_mom, dz, molec, sgs
 use sim_param, only : u, v, w
 use sgs_param, only : nu, Nu_t, delta, S,S11, S12, S13, S22, S23, S33
@@ -622,6 +622,24 @@ end if
 ! Take a step
 theta(1:nx,:,1:nz-1) = theta(1:nx,:,1:nz-1)                                    &
     + dt*(tadv1*RHS_T(1:nx,:,1:nz-1) + tadv2*RHS_Tf(1:nx,:,1:nz-1))
+
+#ifdef PPMPI
+if(coord == 0) then
+    write(*,'(a)') '======================= SCALARS ========================='
+    write(*,*) 'Bottom theta: ', theta(nx/2,ny/2,1:2)
+end if
+call mpi_barrier(comm, ierr)
+if(coord == nproc-1) then
+    write(*,*) 'Top theta: ', theta(nx/2,ny/2,nz-2:nz-1)
+    write(*,'(a)') '======================= SCALARS ========================='
+end if
+call mpi_barrier(comm, ierr)
+#else
+write(*,'(a)') '======================= SCALARS ========================='
+write(*,*) 'Bottom theta: ', theta(nx/2,ny/2,1:2)
+write(*,*) 'Top theta: ', theta(nx/2,ny/2,nz-2:nz-1)
+write(*,'(a)') '======================= SCALARS ========================='
+#endif
 
 #ifdef PPMPI
 call mpi_sync_real_array(theta, 0, MPI_SYNC_DOWNUP)
