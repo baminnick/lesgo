@@ -83,6 +83,9 @@ real(rprec), dimension(:), allocatable, public :: ic_z, ic_theta
 integer, public :: ic_nloc
 real(rprec), public :: lapse_rate = 0._rprec
 logical, public :: read_lbc_scal = .false.
+integer, public :: ubc_scal = 0
+real(rprec), public :: scal_top = 0._rprec
+real(rprec), public :: flux_top = 0._rprec
 
 ! Interpolation of bottom boundary condition
 real(rprec), dimension(:), allocatable :: t_interp, lbc_interp
@@ -324,9 +327,14 @@ end subroutine scalars_checkpoint
 !*******************************************************************************
 subroutine scalars_deriv
 !*******************************************************************************
-use param, only : lbz, nz, coord, nproc, ubc_mom
+use param, only : lbz, nz, coord, nproc, ubc_mom, L_z, sgs, molec
 use mpi_defs, only :  mpi_sync_real_array, MPI_SYNC_DOWNUP
 use derivatives, only : filt_da, ddz_uv
+#ifdef PPMAPPING
+use sim_param, only : mesh_stretch
+#else
+use param, only : dz
+#endif
 
 ! Calculate derivatives of theta
 call filt_da(theta, dTdx, dTdy, lbz)
@@ -336,11 +344,47 @@ call ddz_uv(theta, dTdz, lbz)
 call mpi_sync_real_array(dTdz, 0, MPI_SYNC_DOWNUP)
 #endif
 
-! Top boundary condition
-if (ubc_mom == 0) then
-    if (coord == nproc-1) dTdz(:,:,nz) = lapse_rate
+! Boundary conditions
+if ((.not. sgs) .and. (molec)) then !! DNS BC
+    if (coord == 0) then
+        select case (lbc_scal)
+
+            ! prescribed temperature
+            case (0)
+#ifdef PPMAPPING
+                dTdz(:,:,1) = (theta(:,:,1) - scal_bot) / (mesh_stretch(1))
+#else
+                dTdz(:,:,1) = (theta(:,:,1) - scal_bot) / (0.5_rprec*dz)
+#endif
+
+            ! prescribed flux
+            case (1:)
+                dTdz(:,:,1) = flux_bot
+
+            end select
+    elseif (coord == nproc-1) then
+        select case (ubc_scal)
+
+            ! prescribed temperature
+            case (0)
+#ifdef PPMAPPING
+                dTdz(:,:,nz) = (scal_top - theta(:,:,nz-1)) / (L_z - mesh_stretch(nz-1))
+#else
+                dTdz(:,:,nz) = (scal_top - theta(:,:,nz-1)) / (0.5_rprec*dz)
+#endif
+
+            ! prescribed flux
+            case (1:)
+                dTdz(:,:,nz) = flux_top
+
+            end select
+    endif
+else !! LES BC
+    if (ubc_mom == 0) then
+        if (coord == nproc-1) dTdz(:,:,nz) = lapse_rate
+    endif
+    !! lapse_rate not applied if there is a top wall
 endif
-!! lapse_rate not applied if there is a top wall
 
 end subroutine scalars_deriv
 
@@ -578,6 +622,7 @@ if (coord == nproc-1) then
           pi_z(:,:,nz) = -2*Kappa_t(:,:,nz-1)*dTdz(:,:,nz)
 
       end select
+
 end if
 
 ! Calculate rest of the domain: Kappa_t is on w nodes

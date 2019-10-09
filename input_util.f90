@@ -846,6 +846,12 @@ do
                 read (buff(equal_pos+1:), *) read_lbc_scal
             case ('LAPSE_RATE')
                 read (buff(equal_pos+1:), *) lapse_rate
+            case ('UBC_SCAL')
+                read (buff(equal_pos+1:), *) ubc_scal
+            case ('SCAL_TOP')
+                read (buff(equal_pos+1:), *) scal_top
+            case ('FLUX_TOP')
+                read (buff(equal_pos+1:), *) flux_top
             case ('IC_Z')
                 call parse_vector( buff(equal_pos+1:), ic_nloc, ic_z )
             case ('IC_THETA')
