@@ -196,7 +196,7 @@ select case (lbc_scal)
 
     end select
 
-pi_z(:,:,1) = (nu_molec/Pr_sgs)*dTdz(:,:,1) !! Pr_sgs should be constant
+pi_z(:,:,1) = -(nu_molec/Pr_sgs)*dTdz(:,:,1) !! Pr_sgs should be constant
 #endif
 
 end subroutine ws_dns_lbc
@@ -246,7 +246,7 @@ select case (ubc_scal)
 
     end select
 
-pi_z(:,:,nz) = (nu_molec/Pr_sgs)*dTdz(:,:,nz) !! Pr_sgs should be constant
+pi_z(:,:,nz) = -(nu_molec/Pr_sgs)*dTdz(:,:,nz) !! Pr_sgs should be constant
 #endif
 
 end subroutine ws_dns_ubc
