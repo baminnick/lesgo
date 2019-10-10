@@ -83,6 +83,7 @@ real(rprec), dimension(:), allocatable, public :: ic_z, ic_theta
 integer, public :: ic_nloc
 real(rprec), public :: lapse_rate = 0._rprec
 logical, public :: read_lbc_scal = .false.
+! For DNS mode only:
 integer, public :: ubc_scal = 0
 real(rprec), public :: scal_top = 0._rprec
 real(rprec), public :: flux_top = 0._rprec
@@ -183,6 +184,8 @@ scal_bot = scal_bot/T_scale
 lapse_rate = lapse_rate/T_scale*z_i
 ic_theta = ic_theta/T_scale
 ic_z = ic_z/z_i
+scal_top = scal_top/T_scale
+flux_top = flux_top/u_star/T_scale
 
 ! Read values from file
 if (read_lbc_scal) then
@@ -345,45 +348,8 @@ call mpi_sync_real_array(dTdz, 0, MPI_SYNC_DOWNUP)
 #endif
 
 ! Boundary conditions
-if ((.not. sgs) .and. (molec)) then !! DNS BC
-    if (coord == 0) then
-        select case (lbc_scal)
-
-            ! prescribed temperature
-            case (0)
-#ifdef PPMAPPING
-                dTdz(:,:,1) = (theta(:,:,1) - scal_bot) / (mesh_stretch(1))
-#else
-                dTdz(:,:,1) = (theta(:,:,1) - scal_bot) / (0.5_rprec*dz)
-#endif
-
-            ! prescribed flux
-            case (1:)
-                dTdz(:,:,1) = flux_bot
-
-            end select
-    elseif (coord == nproc-1) then
-        select case (ubc_scal)
-
-            ! prescribed temperature
-            case (0)
-#ifdef PPMAPPING
-                dTdz(:,:,nz) = (scal_top - theta(:,:,nz-1)) / (L_z - mesh_stretch(nz-1))
-#else
-                dTdz(:,:,nz) = (scal_top - theta(:,:,nz-1)) / (0.5_rprec*dz)
-#endif
-
-            ! prescribed flux
-            case (1:)
-                dTdz(:,:,nz) = flux_top
-
-            end select
-    endif
-else !! LES BC
-    if (ubc_mom == 0) then
-        if (coord == nproc-1) dTdz(:,:,nz) = lapse_rate
-    endif
-    !! lapse_rate not applied if there is a top wall
+if ((sgs) .and. (.not. molec)) then !! LES BC
+    if (coord == nproc-1) dTdz(:,:,nz) = lapse_rate
 endif
 
 end subroutine scalars_deriv
@@ -594,13 +560,13 @@ if (coord == 0) then
 
         ! Stress free: Kappa_t is stored on w-nodes
         case (0)
-            pi_x(:,:,1) = -(Kappa_t(:,:,1) + Kappa_t(:,:,2))*dTdx(:,:,1)
-            pi_y(:,:,1) = -(Kappa_t(:,:,1) + Kappa_t(:,:,2))*dTdy(:,:,1)
+            pi_x(:,:,1) = -0.5_rprec*(Kappa_t(:,:,1) + Kappa_t(:,:,2))*dTdx(:,:,1)
+            pi_y(:,:,1) = -0.5_rprec*(Kappa_t(:,:,1) + Kappa_t(:,:,2))*dTdy(:,:,1)
 
         ! Wall: Kappa_t is stored on uvp-nodes
         case (1:)
-            pi_x(:,:,1) = -2*Kappa_t(:,:,1)*dTdx(:,:,1)
-            pi_y(:,:,1) = -2*Kappa_t(:,:,1)*dTdy(:,:,1)
+            pi_x(:,:,1) = -Kappa_t(:,:,1)*dTdx(:,:,1)
+            pi_y(:,:,1) = -Kappa_t(:,:,1)*dTdy(:,:,1)
 
     end select
 end if
@@ -611,15 +577,19 @@ if (coord == nproc-1) then
 
       ! Stress free: Kappa_t is stored on w-nodes
       case (0)
-          pi_x(:,:,nz-1) = -(Kappa_t(:,:,nz-1) + Kappa_t(:,:,nz))*dTdx(:,:,nz-1)
-          pi_y(:,:,nz-1) = -(Kappa_t(:,:,nz-1) + Kappa_t(:,:,nz))*dTdy(:,:,nz-1)
-          pi_z(:,:,nz) = -2*Kappa_t(:,:,nz-1)*dTdz(:,:,nz)
+          pi_x(:,:,nz-1) = -0.5_rprec*(Kappa_t(:,:,nz-1) + Kappa_t(:,:,nz))*dTdx(:,:,nz-1)
+          pi_y(:,:,nz-1) = -0.5_rprec*(Kappa_t(:,:,nz-1) + Kappa_t(:,:,nz))*dTdy(:,:,nz-1)
+          if ((sgs) .and. (.not. molec)) then !! DNS does this in wallstress
+              pi_z(:,:,nz) = -Kappa_t(:,:,nz-1)*dTdz(:,:,nz)
+          endif
 
       ! Wall: Kappa_t is stored on uvp-nodes
       case (1:)
-          pi_x(:,:,nz-1) = -2*Kappa_t(:,:,nz-1)*dTdx(:,:,nz-1)
-          pi_y(:,:,nz-1) = -2*Kappa_t(:,:,nz-1)*dTdy(:,:,nz-1)
-          pi_z(:,:,nz) = -2*Kappa_t(:,:,nz-1)*dTdz(:,:,nz)
+          pi_x(:,:,nz-1) = -Kappa_t(:,:,nz-1)*dTdx(:,:,nz-1)
+          pi_y(:,:,nz-1) = -Kappa_t(:,:,nz-1)*dTdy(:,:,nz-1)
+          if ((sgs) .and. (.not. molec)) then !! DNS does this in wallstress
+              pi_z(:,:,nz) = -Kappa_t(:,:,nz-1)*dTdz(:,:,nz)
+          endif
 
       end select
 
@@ -627,11 +597,11 @@ end if
 
 ! Calculate rest of the domain: Kappa_t is on w nodes
 do k= jz_min, jz_max
-    pi_x(:,:,k) = -(Kappa_t(:,:,k) + Kappa_t(:,:,k+1))*dTdx(:,:,k)
-    pi_y(:,:,k) = -(Kappa_t(:,:,k) + Kappa_t(:,:,k+1))*dTdy(:,:,k)
-    pi_z(:,:,k) = -2*Kappa_t(:,:,k)*dTdz(:,:,k)
+    pi_x(:,:,k) = -0.5_rprec*(Kappa_t(:,:,k) + Kappa_t(:,:,k+1))*dTdx(:,:,k)
+    pi_y(:,:,k) = -0.5_rprec*(Kappa_t(:,:,k) + Kappa_t(:,:,k+1))*dTdy(:,:,k)
+    pi_z(:,:,k) = -Kappa_t(:,:,k)*dTdz(:,:,k)
 end do
-pi_z(:,:,jz_max+1) = -2*Kappa_t(:,:,jz_max+1)*dTdz(:,:,jz_max+1)
+pi_z(:,:,jz_max+1) = -Kappa_t(:,:,jz_max+1)*dTdz(:,:,jz_max+1)
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Divergence of heat flux
@@ -644,11 +614,6 @@ call ddy(pi_y, temp_var, lbz)
 div_pi = div_pi + temp_var
 call ddz_w(pi_z, temp_var, lbz)
 div_pi = div_pi + temp_var
-
-! Added a factor of 2 for the LES case, changing this for pure DNS case
-if ((molec) .and. (.not. sgs)) then
-    div_pi = 0.5_rprec * div_pi
-end if
 
 do k = 1, nz-1
     RHS_T(1:nx,:,k) = -RHS_T(1:nx,:,k) - div_pi(1:nx,:,k)

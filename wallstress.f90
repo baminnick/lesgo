@@ -160,23 +160,44 @@ use sim_param, only : mesh_stretch
 #else
 use param, only : dz
 #endif
+#ifdef PPSCALARS
+use scalars, only : dTdz, pi_z, theta
+use scalars, only : lbc_scal, scal_bot, flux_bot, Pr_sgs
+#endif
 use sim_param , only : u, v
 implicit none
 integer :: i, j
+real(rprec) :: denom
+
+#ifdef PPMAPPING
+denom = mesh_stretch(1)
+#else
+denom = 0.5_rprec*dz
+#endif
 
 do j = 1, ny
     do i = 1, nx
-#ifdef PPMAPPING
-        dudz(i,j,1) = ( u(i,j,1) - ubot ) / (mesh_stretch(1))
-        dvdz(i,j,1) = v(i,j,1) / (mesh_stretch(1))
-#else
-        dudz(i,j,1) = ( u(i,j,1) - ubot ) / ( 0.5_rprec*dz )
-        dvdz(i,j,1) = v(i,j,1) / ( 0.5_rprec*dz )
-#endif
+        dudz(i,j,1) = ( u(i,j,1) - ubot ) / denom
+        dvdz(i,j,1) = v(i,j,1) / denom
         txz(i,j,1) = -nu_molec/(z_i*u_star)*dudz(i,j,1)
         tyz(i,j,1) = -nu_molec/(z_i*u_star)*dvdz(i,j,1)
     end do
 end do
+
+#ifdef PPSCALARS
+select case (lbc_scal)
+    ! prescribed temperature
+    case (0)
+        dTdz(:,:,1) = ( theta(:,:,1) - scal_bot ) / denom
+
+    ! prescribed flux
+    case (1:)
+        dTdz(:,:,1) = flux_bot
+
+    end select
+
+pi_z(:,:,1) = (nu_molec/Pr_sgs)*dTdz(:,:,1) !! Pr_sgs should be constant
+#endif
 
 end subroutine ws_dns_lbc
 
@@ -189,23 +210,44 @@ use sim_param, only : mesh_stretch
 #else
 use param, only : dz
 #endif
+#ifdef PPSCALARS
+use scalars, only : dTdz, pi_z, theta
+use scalars, only : ubc_scal, scal_top, flux_top, Pr_sgs
+#endif
 use sim_param , only : u, v
 implicit none
 integer :: i, j
+real(rprec) :: denom
+
+#ifdef PPMAPPING
+denom = L_z - mesh_stretch(nz-1)
+#else
+denom = 0.5_rprec*dz
+#endif
 
 do j = 1, ny
     do i = 1, nx
-#ifdef PPMAPPING
-        dudz(i,j,nz) = ( utop - u(i,j,nz-1) ) / (L_z - mesh_stretch(nz-1))
-        dvdz(i,j,nz) = -v(i,j,nz-1) / (L_z - mesh_stretch(nz-1))
-#else
-        dudz(i,j,nz) = ( utop - u(i,j,nz-1) ) / (0.5_rprec*dz)
-        dvdz(i,j,nz) = -v(i,j,nz-1) / (0.5_rprec*dz)
-#endif
+        dudz(i,j,nz) = ( utop - u(i,j,nz-1) ) / denom
+        dvdz(i,j,nz) = -v(i,j,nz-1) / denom
         txz(i,j,nz) = -nu_molec/(z_i*u_star)*dudz(i,j,nz)
         tyz(i,j,nz) = -nu_molec/(z_i*u_star)*dvdz(i,j,nz)
     end do
 end do
+
+#ifdef PPSCALARS
+select case (ubc_scal)
+    ! prescribed temperature
+    case (0)
+        dTdz(:,:,nz) = ( scal_top - theta(:,:,nz-1) ) / denom
+
+    ! prescribed flux
+    case (1:)
+        dTdz(:,:,nz) = flux_top
+
+    end select
+
+pi_z(:,:,nz) = (nu_molec/Pr_sgs)*dTdz(:,:,nz) !! Pr_sgs should be constant
+#endif
 
 end subroutine ws_dns_ubc
 
