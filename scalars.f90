@@ -279,17 +279,17 @@ end subroutine ic_scal_les
 subroutine ic_scal_dns
 !*******************************************************************************
 use types, only : rprec
-use param, only : nx, ny, nz, lbz
+use param, only : nx, ny, nz, lbz, L_z
 #ifdef PPMAPPING
 use sim_param, only : mesh_stretch
 #endif
 
 integer :: jx, jy, jz
 real(rprec) :: z
-real(rprec), dimension(nz) :: theta_temp
+real(rprec), dimension(lbz:nz) :: theta_temp
 
-!! parabolic profile (full channel)
-do jz = 1, nz
+! for full channel
+do jz = lbz, nz
 #ifdef PPMPI
 #ifdef PPMAPPING
     z = mesh_stretch(jz)
@@ -299,10 +299,15 @@ do jz = 1, nz
 #else
     z = (real(jz,rprec) - 0.5_rprec) * dz
 #endif
-    theta_temp(jz) = z * (1._rprec - 0.5_rprec*z)
+    ! Parabolic temperature profile
+    ! theta_temp(jz) = z * (1._rprec - 0.5_rprec*z)
+
+    ! Linear temperature profile using fixed Temperature BC
+    theta_temp(jz) = (scal_top - scal_bot)*z/L_z + scal_bot
+
 end do
 
-do jz = 1, nz
+do jz = lbz, nz
 do jy = 1, ny
 do jx = 1, nx
     theta(jx,jy,jz) = theta_temp(jz)
