@@ -47,6 +47,10 @@ public jt_total, openfiles, energy, output_loop, output_final, output_init,    &
     write_tau_wall_bot, write_tau_wall_top, kx_energy, kx_energy_fourier,      &
     ky_energy
 
+#ifdef PPSCALARS
+public write_heat_flux_top, write_heat_flux_bot
+#endif
+
 ! Where to end with nz index.
 integer :: nz_end
 
@@ -1098,6 +1102,80 @@ write(2,*) jt_total, total_time, total_time_dim, turnovers, dt, dt_dim,        &
 close(2)
 
 end subroutine write_tau_wall_top
+
+#ifdef PPSCALARS
+!*******************************************************************************
+subroutine write_heat_flux_bot()
+!*******************************************************************************
+use types, only : rprec
+use param, only : jt_total, wbase, nx, ny
+use scalars, only : pi_z
+implicit none
+real(rprec) :: pizavg
+integer :: jx, jy
+
+! --------------------------- Heat Flux Statistics ---------------------------
+! Compute output to write to file
+pizavg = 0._rprec
+
+! Compute spatial average
+do jx = 1, nx
+do jy = 1, ny
+    pizavg = pizavg + pi_z(jx,jy,1)
+end do
+end do
+pizavg = pizavg/(nx*ny)
+
+! ------------------------------ Write to file -------------------------------
+open(2,file=path // 'output/heat_flux_bot.dat', status='unknown',          &
+    form='formatted', position='append')
+
+! one time header output
+if (jt_total==wbase) write(2,*)                                            &
+    'jt_total, heat_flux, flux_samp'
+
+! continual time-related output
+write(2,*) jt_total, pizavg, pi_z(nx/2,ny/2,1)
+close(2)
+
+end subroutine write_heat_flux_bot
+
+!*******************************************************************************
+subroutine write_heat_flux_top()
+!*******************************************************************************
+use types, only : rprec
+use param, only : jt_total, wbase, nx, ny, nz
+use scalars, only : pi_z
+implicit none
+real(rprec) :: pizavg
+integer :: jx, jy
+
+! --------------------------- Heat Flux Statistics ---------------------------
+! Compute output to write to file
+pizavg = 0._rprec
+
+! Compute spatial average
+do jx = 1, nx
+do jy = 1, ny
+    pizavg = pizavg + pi_z(jx,jy,nz)
+end do
+end do
+pizavg = pizavg/(nx*ny)
+
+! ------------------------------ Write to file -------------------------------
+open(2,file=path // 'output/heat_flux_top.dat', status='unknown',          &
+    form='formatted', position='append')
+
+! one time header output
+if (jt_total==wbase) write(2,*)                                            &
+    'jt_total, heat_flux, flux_samp'
+
+! continual time-related output
+write(2,*) jt_total, pizavg, pi_z(nx/2,ny/2,nz)
+close(2)
+
+end subroutine write_heat_flux_top
+#endif
 
 #ifdef PPCGNS
 #ifdef PPMPI
@@ -3075,7 +3153,7 @@ do i = 1, nx
     tavg_scal(i,j,k) % theta2 = tavg_scal(i,j,k) % theta2 + theta_p * theta_p * tavg_dt
     tavg_scal(i,j,k) % utheta = tavg_scal(i,j,k) % utheta + u_p * theta_p * tavg_dt
     tavg_scal(i,j,k) % vtheta = tavg_scal(i,j,k) % vtheta + v_p * theta_p * tavg_dt
-    tavg_scal(i,j,k) % wtheta = tavg_scal(i,j,k) % wtheta + w_p * theta_p * tavg_dt
+    tavg_scal(i,j,k) % wtheta = tavg_scal(i,j,k) % wtheta + w_p2 * theta_p * tavg_dt
 #endif
 end do
 end do
@@ -3676,7 +3754,7 @@ use stat_defs, only : turbspec_compute
 #endif
 
 #ifdef PPSCALARS
-use stat_defs, only : tavg_scal, rs_scal_compute, rs_scal
+use stat_defs, only : tavg_scal_t, tavg_scal, rs_scal_compute, rs_scal
 #endif
 
 #ifdef PPMPI

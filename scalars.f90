@@ -435,6 +435,7 @@ use derivatives, only : filt_da, ddx, ddy, ddz_uv, ddz_w
 use mpi_defs, only :  mpi_sync_real_array, MPI_SYNC_DOWNUP
 use test_filtermodule
 use fft
+use io, only : write_heat_flux_bot, write_heat_flux_top
 use messages, only : error
 
 integer :: k, jz_min, jz_max, jx, jy, jz
@@ -641,16 +642,20 @@ theta(1:nx,:,1:nz-1) = theta(1:nx,:,1:nz-1)                                    &
 if (modulo (jt_total, wbase) == 0) then
 #ifdef PPMPI
 if(coord == 0) then
+    call write_heat_flux_bot()
     write(*,'(a)') '======================= SCALARS ========================'
     write(*,*) 'Bottom theta: ', theta(nx/2,ny/2,1:2)
 end if
 call mpi_barrier(comm, ierr)
 if(coord == nproc-1) then
+    call write_heat_flux_top()
     write(*,*) 'Top theta: ', theta(nx/2,ny/2,nz-2:nz-1)
     write(*,'(a)') '======================= SCALARS ========================'
 end if
 call mpi_barrier(comm, ierr)
 #else
+call write_heat_flux_bot()
+call write_heat_flux_top()
 write(*,'(a)') '======================= SCALARS ========================'
 write(*,*) 'Bottom theta: ', theta(nx/2,ny/2,1:2)
 write(*,*) 'Top theta: ', theta(nx/2,ny/2,nz-2:nz-1)
