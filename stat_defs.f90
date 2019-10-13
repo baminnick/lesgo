@@ -71,6 +71,16 @@ type rs_t
     real(rprec) :: up2, vp2, wp2, upvp, upwp, vpwp
 end type rs_t
 
+#ifdef PPSCALARS
+type tavg_scal_t
+    real(rprec) :: theta, theta2, utheta, vtheta, wtheta
+end type tavg_scal_t
+
+type rs_scal_t
+    real(rprec) :: thetap2, upthetap, vpthetap, wpthetap
+end type rs_scal_t
+#endif
+
 #ifdef PPOUTPUT_SGS
 type tavg_sgs_t
     real(rprec) :: cs_opt2, Nu_t
@@ -121,7 +131,6 @@ type turbspec_t
     real(rprec) :: upup, vpvp, wpwp, upvp, upwp, vpwp
     real(rprec) :: vortxp2, vortyp2, vortzp2
 end type turbspec_t
-
 #endif
 
 #ifdef PPOUTPUT_WMLES
@@ -185,6 +194,11 @@ type(tavg_t), allocatable, dimension(:) :: tavg_zplane
 
 type(rs_t), allocatable, dimension(:,:,:) :: rs
 type(rs_t), allocatable, dimension(:) :: rs_zplane, cnpy_zplane
+
+#ifdef PPSCALARS
+type(tavg_scal_t), allocatable, dimension(:,:,:) :: tavg_scal
+type(rs_scal_t), allocatable, dimension(:,:,:) :: rs_scal
+#endif
 
 #ifdef PPOUTPUT_SGS
 type(tavg_sgs_t), allocatable, dimension(:,:,:) :: tavg_sgs
@@ -360,6 +374,32 @@ c % upwp = a % uw - a % u_w * a % w   !!pj
 c % vpwp = a % vw - a % v_w * a % w   !!pj
 
 end function rs_compute
+
+#ifdef PPSCALARS
+!*******************************************************************************
+function rs_scal_compute( a, b, lbz2) result(c)
+!*******************************************************************************
+implicit none
+integer, intent(in) :: lbz2
+type(tavg_scal_t), dimension(:,:,lbz2:), intent(in) :: a
+type(tavg_t), dimension(:,:,lbz2:), intent(in) :: b
+type(rs_scal_t), allocatable, dimension(:,:,:) :: c
+
+integer :: ubx, uby, ubz
+
+ubx=ubound(a,1)
+uby=ubound(a,2)
+ubz=ubound(a,3)
+
+allocate(c(ubx,uby,lbz2:ubz))
+
+c % thetap2 = a % theta2 - a % theta * a % theta
+c % upthetap = a % utheta - b % u * a % theta
+c % vpthetap = a % vtheta - b % v * a % theta
+c % wpthetap = a % wtheta - b % w * a % theta
+
+end function rs_scal_compute
+#endif
 
 #ifdef PPOUTPUT_BUDGET
 !*******************************************************************************

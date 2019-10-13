@@ -2829,6 +2829,9 @@ use stat_defs, only : tavg_budget
 #ifdef PPOUTPUT_TURBSPEC
 use stat_defs, only : tavg_turbspecx, tavg_turbspecy
 #endif
+#ifdef PPSCALARS
+use stat_defs, only : tavg_scal
+#endif
 
 implicit none
 
@@ -2841,6 +2844,9 @@ character (*), parameter :: ftavg_budget_in = path // 'tavg_budget.out'
 #endif
 #ifdef PPOUTPUT_TURBSPEC
 character (*), parameter :: ftavg_turbspec_in = path // 'tavg_turbspec.out'
+#endif
+#ifdef PPSCALARS
+character (*), parameter :: ftavg_scal_in = path // 'tavg_scal.out'
 #endif
 #ifdef PPMPI
 character (*), parameter :: MPI_suffix = '.c'
@@ -2907,6 +2913,18 @@ else
     close(1)
 #endif
 
+#ifdef PPSCALARS
+    fname = ftavg_scal_in
+#ifdef PPMPI
+    call string_concat( fname, MPI_suffix, coord )
+#endif
+    open(1, file=fname, action='read', position='rewind', form='unformatted',  &
+        convert=read_endian)
+    read(1) tavg_total_time
+    read(1) tavg_scal
+    close(1)
+#endif
+
 end if
 
 ! Initialize tavg_dt
@@ -2939,6 +2957,11 @@ use sgs_param
 use sim_param, only : fxa, fya, fza
 #endif
 
+#ifdef PPSCALARS
+use stat_defs, only : tavg_scal
+use scalars, only : theta
+#endif
+
 use functions, only : interp_to_uv_grid, interp_to_w_grid
 
 implicit none
@@ -2948,6 +2971,9 @@ real(rprec) :: u_p, u_p2, v_p, v_p2, w_p, w_p2
 real(rprec), allocatable, dimension(:,:,:) :: w_uv, u_w, v_w
 real(rprec), allocatable, dimension(:,:,:) :: pres_real
 real(rprec), allocatable, dimension(:,:,:) :: dwdx_uv, dwdy_uv, dudz_uv, dvdz_uv
+#ifdef PPSCALARS
+real(rprec) :: theta_p
+#endif
 
 allocate(w_uv(nx,ny,lbz:nz), u_w(nx,ny,lbz:nz), v_w(nx,ny,lbz:nz))
 allocate(pres_real(nx,ny,lbz:nz))
@@ -3021,6 +3047,21 @@ do i = 1, nx
     !tavg(i,j,k) % dwdy = tavg(i,j,k) % dwdy + dwdy_uv(i,j,k) * tavg_dt
     !tavg(i,j,k) % dwdz = tavg(i,j,k) % dwdz + dwdz(i,j,k)    * tavg_dt
 
+#ifdef PPSCALARS
+    theta_p = theta(i,j,k) !! uv grid
+
+    tavg_scal(i,j,k) % theta = tavg_scal(i,j,k) % theta +              &
+        theta_p * tavg_dt
+
+    tavg_scal(i,j,k) % theta2 = tavg_scal(i,j,k) % theta2 +            &
+        theta_p * theta_p * tavg_dt
+    tavg_scal(i,j,k) % utheta = tavg_scal(i,j,k) % utheta +            &
+        u_p * theta_p * tavg_dt
+    tavg_scal(i,j,k) % vtheta = tavg_scal(i,j,k) % vtheta +            &
+        v_p * theta_p * tavg_dt
+    tavg_scal(i,j,k) % wtheta = tavg_scal(i,j,k) % wtheta +            &
+        w_p * theta_p * tavg_dt
+#endif
 end do
 end do
 end do
@@ -3619,6 +3660,10 @@ use stat_defs, only : tavg_turbspecx, tavg_turbspecy, turbspecx, turbspecy
 use stat_defs, only : turbspec_compute
 #endif
 
+#ifdef PPSCALARS
+use stat_defs, only : tavg_scal, rs_scal_compute, rs_scal
+#endif
+
 #ifdef PPMPI
 use mpi_defs, only : mpi_sync_real_array,MPI_SYNC_DOWNUP
 use param, only : ierr,comm
@@ -3644,6 +3689,10 @@ character(64) :: fname_rxx, fname_ryy, fname_rzz, fname_rxy, fname_rxz, fname_ry
 
 #ifdef PPOUTPUT_TURBSPEC
 character(64) :: fname_sxvel, fname_syvel, fname_sxvort, fname_syvort
+#endif
+
+#ifdef PPSCALARS
+character(64) :: fname_scal
 #endif
 
 integer :: i,j,k
@@ -3684,6 +3733,9 @@ fname_syvel = path // 'output/syvel'
 fname_sxvort = path // 'output/sxvort'
 fname_syvort = path // 'output/syvort'
 #endif
+#ifdef PPSCALARS
+fname_scal = path // 'output/scal'
+#endif
 
 ! CGNS
 #ifdef PPCGNS
@@ -3712,6 +3764,9 @@ call string_concat(fname_sxvel, '.cgns')
 call string_concat(fname_syvel, '.cgns')
 call string_concat(fname_sxvort, '.cgns')
 call string_concat(fname_syvort, '.cgns')
+#endif
+#ifdef PPSCALARS
+call string_concat(fname_scal, '.cgns')
 #endif
 ! Binary
 #else
@@ -3745,6 +3800,9 @@ call string_concat(fname_sxvel, bin_ext)
 call string_concat(fname_syvel, bin_ext)
 call string_concat(fname_sxvort, bin_ext)
 call string_concat(fname_syvort, bin_ext)
+#endif
+#ifdef PPSCALARS
+call string_concat(fname_scal, bin_ext)
 #endif
 #endif
 
@@ -3789,6 +3847,14 @@ do i = 1, Nx
     !tavg(i,j,k) % dwdx = tavg(i,j,k) % dwdx / tavg_total_time
     !tavg(i,j,k) % dwdy = tavg(i,j,k) % dwdy / tavg_total_time
     !tavg(i,j,k) % dwdz = tavg(i,j,k) % dwdz / tavg_total_time
+
+#ifdef PPSCALARS
+    tavg_scal(i,j,k) % theta  = tavg_scal(i,j,k) % theta / tavg_total_time
+    tavg_scal(i,j,k) % theta2 = tavg_scal(i,j,k) % theta2 / tavg_total_time
+    tavg_scal(i,j,k) % utheta = tavg_scal(i,j,k) % utheta / tavg_total_time
+    tavg_scal(i,j,k) % vtheta = tavg_scal(i,j,k) % vtheta / tavg_total_time
+    tavg_scal(i,j,k) % wtheta = tavg_scal(i,j,k) % wtheta / tavg_total_time
+#endif
 end do
 end do
 end do
@@ -4055,6 +4121,13 @@ call mpi_sync_real_array( tavg(1:nx,1:ny,lbz:nz)%vw, 0, MPI_SYNC_DOWNUP )
 call mpi_sync_real_array( tavg(1:nx,1:ny,lbz:nz)%uv, 0, MPI_SYNC_DOWNUP )
 call mpi_sync_real_array( tavg(1:nx,1:ny,lbz:nz)%p, 0, MPI_SYNC_DOWNUP )
 call mpi_sync_real_array( tavg(1:nx,1:ny,lbz:nz)%fx, 0, MPI_SYNC_DOWNUP )
+#ifdef PPSCALARS
+call mpi_sync_real_array( tavg_scal(1:nx,1:ny,lbz:nz)%theta, 0, MPI_SYNC_DOWNUP )
+call mpi_sync_real_array( tavg_scal(1:nx,1:ny,lbz:nz)%theta2, 0, MPI_SYNC_DOWNUP )
+call mpi_sync_real_array( tavg_scal(1:nx,1:ny,lbz:nz)%utheta, 0, MPI_SYNC_DOWNUP )
+call mpi_sync_real_array( tavg_scal(1:nx,1:ny,lbz:nz)%vtheta, 0, MPI_SYNC_DOWNUP )
+call mpi_sync_real_array( tavg_scal(1:nx,1:ny,lbz:nz)%wtheta, 0, MPI_SYNC_DOWNUP )
+#endif
 #ifdef PPOUTPUT_SGS
 call mpi_sync_real_array( tavg_sgs(1:nx,1:ny,lbz:nz)%cs_opt2, 0, MPI_SYNC_DOWNUP )
 ! call mpi_sync_real_array( tavg_sgs(1:nx,1:ny,lbz:nz)%Tn, 0, MPI_SYNC_DOWNUP )
@@ -4402,6 +4475,37 @@ close(13)
 
 deallocate(rs)
 
+#ifdef PPSCALARS
+allocate(rs_scal(nx,ny,lbz:nz))
+rs_scal = rs_scal_compute(tavg_scal, tavg, lbz)
+
+#ifdef PPCGNS
+! Write CGNS data
+call write_parallel_cgns(fname_scal,nx,ny,nz- nz_end,nz_tot,                       &
+    (/ 1, 1,   (nz-1)*coord + 1 /),                                                &
+    (/ nx, ny, (nz-1)*(coord+1) + 1 - nz_end /),                                   &
+    x(1:nx) , y(1:ny) , z(1:(nz-nz_end) ), 6,                                      &
+    (/ 'Meantheta', 'Meanthetap', 'Meanupthetap','Meanvpthetap','Meanwpthetap'/),  &
+    (/ tavg_scal(1:nx,1:ny,1:nz- nz_end) % theta,                                  &
+    rs_scal(1:nx,1:ny,1:nz- nz_end) % thetap2,                                     &
+    rs_scal(1:nx,1:ny,1:nz- nz_end) % upthetap,                                    &
+    rs_scal(1:nx,1:ny,1:nz- nz_end) % vpthetap,                                    &
+    rs_scal(1:nx,1:ny,1:nz- nz_end) % wpthetap /) )
+#else
+! Write binary data
+open(unit=13, file=fname_scal, form='unformatted', convert=write_endian,           &
+    access='direct',recl=nx*ny*nz*rprec)
+write(13,rec=1) tavg_scal(:nx,:ny,1:nz)%theta
+write(13,rec=2) rs_scal(:nx,:ny,1:nz)%thetap2
+write(13,rec=3) rs_scal(:nx,:ny,1:nz)%upthetap
+write(13,rec=4) rs_scal(:nx,:ny,1:nz)%vpthetap
+write(13,rec=5) rs_scal(:nx,:ny,1:nz)%wpthetap
+close(13)
+#endif
+
+deallocate(rs_scal)
+#endif
+
 #ifdef PPOUTPUT_SGS
 #ifdef PPCGNS
 call write_parallel_cgns(fname_cs,nx,ny,nz- nz_end,nz_tot,                     &
@@ -4734,6 +4838,10 @@ use stat_defs, only : tavg_budget
 use param, only : checkpoint_tavg_turbspec_file
 use stat_defs, only : tavg_turbspecx, tavg_turbspecy
 #endif
+#ifdef PPSCALARS
+use param, only : checkpoint_tavg_scal_file
+use stat_defs, only : tavg_scal
+#endif
 
 implicit none
 
@@ -4788,6 +4896,19 @@ open(1, file=fname, action='write', position='rewind',form='unformatted',      &
 write(1) tavg_total_time
 write(1) tavg_turbspecx
 write(1) tavg_turbspecy
+close(1)
+#endif
+
+#ifdef PPSCALARS
+fname = checkpoint_tavg_scal_file
+#ifdef PPMPI
+call string_concat( fname, '.c', coord)
+#endif
+!  Write data to tavg_sgs.out
+open(1, file=fname, action='write', position='rewind',form='unformatted',      &
+    convert=write_endian)
+write(1) tavg_total_time
+write(1) tavg_scal
 close(1)
 #endif
 
