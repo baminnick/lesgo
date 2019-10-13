@@ -2385,6 +2385,9 @@ use grid_m
 use functions, only : cell_indx
 use stat_defs, only : point, xplane, yplane, zplane
 use stat_defs, only : tavg, tavg_zplane
+#ifdef PPSCALARS
+use stat_defs, only : tavg_scal
+#endif
 #ifdef PPOUTPUT_SGS
 use stat_defs, only : tavg_sgs
 #endif
@@ -2423,7 +2426,10 @@ z => grid % z
 if( tavg_calc ) then
 
     allocate(tavg(nx,ny,lbz:nz))
-    allocate(tavg_zplane(nz))
+    ! allocate(tavg_zplane(nz))
+#ifdef PPSCALARS
+    allocate(tavg_scal(nx,ny,lbz:nz))
+#endif
 #ifdef PPOUTPUT_SGS
     allocate(tavg_sgs(nx,ny,lbz:nz))
 #endif
@@ -2476,6 +2482,20 @@ if( tavg_calc ) then
         ! to replace commented line below, set all types of tavg_zplane = 0._rprec
         ! call type_set( tavg_zplane(k), 0._rprec )
     end do
+
+#ifdef PPSCALARS
+    do k = 1, Nz
+    do j = 1, Ny
+    do i = 1, Nx
+        tavg_scal(i,j,k) % theta  = 0._rprec
+        tavg_scal(i,j,k) % theta2 = 0._rprec
+        tavg_scal(i,j,k) % utheta = 0._rprec
+        tavg_scal(i,j,k) % vtheta = 0._rprec
+        tavg_scal(i,j,k) % wtheta = 0._rprec
+    end do
+    end do
+    end do
+#endif
 
 #ifdef PPOUTPUT_SGS
     do k = 1, Nz
@@ -3050,17 +3070,12 @@ do i = 1, nx
 #ifdef PPSCALARS
     theta_p = theta(i,j,k) !! uv grid
 
-    tavg_scal(i,j,k) % theta = tavg_scal(i,j,k) % theta +              &
-        theta_p * tavg_dt
+    tavg_scal(i,j,k) % theta = tavg_scal(i,j,k) % theta + theta_p * tavg_dt
 
-    tavg_scal(i,j,k) % theta2 = tavg_scal(i,j,k) % theta2 +            &
-        theta_p * theta_p * tavg_dt
-    tavg_scal(i,j,k) % utheta = tavg_scal(i,j,k) % utheta +            &
-        u_p * theta_p * tavg_dt
-    tavg_scal(i,j,k) % vtheta = tavg_scal(i,j,k) % vtheta +            &
-        v_p * theta_p * tavg_dt
-    tavg_scal(i,j,k) % wtheta = tavg_scal(i,j,k) % wtheta +            &
-        w_p * theta_p * tavg_dt
+    tavg_scal(i,j,k) % theta2 = tavg_scal(i,j,k) % theta2 + theta_p * theta_p * tavg_dt
+    tavg_scal(i,j,k) % utheta = tavg_scal(i,j,k) % utheta + u_p * theta_p * tavg_dt
+    tavg_scal(i,j,k) % vtheta = tavg_scal(i,j,k) % vtheta + v_p * theta_p * tavg_dt
+    tavg_scal(i,j,k) % wtheta = tavg_scal(i,j,k) % wtheta + w_p * theta_p * tavg_dt
 #endif
 end do
 end do
@@ -4508,24 +4523,24 @@ deallocate(rs_scal)
 
 #ifdef PPOUTPUT_SGS
 #ifdef PPCGNS
-call write_parallel_cgns(fname_cs,nx,ny,nz- nz_end,nz_tot,                     &
-    (/ 1, 1,   (nz-1)*coord + 1 /),                                            &
-    (/ nx, ny, (nz-1)*(coord+1) + 1 - nz_end /),                               &
-    x(1:nx) , y(1:ny) , zw(1:(nz-nz_end) ), 1,                                 &
+call write_parallel_cgns(fname_cs,nx,ny,nz- nz_end,nz_tot,                &
+    (/ 1, 1,   (nz-1)*coord + 1 /),                                       &
+    (/ nx, ny, (nz-1)*(coord+1) + 1 - nz_end /),                          &
+    x(1:nx) , y(1:ny) , zw(1:(nz-nz_end) ), 1,                            &
     (/ 'Cs_Coeff'/),  (/ tavg(1:nx,1:ny,1:nz- nz_end) % cs_opt2 /) )
 
-call write_parallel_cgns(fname_sgs,nx,ny,nz- nz_end,nz_tot,                    &
-    (/ 1, 1,   (nz-1)*coord + 1 /),                                            &
-    (/ nx, ny, (nz-1)*(coord+1) + 1 - nz_end /),                               &
-    x(1:nx) , y(1:ny) , zw(1:(nz-nz_end) ), 1,                                 &
+call write_parallel_cgns(fname_sgs,nx,ny,nz- nz_end,nz_tot,               &
+    (/ 1, 1,   (nz-1)*coord + 1 /),                                       &
+    (/ nx, ny, (nz-1)*(coord+1) + 1 - nz_end /),                          &
+    x(1:nx) , y(1:ny) , zw(1:(nz-nz_end) ), 1,                            &
     (/ 'SGS_eddy '/),  (/ tavg_sgs(1:nx,1:ny,1:nz- nz_end) % Nu_t /) )
 #else
-open(unit=13, file=fname_cs, form='unformatted', convert=write_endian,         &
+open(unit=13, file=fname_cs, form='unformatted', convert=write_endian,    &
     access='direct', recl=nx*ny*nz*rprec)
 write(13,rec=1) tavg_sgs(:nx,:ny,1:nz)%cs_opt2
 close(13)
 
-open(unit=13, file=fname_sgs, form='unformatted', convert=write_endian,        &
+open(unit=13, file=fname_sgs, form='unformatted', convert=write_endian,   &
     access='direct', recl=nx*ny*nz*rprec)
 write(13,rec=1) tavg_sgs(:nx,:ny,1:nz)%Nu_t
 close(13)
@@ -4617,16 +4632,16 @@ call write_parallel_cgns(fname_ryz,nx,ny,nz- nz_end,nz_tot,                 &
     budget(1:nx,1:ny,1:nz- nz_end) % prodyz,                                &
     budget(1:nx,1:ny,1:nz- nz_end) % pdissyz /) )
 
-!call write_parallel_cgns(fname_mke,nx,ny,nz- nz_end,nz_tot,                    &
-!    (/ 1, 1,   (nz-1)*coord + 1 /),                                            &
-!    (/ nx, ny, (nz-1)*(coord+1) + 1 - nz_end /),                               &
-!    x(1:nx) , y(1:ny) , z(1:(nz-nz_end) ), 6,                                  &
-!    (/ 'madv', 'mtfluc', 'mtpres', 'mtvisc', 'mpdiss', 'mdiss'/),              &
-!    (/ budget(1:nx,1:ny,1:nz- nz_end) % madv,                                  &
-!    budget(1:nx,1:ny,1:nz- nz_end) % mtfluc,                                   &
-!    budget(1:nx,1:ny,1:nz- nz_end) % mtpres,                                   &
-!    budget(1:nx,1:ny,1:nz- nz_end) % mtvisc,                                   &
-!    budget(1:nx,1:ny,1:nz- nz_end) % mpdiss,                                   &
+!call write_parallel_cgns(fname_mke,nx,ny,nz- nz_end,nz_tot,               &
+!    (/ 1, 1,   (nz-1)*coord + 1 /),                                       &
+!    (/ nx, ny, (nz-1)*(coord+1) + 1 - nz_end /),                          &
+!    x(1:nx) , y(1:ny) , z(1:(nz-nz_end) ), 6,                             &
+!    (/ 'madv', 'mtfluc', 'mtpres', 'mtvisc', 'mpdiss', 'mdiss'/),         &
+!    (/ budget(1:nx,1:ny,1:nz- nz_end) % madv,                             &
+!    budget(1:nx,1:ny,1:nz- nz_end) % mtfluc,                              &
+!    budget(1:nx,1:ny,1:nz- nz_end) % mtpres,                              &
+!    budget(1:nx,1:ny,1:nz- nz_end) % mtvisc,                              &
+!    budget(1:nx,1:ny,1:nz- nz_end) % mpdiss,                              &
 !    budget(1:nx,1:ny,1:nz- nz_end) % mdiss /) )
 
 #else
@@ -4723,46 +4738,46 @@ turbspecy = turbspec_compute(tavg_turbspecy, lbz)
 ! Write CGNS data
 
 ! Position variable needs to be corrected!
-call write_parallel_cgns(fname_sxvel,nx/2+1,ny,nz- nz_end,nz_tot,             &
-    (/ 1, 1,   (nz-1)*coord + 1 /),                                           &
-    (/ nx/2+1, ny, (nz-1)*(coord+1) + 1 - nz_end /),                          &
-    x(1:nx/2+1) , y(1:ny) , z(1:(nz-nz_end) ), 6,                             &
-    (/ 'sxuu', 'sxvv', 'sxww', 'sxuv', 'sxuw', 'sxvw'/),                      &
-    (/ turbspecx(1:nx/2+1,1:ny,1:nz- nz_end) % upup,                          &
-    turbspecx(1:nx/2+1,1:ny,1:nz- nz_end) % vpvp,                             &
-    turbspecx(1:nx/2+1,1:ny,1:nz- nz_end) % wpwp,                             &
-    turbspecx(1:nx/2+1,1:ny,1:nz- nz_end) % upvp,                             &
-    turbspecx(1:nx/2+1,1:ny,1:nz- nz_end) % upwp,                             &
+call write_parallel_cgns(fname_sxvel,nx/2+1,ny,nz- nz_end,nz_tot,        &
+    (/ 1, 1,   (nz-1)*coord + 1 /),                                      &
+    (/ nx/2+1, ny, (nz-1)*(coord+1) + 1 - nz_end /),                     &
+    x(1:nx/2+1) , y(1:ny) , z(1:(nz-nz_end) ), 6,                        &
+    (/ 'sxuu', 'sxvv', 'sxww', 'sxuv', 'sxuw', 'sxvw'/),                 &
+    (/ turbspecx(1:nx/2+1,1:ny,1:nz- nz_end) % upup,                     &
+    turbspecx(1:nx/2+1,1:ny,1:nz- nz_end) % vpvp,                        &
+    turbspecx(1:nx/2+1,1:ny,1:nz- nz_end) % wpwp,                        &
+    turbspecx(1:nx/2+1,1:ny,1:nz- nz_end) % upvp,                        &
+    turbspecx(1:nx/2+1,1:ny,1:nz- nz_end) % upwp,                        &
     turbspecx(1:nx/2+1,1:ny,1:nz- nz_end) % vpwp /) )
 
-call write_parallel_cgns(fname_sxvort,nx/2+1,ny,nz- nz_end,nz_tot,            &
-    (/ 1, 1,   (nz-1)*coord + 1 /),                                           &
-    (/ nx/2+1, ny, (nz-1)*(coord+1) + 1 - nz_end /),                          &
-    x(1:nx/2+1) , y(1:ny) , z(1:(nz-nz_end) ), 3,                             &
-    (/ 'sxvortx', 'sxvorty', 'sxvortz'/),                                     &
-    (/ turbspecx(1:nx/2+1,1:ny,1:nz- nz_end) % vortxp2,                       &
-    turbspecx(1:nx/2+1,1:ny,1:nz- nz_end) % vortyp2,                          &
+call write_parallel_cgns(fname_sxvort,nx/2+1,ny,nz- nz_end,nz_tot,       &
+    (/ 1, 1,   (nz-1)*coord + 1 /),                                      &
+    (/ nx/2+1, ny, (nz-1)*(coord+1) + 1 - nz_end /),                     &
+    x(1:nx/2+1) , y(1:ny) , z(1:(nz-nz_end) ), 3,                        &
+    (/ 'sxvortx', 'sxvorty', 'sxvortz'/),                                &
+    (/ turbspecx(1:nx/2+1,1:ny,1:nz- nz_end) % vortxp2,                  &
+    turbspecx(1:nx/2+1,1:ny,1:nz- nz_end) % vortyp2,                     &
     turbspecx(1:nx/2+1,1:ny,1:nz- nz_end) % vortzp2 /) )
 
-call write_parallel_cgns(fname_syvel,nx,ny/2+1,nz- nz_end,nz_tot,             &
-    (/ 1, 1,   (nz-1)*coord + 1 /),                                           &
-    (/ nx, ny/2+1, (nz-1)*(coord+1) + 1 - nz_end /),                          &
-    x(1:nx) , y(1:ny/2+1) , z(1:(nz-nz_end) ), 6,                             &
-    (/ 'syuu', 'syvv', 'syww', 'syuv', 'syuw', 'syvw'/),                      &
-    (/ turbspecy(1:nx,1:ny/2+1,1:nz- nz_end) % upup,                          &
-    turbspecy(1:nx,1:ny/2+1,1:nz- nz_end) % vpvp,                             &
-    turbspecy(1:nx,1:ny/2+1,1:nz- nz_end) % wpwp,                             &
-    turbspecy(1:nx,1:ny/2+1,1:nz- nz_end) % upvp,                             &
-    turbspecy(1:nx,1:ny/2+1,1:nz- nz_end) % upwp,                             &
+call write_parallel_cgns(fname_syvel,nx,ny/2+1,nz- nz_end,nz_tot,        &
+    (/ 1, 1,   (nz-1)*coord + 1 /),                                      &
+    (/ nx, ny/2+1, (nz-1)*(coord+1) + 1 - nz_end /),                     &
+    x(1:nx) , y(1:ny/2+1) , z(1:(nz-nz_end) ), 6,                        &
+    (/ 'syuu', 'syvv', 'syww', 'syuv', 'syuw', 'syvw'/),                 &
+    (/ turbspecy(1:nx,1:ny/2+1,1:nz- nz_end) % upup,                     &
+    turbspecy(1:nx,1:ny/2+1,1:nz- nz_end) % vpvp,                        &
+    turbspecy(1:nx,1:ny/2+1,1:nz- nz_end) % wpwp,                        &
+    turbspecy(1:nx,1:ny/2+1,1:nz- nz_end) % upvp,                        &
+    turbspecy(1:nx,1:ny/2+1,1:nz- nz_end) % upwp,                        &
     turbspecy(1:nx,1:ny/2+1,1:nz- nz_end) % vpwp /) )
 
-call write_parallel_cgns(fname_syvort,nx,ny/2+1,nz- nz_end,nz_tot,            &
-    (/ 1, 1,   (nz-1)*coord + 1 /),                                           &
-    (/ nx, ny/2+1, (nz-1)*(coord+1) + 1 - nz_end /),                          &
-    x(1:nx) , y(1:ny/2+1) , z(1:(nz-nz_end) ), 3,                             &
-    (/ 'syvortx', 'syvorty', 'syvortz'/),                                     &
-    (/ turbspecy(1:nx,1:ny/2+1,1:nz- nz_end) % vortxp2,                       &
-    turbspecy(1:nx,1:ny/2+1,1:nz- nz_end) % vortyp2,                          &
+call write_parallel_cgns(fname_syvort,nx,ny/2+1,nz- nz_end,nz_tot,       &
+    (/ 1, 1,   (nz-1)*coord + 1 /),                                      &
+    (/ nx, ny/2+1, (nz-1)*(coord+1) + 1 - nz_end /),                     &
+    x(1:nx) , y(1:ny/2+1) , z(1:(nz-nz_end) ), 3,                        &
+    (/ 'syvortx', 'syvorty', 'syvortz'/),                                &
+    (/ turbspecy(1:nx,1:ny/2+1,1:nz- nz_end) % vortxp2,                  &
+    turbspecy(1:nx,1:ny/2+1,1:nz- nz_end) % vortyp2,                     &
     turbspecy(1:nx,1:ny/2+1,1:nz- nz_end) % vortzp2 /) )
 
 #else
