@@ -2570,6 +2570,7 @@ if( tavg_calc ) then
         tavg_scal(i,j,k) % utheta = 0._rprec
         tavg_scal(i,j,k) % vtheta = 0._rprec
         tavg_scal(i,j,k) % wtheta = 0._rprec
+        tavg_scal(i,j,k) % pi_z   = 0._rprec
     end do
     end do
     end do
@@ -3057,7 +3058,7 @@ use sim_param, only : fxa, fya, fza
 
 #ifdef PPSCALARS
 use stat_defs, only : tavg_scal
-use scalars, only : theta
+use scalars, only : theta, pi_z
 #endif
 
 use functions, only : interp_to_uv_grid, interp_to_w_grid
@@ -3070,7 +3071,7 @@ real(rprec), allocatable, dimension(:,:,:) :: w_uv, u_w, v_w
 real(rprec), allocatable, dimension(:,:,:) :: pres_real
 real(rprec), allocatable, dimension(:,:,:) :: dwdx_uv, dwdy_uv, dudz_uv, dvdz_uv
 #ifdef PPSCALARS
-real(rprec) :: theta_p
+real(rprec) :: theta_p, pi_zp
 #endif
 
 allocate(w_uv(nx,ny,lbz:nz), u_w(nx,ny,lbz:nz), v_w(nx,ny,lbz:nz))
@@ -3147,6 +3148,7 @@ do i = 1, nx
 
 #ifdef PPSCALARS
     theta_p = theta(i,j,k) !! uv grid
+    pi_zp = pi_z(i,j,k) !! w grid
 
     tavg_scal(i,j,k) % theta = tavg_scal(i,j,k) % theta + theta_p * tavg_dt
 
@@ -3154,6 +3156,7 @@ do i = 1, nx
     tavg_scal(i,j,k) % utheta = tavg_scal(i,j,k) % utheta + u_p * theta_p * tavg_dt
     tavg_scal(i,j,k) % vtheta = tavg_scal(i,j,k) % vtheta + v_p * theta_p * tavg_dt
     tavg_scal(i,j,k) % wtheta = tavg_scal(i,j,k) % wtheta + w_p2 * theta_p * tavg_dt
+    tavg_scal(i,j,k) % pi_z = tavg_scal(i,j,k) % pi_z + pi_zp * tavg_dt
 #endif
 end do
 end do
@@ -3947,6 +3950,7 @@ do i = 1, Nx
     tavg_scal(i,j,k) % utheta = tavg_scal(i,j,k) % utheta / tavg_total_time
     tavg_scal(i,j,k) % vtheta = tavg_scal(i,j,k) % vtheta / tavg_total_time
     tavg_scal(i,j,k) % wtheta = tavg_scal(i,j,k) % wtheta / tavg_total_time
+    tavg_scal(i,j,k) % pi_z = tavg_scal(i,j,k) % pi_z / tavg_total_time
 #endif
 end do
 end do
@@ -4220,6 +4224,7 @@ call mpi_sync_real_array( tavg_scal(1:nx,1:ny,lbz:nz)%theta2, 0, MPI_SYNC_DOWNUP
 call mpi_sync_real_array( tavg_scal(1:nx,1:ny,lbz:nz)%utheta, 0, MPI_SYNC_DOWNUP )
 call mpi_sync_real_array( tavg_scal(1:nx,1:ny,lbz:nz)%vtheta, 0, MPI_SYNC_DOWNUP )
 call mpi_sync_real_array( tavg_scal(1:nx,1:ny,lbz:nz)%wtheta, 0, MPI_SYNC_DOWNUP )
+call mpi_sync_real_array( tavg_scal(1:nx,1:ny,lbz:nz)%pi_z, 0, MPI_SYNC_DOWNUP )
 #endif
 #ifdef PPOUTPUT_SGS
 call mpi_sync_real_array( tavg_sgs(1:nx,1:ny,lbz:nz)%cs_opt2, 0, MPI_SYNC_DOWNUP )
@@ -4574,16 +4579,17 @@ rs_scal = rs_scal_compute(tavg_scal, tavg, lbz)
 
 #ifdef PPCGNS
 ! Write CGNS data
-call write_parallel_cgns(fname_scal,nx,ny,nz- nz_end,nz_tot,                       &
-    (/ 1, 1,   (nz-1)*coord + 1 /),                                                &
-    (/ nx, ny, (nz-1)*(coord+1) + 1 - nz_end /),                                   &
-    x(1:nx) , y(1:ny) , z(1:(nz-nz_end) ), 6,                                      &
+call write_parallel_cgns(fname_scal,nx,ny,nz- nz_end,nz_tot,              &
+    (/ 1, 1,   (nz-1)*coord + 1 /),                                       &
+    (/ nx, ny, (nz-1)*(coord+1) + 1 - nz_end /),                          &
+    x(1:nx) , y(1:ny) , z(1:(nz-nz_end) ), 6,                             &
     (/ 'Meantheta', 'Meanthetap', 'Meanupthetap','Meanvpthetap','Meanwpthetap'/),  &
-    (/ tavg_scal(1:nx,1:ny,1:nz- nz_end) % theta,                                  &
-    rs_scal(1:nx,1:ny,1:nz- nz_end) % thetap2,                                     &
-    rs_scal(1:nx,1:ny,1:nz- nz_end) % upthetap,                                    &
-    rs_scal(1:nx,1:ny,1:nz- nz_end) % vpthetap,                                    &
-    rs_scal(1:nx,1:ny,1:nz- nz_end) % wpthetap /) )
+    (/ tavg_scal(1:nx,1:ny,1:nz- nz_end) % theta,                         &
+    rs_scal(1:nx,1:ny,1:nz- nz_end) % thetap2,                            &
+    rs_scal(1:nx,1:ny,1:nz- nz_end) % upthetap,                           &
+    rs_scal(1:nx,1:ny,1:nz- nz_end) % vpthetap,                           &
+    rs_scal(1:nx,1:ny,1:nz- nz_end) % wpthetap,                           &
+    tavg_scal(1:nx,1:ny,1:nz- nz_end) % pi_z /) )
 #else
 ! Write binary data
 open(unit=13, file=fname_scal, form='unformatted', convert=write_endian,           &
@@ -4593,6 +4599,7 @@ write(13,rec=2) rs_scal(:nx,:ny,1:nz)%thetap2
 write(13,rec=3) rs_scal(:nx,:ny,1:nz)%upthetap
 write(13,rec=4) rs_scal(:nx,:ny,1:nz)%vpthetap
 write(13,rec=5) rs_scal(:nx,:ny,1:nz)%wpthetap
+write(13,rec=6) tavg_scal(:nx,:ny,1:nz)%pi_z
 close(13)
 #endif
 

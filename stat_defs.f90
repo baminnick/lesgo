@@ -73,7 +73,7 @@ end type rs_t
 
 #ifdef PPSCALARS
 type tavg_scal_t
-    real(rprec) :: theta, theta2, utheta, vtheta, wtheta
+    real(rprec) :: theta, theta2, utheta, vtheta, wtheta, pi_z
 end type tavg_scal_t
 
 type rs_scal_t
