@@ -774,11 +774,6 @@ tf2_2=tf2**2
 !Get standard deviation of scalar quantity for the calculation of Tn
 call get_scalar_std(theta, sigma_theta)
 
-!if (coord==6) write(*,*) 'A. jt, coord, sigma_theta(nz-1)', jt, coord, sigma_theta(nz-1)
-!if (coord==6) write(*,*) 'A. jt, coord, sigma_theta(nz)', jt, coord, sigma_theta(nz)
-!if (coord==7) write(*,*) 'A. jt, coord, sigma_theta(0)', jt, coord, sigma_theta(0)
-!if (coord==7) write(*,*) 'A. jt, coord, sigma_theta(1)', jt, coord, sigma_theta(1)
-
 ! "Rearrange" I_* (running averages) so that their new positions (i,j,k)
 !  correspond to the current (i,j,k) particle
 call scalars_interpolag_Sdep()

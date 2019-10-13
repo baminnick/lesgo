@@ -332,6 +332,9 @@ use sim_param, only: u, v, w
 use messages
 use fft
 use functions, only: int2str
+#ifdef PPSCALARS
+use scalars, only: theta
+#endif
 
 implicit none
 
@@ -343,12 +346,20 @@ real(rprec), dimension(nx/2+1) :: ke, uu, vv, ww
 complex(rprec), dimension(nx/2+1) :: bigvhat, bigwhat
 real(rprec), dimension(nx/2+1) :: roll, bigvv, bigww
 #endif
+#ifdef PPSCALARS
+real(rprec), dimension(ld,ny,lbz:nz) :: theta_pert
+complex(rprec), dimension(nx/2+1) :: theta_hat
+real(rprec), dimension(nx/2+1) :: theta2
+#endif
 character(len = 10), dimension(nx/2+1) :: fhead !! file header variable
 
 #ifdef PPMPI
-    real(rprec), dimension(nx/2+1) :: ke_global
+real(rprec), dimension(nx/2+1) :: ke_global
 #ifdef PPOUTPUT_SSP
-    real(rprec), dimension(nx/2+1) :: uu_global, roll_global
+real(rprec), dimension(nx/2+1) :: uu_global, roll_global
+#endif
+#ifdef PPSCALARS
+real(rprec), dimension(nx/2+1) :: theta2_global
 #endif
 #endif
 
@@ -361,12 +372,18 @@ ww = 0.0_rprec
 bigvv = 0.0_rprec
 bigww = 0.0_rprec
 #endif
+#ifdef PPSCALARS
+theta2 = 0.0_rprec
+#endif
 
 #ifdef PPMPI
-    ke_global = 0.0_rprec
+ke_global = 0.0_rprec
 #ifdef PPOUTPUT_SSP
-    uu_global = 0.0_rprec
-    roll_global = 0.0_rprec
+uu_global = 0.0_rprec
+roll_global = 0.0_rprec
+#endif
+#ifdef PPSCALARS
+theta2_global = 0.0_rprec
 #endif
 #endif
 
@@ -381,6 +398,9 @@ endif
 call ypert(u,upert)
 call ypert(v,vpert)
 call ypert(w,wpert)
+#ifdef PPSCALARS
+call ypert(theta,theta_pert)
+#endif
 
 ! Consider each y and z location
 do jy = 1, ny
@@ -394,6 +414,9 @@ do jz = 1, nz-1
     call dfftw_execute_dft_r2c( forw_x, v(:,jy,jz), bigvhat)
     call dfftw_execute_dft_r2c( forw_x, w(:,jy,jz), bigwhat)
 #endif
+#ifdef PPSCALARS
+    call dfftw_execute_dft_r2c( forw_x, theta_pert(:,jy,jz), theta_hat)
+#endif
 
     ! Normalize transformed variables
     uhat = uhat / nx
@@ -402,6 +425,9 @@ do jz = 1, nz-1
 #ifdef PPOUTPUT_SSP
     bigvhat = bigvhat / nx
     bigwhat = bigwhat / nx
+#endif
+#ifdef PPSCALARS
+    theta_hat = theta_hat / nx
 #endif
 
     ! Sum over boundary points
@@ -412,6 +438,9 @@ do jz = 1, nz-1
     bigvv(1) = bigvv(1) + 0.5d0*real(bigvhat(1)*conjg(bigvhat(1)))
     bigww(1) = bigww(1) + 0.5d0*real(bigwhat(1)*conjg(bigwhat(1)))
 #endif
+#ifdef PPSCALARS
+    theta2(1) = theta2(1) + 0.5d0*real(theta_hat(1)*conjg(theta_hat(1)))
+#endif
 
     uu(lh) = uu(lh) + 0.5d0*real(uhat(lh)*conjg(uhat(lh)))
     vv(lh) = vv(lh) + 0.5d0*real(vhat(lh)*conjg(vhat(lh)))
@@ -419,6 +448,9 @@ do jz = 1, nz-1
 #ifdef PPOUTPUT_SSP
     bigvv(lh) = bigvv(lh) + 0.5d0*real(bigvhat(lh)*conjg(bigvhat(lh)))
     bigww(lh) = bigww(lh) + 0.5d0*real(bigwhat(lh)*conjg(bigwhat(lh)))
+#endif
+#ifdef PPSCALARS
+    theta2(lh) = theta2(lh) + 0.5d0*real(theta_hat(lh)*conjg(theta_hat(lh)))
 #endif
 
     ! Sum over interior points
@@ -429,6 +461,9 @@ do jz = 1, nz-1
 #ifdef PPOUTPUT_SSP
         bigvv(jx) = bigvv(jx) + 0.5d0*real(bigvhat(jx)*conjg(bigvhat(jx)))
         bigww(jx) = bigww(jx) + 0.5d0*real(bigwhat(jx)*conjg(bigwhat(jx)))
+#endif
+#ifdef PPSCALARS
+        theta2(jx) = theta2(jx) + 0.5d0*real(theta_hat(jx)*conjg(theta_hat(jx)))
 #endif
     enddo
 
@@ -442,6 +477,9 @@ ww = ww / L_y
 #ifdef PPOUTPUT_SSP
 bigvv = bigvv / L_y
 bigww = bigww / L_y
+#endif
+#ifdef PPSCALARS
+theta2 = theta2 / L_y
 #endif
 
 ! Make summations
@@ -457,11 +495,17 @@ call mpi_reduce (ke, ke_global, lh, MPI_RPREC, MPI_SUM, 0, comm, ierr)
 call mpi_reduce (uu, uu_global, lh, MPI_RPREC, MPI_SUM, 0, comm, ierr)
 call mpi_reduce (roll, roll_global, lh, MPI_RPREC, MPI_SUM, 0, comm, ierr)
 #endif
+#ifdef PPSCALARS
+call mpi_reduce ( theta2, theta2_global, lh, MPI_RPREC, MPI_SUM, 0, comm, ierr)
+#endif
 if (rank == 0) then  ! note that it's rank here, not coord
     ke = ke_global
 #ifdef PPOUTPUT_SSP
     uu = uu_global
     roll = roll_global
+#endif
+#ifdef PPSCALARS
+    theta2 = theta2_global
 #endif
 #endif
     ! kinetic energy of spanwise perturbations
@@ -484,6 +528,15 @@ if (rank == 0) then  ! note that it's rank here, not coord
         form='formatted', position='append')
     if (jt_total==wbase) write(2,*) 'jt_total ', fhead
     write(2,*) jt_total, roll
+    close(2)
+#endif
+
+#ifdef PPSCALARS
+    ! temperature "energy" of spanwise perturbations
+    open(2,file=path // 'output/theta_kx.dat', status='unknown',            &
+        form='formatted', position='append')
+    if (jt_total==wbase) write(2,*) 'jt_total ', fhead
+    write(2,*) jt_total, theta2
     close(2)
 #endif
 
