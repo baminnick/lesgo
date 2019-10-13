@@ -27,6 +27,9 @@ use level_set_base
 #ifdef PPOUTPUT_WMLES
 use tlwmles, only : hwm, nzr
 #endif
+#ifdef PPSCALARS
+use scalars
+#endif
 
 implicit none
 
@@ -214,6 +217,32 @@ write(2,i_fmt) 'zplane_nloc : ', zplane_nloc
 do n=1,zplane_nloc
   write(2,if_fmt) 'n, zplane_loc(n) : ', n, zplane_loc(n)
 enddo
+
+#ifdef PPSCALARS
+write(2,c_fmt) ''
+write(2,c_fmt) '---------------------------------------------------'
+write(2,c_fmt) 'SCALARS PARAMETERS'
+write(2,c_fmt) '---------------------------------------------------'
+write(2,i_fmt) 'lbc_scal : ', lbc_scal
+write(2,f_fmt) 'scal_bot : ', scal_bot
+write(2,f_fmt) 'flux_bot : ', flux_bot
+write(2,l_fmt) 'read_lbc_scal : ', read_lbc_scal
+write(2,f_fmt) 'lapse_rate : ', lapse_rate
+write(2,i_fmt) 'ubc_scal : ', ubc_scal
+write(2,f_fmt) 'scal_top : ', scal_top
+write(2,f_fmt) 'flux_top : ', flux_top
+!write(2,i_fmt) 'ic_z : ', ic_z ! need to generalize for arrays
+!write(2,i_fmt) 'ic_theta : ', ic_theta ! generalize for arrays
+write(2,f_fmt) 'g : ', g
+write(2,f_fmt) 'scal_source : ', scal_source
+write(2,f_fmt) 'zo_s : ', zo_s
+write(2,f_fmt) 'T_scale : ', T_scale
+write(2,l_fmt) 'passive_scalar : ', passive_scalar
+write(2,i_fmt) 'sgs_model_scal : ', sgs_model_scal
+write(2,f_fmt) 'Pr_sgs : ', Pr_sgs
+write(2,i_fmt) 'cs_count_scal : ', cs_count_scal
+write(2,i_fmt) 'dyn_init_scal : ', dyn_init_scal
+#endif
 
 #ifdef PPLVLSET
 write(2,c_fmt) ''
