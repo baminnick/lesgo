@@ -435,7 +435,6 @@ use derivatives, only : filt_da, ddx, ddy, ddz_uv, ddz_w
 use mpi_defs, only :  mpi_sync_real_array, MPI_SYNC_DOWNUP
 use test_filtermodule
 use fft
-use io, only : write_heat_flux_bot, write_heat_flux_top
 use messages, only : error
 
 integer :: k, jz_min, jz_max, jx, jy, jz
@@ -1248,5 +1247,75 @@ endif
 nullify(x,y,z)
 
 end subroutine scalars_interpolag_Sdep
+
+!*******************************************************************************
+subroutine write_heat_flux_bot()
+!*******************************************************************************
+use types, only : rprec
+use param, only : jt_total, wbase, nx, ny
+implicit none
+real(rprec) :: pizavg
+integer :: jx, jy
+
+! --------------------------- Heat Flux Statistics ---------------------------
+! Compute output to write to file
+pizavg = 0._rprec
+
+! Compute spatial average
+do jx = 1, nx
+do jy = 1, ny
+    pizavg = pizavg + pi_z(jx,jy,1)
+end do
+end do
+pizavg = pizavg/(nx*ny)
+
+! ------------------------------ Write to file -------------------------------
+open(2,file=path // 'output/heat_flux_bot.dat', status='unknown',          &
+    form='formatted', position='append')
+
+! one time header output
+if (jt_total==wbase) write(2,*)                                            &
+    'jt_total, heat_flux, flux_samp'
+
+! continual time-related output
+write(2,*) jt_total, pizavg, pi_z(nx/2,ny/2,1)
+close(2)
+
+end subroutine write_heat_flux_bot
+
+!*******************************************************************************
+subroutine write_heat_flux_top()
+!*******************************************************************************
+use types, only : rprec
+use param, only : jt_total, wbase, nx, ny, nz
+implicit none
+real(rprec) :: pizavg
+integer :: jx, jy
+
+! --------------------------- Heat Flux Statistics ---------------------------
+! Compute output to write to file
+pizavg = 0._rprec
+
+! Compute spatial average
+do jx = 1, nx
+do jy = 1, ny
+    pizavg = pizavg + pi_z(jx,jy,nz)
+end do
+end do
+pizavg = pizavg/(nx*ny)
+
+! ------------------------------ Write to file -------------------------------
+open(2,file=path // 'output/heat_flux_top.dat', status='unknown',          &
+    form='formatted', position='append')
+
+! one time header output
+if (jt_total==wbase) write(2,*)                                            &
+    'jt_total, heat_flux, flux_samp'
+
+! continual time-related output
+write(2,*) jt_total, pizavg, pi_z(nx/2,ny/2,nz)
+close(2)
+
+end subroutine write_heat_flux_top
 
 end module scalars
