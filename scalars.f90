@@ -28,12 +28,15 @@ implicit none
 save
 private
 
-public :: scalars_init, ic_scal, buoyancy_force, scalars_transport,            &
+public :: scalars_init, ic_scal, buoyancy_force, scalars_transport,     &
     scalars_checkpoint, obukhov, scalars_deriv
 
 real(rprec), public, dimension(:,:,:), allocatable :: theta, dTdx, dTdy, dTdz, &
     RHS_T, RHS_Tf, u_big, v_big, w_big, dTdx_big, dTdy_big, dTdz_big, RHS_big, &
     pi_x, pi_y, pi_z, div_pi, temp_var
+
+! Fourier variables
+real(rprec), dimension(:,:,:), allocatable :: thetaF, pi_zF
 
 ! SGS values
 integer, public :: sgs_model_scal
@@ -97,7 +100,7 @@ contains
 subroutine scalars_init
 !*******************************************************************************
 ! This subroutine initializes the variables for the scalars module
-use param, only : lbz, ld, ld_big, nx, ny, nz, ny2, u_star, z_i
+use param, only : lbz, ld, ld_big, nx, ny, nz, ny2, u_star, z_i, nxp
 use functions, only : count_lines
 integer :: i, num_t, fid
 
@@ -122,6 +125,10 @@ allocate ( div_pi(ld, ny, lbz:nz) ); div_pi = 0._rprec
 allocate ( temp_var(ld, ny, lbz:nz) ); temp_var = 0._rprec
 allocate ( Kappa_t(ld, ny, lbz:nz) ); Kappa_t = 0._rprec
 allocate ( sigma_theta(lbz:nz) ); sigma_theta = 0._rprec
+
+! Fourier variables
+allocate ( thetaF(nxp+2, ny, lbz:nz) ); thetaF = 0.0_rprec
+allocate ( pi_zF(nxp+2, ny, lbz:nz) ); pi_zF = 0.0_rprec
 
 ! Obukhov values (defaults for passive scalars)
 allocate ( psi_m(nx, ny) ); psi_m = 0._rprec
@@ -279,7 +286,8 @@ end subroutine ic_scal_les
 subroutine ic_scal_dns
 !*******************************************************************************
 use types, only : rprec
-use param, only : nx, ny, nz, lbz, L_z
+use param, only : nx, ny, nz, lbz, L_z, coord, fourier
+use derivatives, only : phys2wave
 #ifdef PPMAPPING
 use sim_param, only : mesh_stretch
 #endif
@@ -299,11 +307,18 @@ do jz = lbz, nz
 #else
     z = (real(jz,rprec) - 0.5_rprec) * dz
 #endif
+
     ! Parabolic temperature profile
-    ! theta_temp(jz) = z * (1._rprec - 0.5_rprec*z)
+    !theta_temp(jz) = z * (1._rprec - 0.5_rprec*z)
+    !if((coord == 0) .and. (jz == 0)) then
+    !    write(*,*) '--> Using initial parabolic theta profile'
+    !endif
 
     ! Linear temperature profile using fixed Temperature BC
     theta_temp(jz) = (scal_top - scal_bot)*z/L_z + scal_bot
+    if((coord == 0) .and. (jz==0)) then 
+        write(*,*) '--> Using initial linear theta profile'
+    endif
 
 end do
 
@@ -314,6 +329,12 @@ do jx = 1, nx
 end do
 end do
 end do
+
+! Transform temperature profile if starting a new simulation
+if (fourier) then
+    if (coord==0) write(*,*) '--> Transforming initial theta to kxspace'
+    call phys2wave( theta, lbz )
+endif
 
 end subroutine ic_scal_dns
 
@@ -427,11 +448,13 @@ end subroutine obukhov
 subroutine scalars_transport()
 !*******************************************************************************
 use param, only : lbz, nx, nz, nx2, ny2, nproc, coord, dt, tadv1, tadv2,       &
-    jt_total, dt, use_cfl_dt, jt, initu, comm, ierr, wbase
+    jt_total, dt, use_cfl_dt, jt, initu, comm, ierr, wbase, fourier, nxp
 use param, only : lbc_mom, ubc_mom, dz, molec, sgs
 use sim_param, only : u, v, w
 use sgs_param, only : nu, Nu_t, delta, S,S11, S12, S13, S22, S23, S33
-use derivatives, only : filt_da, ddx, ddy, ddz_uv, ddz_w
+use derivatives, only : filt_da, ddx, ddy, ddz_uv, ddz_w, convolve_rnl,        &
+    dft_direct_forw_2d_n_yonlyC_big, dft_direct_back_2d_n_yonlyC_big,          &
+    wave2physF
 use mpi_defs, only :  mpi_sync_real_array, MPI_SYNC_DOWNUP
 use test_filtermodule
 use fft
@@ -479,36 +502,89 @@ call to_big(dTdy, dTdy_big)
 call to_big(dTdz, dTdz_big)
 
 ! Normalization for FFTs
-const=1._rprec/(nx2*ny2)
+if (fourier) then
+    const = 1._rprec
+else
+    const=1._rprec/(nx2*ny2)
+endif
 
-! Interior of domain
-do k = jz_min, jz_max
-    RHS_big(:,:,k) = const*(u_big(:,:,k)*dTdx_big(:,:,k)                       &
-        + v_big(:,:,k)*dTdy_big(:,:,k)                                         &
-        + 0.5_rprec*w_big(:,:,k+1)*dTdz_big(:,:,k+1)                           &
-        + 0.5_rprec*w_big(:,:,k)*dTdz_big(:,:,k))
-end do
+if (fourier) then
+    ! Transform ky --> y
+    do k = lbz, nz
+        call dft_direct_back_2d_n_yonlyC_big( u_big(:,:,k) )
+        call dft_direct_back_2d_n_yonlyC_big( v_big(:,:,k) )
+        call dft_direct_back_2d_n_yonlyC_big( w_big(:,:,k) )
+    end do
+    do k = 1, nz
+        call dft_direct_back_2d_n_yonlyC_big( dTdx_big(:,:,k) )
+        call dft_direct_back_2d_n_yonlyC_big( dTdy_big(:,:,k) )
+        call dft_direct_back_2d_n_yonlyC_big( dTdz_big(:,:,k) )
+    end do
 
-! Bottom of domain
-if (coord == 0) then
-    RHS_big(:,:,1) = const*(u_big(:,:,1)*dTdx_big(:,:,1)                       &
-        + v_big(:,:,1)*dTdy_big(:,:,1)                                         &
-        + 0.5_rprec*w_big(:,:,2)*dTdz_big(:,:,2))
-end if
+    ! Interior of domain
+    do k = jz_min, jz_max
+        RHS_big(:,:,k) = const*(convolve_rnl(u_big(:,:,k),dTdx_big(:,:,k))   &
+            + convolve_rnl(v_big(:,:,k),dTdy_big(:,:,k))                     &
+            + 0.5_rprec*convolve_rnl(w_big(:,:,k+1),dTdz_big(:,:,k+1))       &
+            + 0.5_rprec*convolve_rnl(w_big(:,:,k),dTdz_big(:,:,k)))
+    end do
 
-! Top of domain
-if (coord == nproc-1) then
-    RHS_big(:,:,nz-1) = const*(u_big(:,:,nz-1)*dTdx_big(:,:,nz-1)              &
-        + v_big(:,:,nz-1)*dTdy_big(:,:,nz-1)                                   &
-        + 0.5_rprec*w_big(:,:,nz-1)*dTdz_big(:,:,nz-1))
-end if
+    ! Bottom of domain
+    if (coord == 0) then
+        RHS_big(:,:,1) = const*(convolve_rnl(u_big(:,:,1),dTdx_big(:,:,1))   &
+            + convolve_rnl(v_big(:,:,1),dTdy_big(:,:,1))                     &
+            + 0.5_rprec*convolve_rnl(w_big(:,:,2),dTdz_big(:,:,2)))
+    end if
+
+    ! Top of domain
+    if (coord == nproc-1) then
+        RHS_big(:,:,nz-1) = const*(convolve_rnl(u_big(:,:,nz-1),dTdx_big(:,:,nz-1))   &
+            + convolve_rnl(v_big(:,:,nz-1),dTdy_big(:,:,nz-1))                        &
+            + 0.5_rprec*convolve_rnl(w_big(:,:,nz-1),dTdz_big(:,:,nz-1)))
+    end if
+
+    ! Transform y --> ky
+    do k = 1, nz-1
+        call dft_direct_forw_2d_n_yonlyC_big( RHS_big(:,:,k) )
+    end do
+
+else
+    ! Interior of domain
+    do k = jz_min, jz_max
+        RHS_big(:,:,k) = const*(u_big(:,:,k)*dTdx_big(:,:,k)           &
+            + v_big(:,:,k)*dTdy_big(:,:,k)                             &
+            + 0.5_rprec*w_big(:,:,k+1)*dTdz_big(:,:,k+1)               &
+            + 0.5_rprec*w_big(:,:,k)*dTdz_big(:,:,k))
+    end do
+
+    ! Bottom of domain
+    if (coord == 0) then
+        RHS_big(:,:,1) = const*(u_big(:,:,1)*dTdx_big(:,:,1)           &
+            + v_big(:,:,1)*dTdy_big(:,:,1)                             &
+            + 0.5_rprec*w_big(:,:,2)*dTdz_big(:,:,2))
+    end if
+
+    ! Top of domain
+    if (coord == nproc-1) then
+        RHS_big(:,:,nz-1) = const*(u_big(:,:,nz-1)*dTdx_big(:,:,nz-1)  &
+            + v_big(:,:,nz-1)*dTdy_big(:,:,nz-1)                       &
+            + 0.5_rprec*w_big(:,:,nz-1)*dTdz_big(:,:,nz-1))
+    end if
+endif
 
 ! Put back on the smaller grid
 do k = 1, nz-1
-    call dfftw_execute_dft_r2c(forw_big, RHS_big(:,:,k), RHS_big(:,:,k))
+    if (.not. fourier) then
+        call dfftw_execute_dft_r2c(forw_big, RHS_big(:,:,k), RHS_big(:,:,k))
+    endif
     call unpadd(RHS_T(:,:,k), RHS_big(:,:,k))
-    call dfftw_execute_dft_c2r(back, RHS_T(:,:,k), RHS_T(:,:,k))
+    if (.not. fourier) then
+        call dfftw_execute_dft_c2r(back, RHS_T(:,:,k), RHS_T(:,:,k))
+    endif
 end do
+
+! debug
+!if (coord==0) write(*,*) 'A', RHS_T(1,1,:)
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Subgrid stress
@@ -612,6 +688,11 @@ pi_z(:,:,jz_max+1) = -Kappa_t(:,:,jz_max+1)*dTdz(:,:,jz_max+1)
 ! Divergence of heat flux
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
+! debug
+!if(coord==0) write(*,*) 'B1', pi_x(1,1,:)
+!if(coord==0) write(*,*) 'B2', pi_y(1,1,:)
+!if(coord==0) write(*,*) 'B3', pi_z(1,1,:)
+
 ! Store the derivatives in the stress values...can change if we need to output
 ! stuff
 call ddx(pi_x, div_pi, lbz)
@@ -620,45 +701,80 @@ div_pi = div_pi + temp_var
 call ddz_w(pi_z, temp_var, lbz)
 div_pi = div_pi + temp_var
 
+! debug
+!if(coord==0) write(*,*) 'C', div_pi(1,1,:)
+
 do k = 1, nz-1
     RHS_T(1:nx,:,k) = -RHS_T(1:nx,:,k) - div_pi(1:nx,:,k)
 end do
 
-! Add heat source
-do k = 1, nz-1
-    RHS_T(1:nx,:,k) = RHS_T(1:nx,:,k) + scal_source
-end do
+! debug
+!if(coord==0) write(*,*) 'D', RHS_T(1,1,:)
+
+! Add heat source - assumed constant and uniform
+if (fourier) then
+    RHS_T(1,1,1:nz-1) = RHS_T(1,1,1:nz-1) + scal_source
+else
+    RHS_T(1:nx,:,1:nz-1) = RHS_T(1:nx,:,1:nz-1) + scal_source
+endif
 
 ! Euler integration check
 if ((jt_total == 1) .and. (inits)) then
     RHS_Tf = RHS_T
 end if
 
+! debug
+if(coord==0) write(*,*) 'E1', theta(1,1,:)
+if(coord==0) write(*,*) 'E2', RHS_T(1,1,:)
+
 ! Take a step
 theta(1:nx,:,1:nz-1) = theta(1:nx,:,1:nz-1)                                    &
     + dt*(tadv1*RHS_T(1:nx,:,1:nz-1) + tadv2*RHS_Tf(1:nx,:,1:nz-1))
 
+! debug
+if (coord==0) write(*,*) 'F', theta(1,1,:)
+
 if (modulo (jt_total, wbase) == 0) then
+    if (fourier) then
+        call wave2physF( theta, thetaF )
+        call wave2physF( pi_z, pi_zF )
+
+! debug
+if (coord==0) write(*,*) 'G', theta(1,1,:), thetaF(1,1,:)
+    endif
 #ifdef PPMPI
-if(coord == 0) then
-    call write_heat_flux_bot()
-    write(*,'(a)') '======================= SCALARS ========================'
-    write(*,*) 'Bottom theta: ', theta(nx/2,ny/2,1:2)
-end if
-call mpi_barrier(comm, ierr)
-if(coord == nproc-1) then
-    call write_heat_flux_top()
-    write(*,*) 'Top theta: ', theta(nx/2,ny/2,nz-2:nz-1)
-    write(*,'(a)') '======================= SCALARS ========================'
-end if
-call mpi_barrier(comm, ierr)
+    if(coord == 0) then
+        call write_heat_flux_bot()
+        write(*,'(a)') '======================= SCALARS ========================'
+        if (fourier) then
+            write(*,*) 'Bottom theta: ', thetaF(nxp/2,ny/2,1:2)
+        else
+            write(*,*) 'Bottom theta: ', theta(nx/2,ny/2,1:2)
+        endif
+    end if
+    call mpi_barrier(comm, ierr)
+    if(coord == nproc-1) then
+        call write_heat_flux_top()
+        if (fourier) then
+            write(*,*) 'Top theta: ', thetaF(nxp/2,ny/2,nz-2:nz-1)
+        else
+            write(*,*) 'Top theta: ', theta(nx/2,ny/2,nz-2:nz-1)
+        endif
+        write(*,'(a)') '======================= SCALARS ========================'
+    end if
+    call mpi_barrier(comm, ierr)
 #else
-call write_heat_flux_bot()
-call write_heat_flux_top()
-write(*,'(a)') '======================= SCALARS ========================'
-write(*,*) 'Bottom theta: ', theta(nx/2,ny/2,1:2)
-write(*,*) 'Top theta: ', theta(nx/2,ny/2,nz-2:nz-1)
-write(*,'(a)') '======================= SCALARS ========================'
+    call write_heat_flux_bot()
+    call write_heat_flux_top()
+    write(*,'(a)') '======================= SCALARS ========================'
+    if (fourier) then
+        write(*,*) 'Bottom theta: ', thetaF(nxp/2,ny/2,1:2)
+        write(*,*) 'Top theta: ', thetaF(nxp/2,ny/2,nz-2:nz-1)
+    else
+        write(*,*) 'Bottom theta: ', theta(nx/2,ny/2,1:2)
+        write(*,*) 'Top theta: ', theta(nx/2,ny/2,nz-2:nz-1)
+    endif
+    write(*,'(a)') '======================= SCALARS ========================'
 #endif
 endif
 
@@ -667,12 +783,11 @@ call mpi_sync_real_array(theta, 0, MPI_SYNC_DOWNUP)
 #endif
 
 ! Use gradient at top to project temperature above domain
-if (ubc_mom == 0) then
+if ((sgs) .and. (.not. molec)) then !! LES BC
 if (coord == nproc-1) then
     theta(:,:,nz) = theta(:,:,nz-1) + lapse_rate*dz
 end if
 end if
-! lapse_rate not applied if there is a top wall
 
 end subroutine scalars_transport
 
@@ -680,7 +795,7 @@ end subroutine scalars_transport
 subroutine to_big(a, a_big)
 !*******************************************************************************
 use fft
-use param, only : lbz, nx, ny, nz
+use param, only : lbz, nx, ny, nz, fourier
 
 real(rprec), dimension(ld, ny, lbz:nz), intent(inout) ::  a
 real(rprec), dimension(ld_big, ny2, lbz:nz), intent(inout) :: a_big
@@ -690,12 +805,21 @@ real(rprec) :: const
 
 ! Set variables onto big domain for multiplication in physical space and
 ! dealiasing
-const = 1._rprec/(nx*ny)
+if (fourier) then
+    const = 1._rprec
+else
+    const = 1._rprec/(nx*ny)
+endif
+
 do jz = lbz, nz
     temp_var(:,:,jz) = const*a(:,:,jz)
-    call dfftw_execute_dft_r2c(forw, temp_var(:,:,jz), temp_var(:,:,jz))
+    if (.not. fourier) then
+        call dfftw_execute_dft_r2c(forw, temp_var(:,:,jz), temp_var(:,:,jz))
+    endif
     call padd(a_big(:,:,jz), temp_var(:,:,jz))
-    call dfftw_execute_dft_c2r(back_big, a_big(:,:,jz), a_big(:,:,jz))
+    if (.not. fourier) then
+        call dfftw_execute_dft_c2r(back_big, a_big(:,:,jz), a_big(:,:,jz))
+    endif
 end do
 
 end subroutine to_big
@@ -1252,7 +1376,7 @@ end subroutine scalars_interpolag_Sdep
 subroutine write_heat_flux_bot()
 !*******************************************************************************
 use types, only : rprec
-use param, only : jt_total, wbase, nx, ny
+use param, only : jt_total, wbase, nx, ny, nxp, fourier
 implicit none
 real(rprec) :: pizavg
 integer :: jx, jy
@@ -1262,12 +1386,21 @@ integer :: jx, jy
 pizavg = 0._rprec
 
 ! Compute spatial average
-do jx = 1, nx
-do jy = 1, ny
-    pizavg = pizavg + pi_z(jx,jy,1)
-end do
-end do
-pizavg = pizavg/(nx*ny)
+if (fourier) then
+    do jx = 1, nxp
+    do jy = 1, ny
+        pizavg = pizavg + pi_zF(jx,jy,1)
+    end do
+    end do
+    pizavg = pizavg/(nxp*ny)
+else
+    do jx = 1, nx
+    do jy = 1, ny
+        pizavg = pizavg + pi_z(jx,jy,1)
+    end do
+    end do
+    pizavg = pizavg/(nx*ny)
+end if
 
 ! ------------------------------ Write to file -------------------------------
 open(2,file=path // 'output/heat_flux_bot.dat', status='unknown',          &
@@ -1278,7 +1411,11 @@ if (jt_total==wbase) write(2,*)                                            &
     'jt_total, heat_flux, flux_samp'
 
 ! continual time-related output
-write(2,*) jt_total, pizavg, pi_z(nx/2,ny/2,1)
+if (fourier) then
+    write(2,*) jt_total, pizavg, pi_zF(nxp/2,ny/2,1)
+else
+    write(2,*) jt_total, pizavg, pi_z(nx/2,ny/2,1)
+end if
 close(2)
 
 end subroutine write_heat_flux_bot
@@ -1287,7 +1424,7 @@ end subroutine write_heat_flux_bot
 subroutine write_heat_flux_top()
 !*******************************************************************************
 use types, only : rprec
-use param, only : jt_total, wbase, nx, ny, nz
+use param, only : jt_total, wbase, nx, ny, nz, nxp, fourier
 implicit none
 real(rprec) :: pizavg
 integer :: jx, jy
@@ -1297,12 +1434,21 @@ integer :: jx, jy
 pizavg = 0._rprec
 
 ! Compute spatial average
-do jx = 1, nx
-do jy = 1, ny
-    pizavg = pizavg + pi_z(jx,jy,nz)
-end do
-end do
-pizavg = pizavg/(nx*ny)
+if (fourier) then
+    do jx = 1, nxp
+    do jy = 1, ny
+        pizavg = pizavg + pi_z(jx,jy,nz)
+    end do
+    end do
+    pizavg = pizavg/(nxp*ny)
+else
+    do jx = 1, nx
+    do jy = 1, ny
+        pizavg = pizavg + pi_z(jx,jy,nz)
+    end do
+    end do
+    pizavg = pizavg/(nx*ny)
+end if
 
 ! ------------------------------ Write to file -------------------------------
 open(2,file=path // 'output/heat_flux_top.dat', status='unknown',          &
@@ -1313,7 +1459,11 @@ if (jt_total==wbase) write(2,*)                                            &
     'jt_total, heat_flux, flux_samp'
 
 ! continual time-related output
-write(2,*) jt_total, pizavg, pi_z(nx/2,ny/2,nz)
+if (fourier) then
+    write(2,*) jt_total, pizavg, pi_z(nxp/2,ny/2,nz)
+else
+    write(2,*) jt_total, pizavg, pi_z(nx/2,ny/2,nz)
+endif
 close(2)
 
 end subroutine write_heat_flux_top

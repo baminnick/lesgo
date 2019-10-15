@@ -429,14 +429,14 @@ time_loop: do jt_step = nstart, nsteps
     !//////////////////////////////////////////////////////
     ! Calculate intermediate velocity field
     !   only 1:nz-1 are valid
-    u(:,:,1:nz-1) = u(:,:,1:nz-1) +                                     &
+    u(:,:,1:nz-1) = u(:,:,1:nz-1) +                            &
         dt * ( tadv1 * RHSx(:,:,1:nz-1) + tadv2 * RHSx_f(:,:,1:nz-1) )
-    v(:,:,1:nz-1) = v(:,:,1:nz-1) +                                     &
+    v(:,:,1:nz-1) = v(:,:,1:nz-1) +                            &
         dt * ( tadv1 * RHSy(:,:,1:nz-1) + tadv2 * RHSy_f(:,:,1:nz-1) )
-    w(:,:,1:nz-1) = w(:,:,1:nz-1) +                                     &
+    w(:,:,1:nz-1) = w(:,:,1:nz-1) +                            &
         dt * ( tadv1 * RHSz(:,:,1:nz-1) + tadv2 * RHSz_f(:,:,1:nz-1) )
     if (coord == nproc-1) then
-        w(:,:,nz) = w(:,:,nz) +                                         &
+        w(:,:,nz) = w(:,:,nz) +                                &
             dt * ( tadv1 * RHSz(:,:,nz) + tadv2 * RHSz_f(:,:,nz) )
     end if
 
