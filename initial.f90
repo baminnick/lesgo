@@ -616,8 +616,8 @@ do jz = 1, nz
 
 end do
 
-rms = 0.0_rprec !! Don't add noise for debugging
-!rms = 3._rprec
+!rms = 0.0_rprec !! Don't add noise for debugging
+rms = 3._rprec
 sigma_rv = 0.289_rprec
 
 ! Fill u, v, and w with uniformly distributed random numbers between 0 and 1
