@@ -583,9 +583,6 @@ do k = 1, nz-1
     endif
 end do
 
-! debug
-!if (coord==0) write(*,*) 'A', RHS_T(1,1,:)
-
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Subgrid stress
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -688,11 +685,6 @@ pi_z(:,:,jz_max+1) = -Kappa_t(:,:,jz_max+1)*dTdz(:,:,jz_max+1)
 ! Divergence of heat flux
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-! debug
-!if(coord==0) write(*,*) 'B1', pi_x(1,1,:)
-!if(coord==0) write(*,*) 'B2', pi_y(1,1,:)
-!if(coord==0) write(*,*) 'B3', pi_z(1,1,:)
-
 ! Store the derivatives in the stress values...can change if we need to output
 ! stuff
 call ddx(pi_x, div_pi, lbz)
@@ -701,15 +693,9 @@ div_pi = div_pi + temp_var
 call ddz_w(pi_z, temp_var, lbz)
 div_pi = div_pi + temp_var
 
-! debug
-!if(coord==0) write(*,*) 'C', div_pi(1,1,:)
-
 do k = 1, nz-1
     RHS_T(1:nx,:,k) = -RHS_T(1:nx,:,k) - div_pi(1:nx,:,k)
 end do
-
-! debug
-!if(coord==0) write(*,*) 'D', RHS_T(1,1,:)
 
 ! Add heat source - assumed constant and uniform
 if (fourier) then
@@ -723,24 +709,15 @@ if ((jt_total == 1) .and. (inits)) then
     RHS_Tf = RHS_T
 end if
 
-! debug
-if(coord==0) write(*,*) 'E1', theta(1,1,:)
-if(coord==0) write(*,*) 'E2', RHS_T(1,1,:)
-
 ! Take a step
 theta(1:nx,:,1:nz-1) = theta(1:nx,:,1:nz-1)                                    &
     + dt*(tadv1*RHS_T(1:nx,:,1:nz-1) + tadv2*RHS_Tf(1:nx,:,1:nz-1))
-
-! debug
-if (coord==0) write(*,*) 'F', theta(1,1,:)
 
 if (modulo (jt_total, wbase) == 0) then
     if (fourier) then
         call wave2physF( theta, thetaF )
         call wave2physF( pi_z, pi_zF )
 
-! debug
-if (coord==0) write(*,*) 'G', theta(1,1,:), thetaF(1,1,:)
     endif
 #ifdef PPMPI
     if(coord == 0) then

@@ -154,7 +154,7 @@ end subroutine ws_free_ubc
 !*******************************************************************************
 subroutine ws_dns_lbc
 !*******************************************************************************
-use param, only : nx, ny, nu_molec, z_i, u_star, ubot 
+use param, only : nx, ny, nu_molec, z_i, u_star, ubot, fourier
 #ifdef PPMAPPING
 use sim_param, only : mesh_stretch
 #else
@@ -185,16 +185,32 @@ do j = 1, ny
 end do
 
 #ifdef PPSCALARS
-select case (lbc_scal)
-    ! prescribed temperature
-    case (0)
-        dTdz(:,:,1) = ( theta(:,:,1) - scal_bot ) / denom
+if (fourier) then
+    ! Treat non-zero modes first, then the zero-mode
+    select case (lbc_scal)
+        ! prescribed temperature
+        case (0)
+            dTdz(:,:,1) = theta(:,:,1) / denom
+            dTdz(1,1,1) = ( theta(1,1,1) - scal_bot ) / denom
 
-    ! prescribed flux
-    case (1:)
-        dTdz(:,:,1) = flux_bot
+        ! prescribed flux
+        case (1:)
+            dTdz(:,:,1) = 0.0_rprec
+            dTdz(1,1,1) = flux_bot
 
     end select
+else
+    select case (lbc_scal)
+        ! prescribed temperature
+        case (0)
+            dTdz(:,:,1) = ( theta(:,:,1) - scal_bot ) / denom
+
+        ! prescribed flux
+        case (1:)
+            dTdz(:,:,1) = flux_bot
+
+    end select
+endif
 
 pi_z(:,:,1) = -(nu_molec/Pr_sgs)*dTdz(:,:,1) !! Pr_sgs should be constant
 #endif
@@ -204,7 +220,7 @@ end subroutine ws_dns_lbc
 !*******************************************************************************
 subroutine ws_dns_ubc
 !*******************************************************************************
-use param, only : nx, ny, nu_molec, z_i, u_star, utop, L_z
+use param, only : nx, ny, nu_molec, z_i, u_star, utop, L_z, fourier
 #ifdef PPMAPPING
 use sim_param, only : mesh_stretch
 #else
@@ -235,16 +251,32 @@ do j = 1, ny
 end do
 
 #ifdef PPSCALARS
-select case (ubc_scal)
-    ! prescribed temperature
-    case (0)
-        dTdz(:,:,nz) = ( scal_top - theta(:,:,nz-1) ) / denom
+if (fourier) then
+    ! Treat non-zero modes first, then the zero-mode
+    select case (ubc_scal)
+        ! prescribed temperature
+        case (0)
+            dTdz(:,:,nz) = -theta(:,:,nz-1) / denom
+            dTdz(1,1,nz) = ( scal_top - theta(1,1,nz-1) ) / denom
 
-    ! prescribed flux
-    case (1:)
-        dTdz(:,:,nz) = flux_top
+        ! prescribed flux
+        case (1:)
+            dTdz(:,:,nz) = 0.0_rprec
+            dTdz(1,1,nz) = flux_top
 
-    end select
+        end select
+else
+    select case (ubc_scal)
+        ! prescribed temperature
+        case (0)
+            dTdz(:,:,nz) = ( scal_top - theta(:,:,nz-1) ) / denom
+
+        ! prescribed flux
+        case (1:)
+            dTdz(:,:,nz) = flux_top
+
+        end select
+endif
 
 pi_z(:,:,nz) = -(nu_molec/Pr_sgs)*dTdz(:,:,nz) !! Pr_sgs should be constant
 #endif

@@ -459,7 +459,6 @@ subroutine wave2physF( uhat, u )
 use types, only : rprec
 use param, only : nxp, ny, nz, lbz, kx_num, kxs_in
 use fft
-use param, only : coord !! debug
 implicit none
 
 integer :: jx, jz, ii, ir, iih, irh
@@ -481,10 +480,6 @@ do jx = 1, kx_num
 
     u(ir:ii, :, :) = uhat( irh:iih, :, :)
 end do
-
-! debug
-if(coord==0) write(*,*) 'H1', u(:,1,1), uhat(:,1,1)
-if(coord==0) write(*,*) 'H2', u(1,1,:), uhat(1,1,:)
 
 ! Loop through horizontal slices
 do jz = lbz, nz
