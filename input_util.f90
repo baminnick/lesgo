@@ -457,6 +457,8 @@ do
                 Read (buff(equal_pos+1:), *) lbc_mom
             case ('UBC_MOM')
                 Read (buff(equal_pos+1:), *) ubc_mom
+            case ('IHWM')
+                Read (buff(equal_pos+1:), *) ihwm
             case ('TLWM_KXIN')
                 call parse_vector( buff(equal_pos+1:), tlwm_kxnum, tlwm_kxin )
             case ('UBOT')

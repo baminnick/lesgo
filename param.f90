@@ -215,6 +215,9 @@ logical :: inilag = .true.
 integer :: lbc_mom = 1
 integer :: ubc_mom = 0
 
+! Inputs for All TLWMLES
+integer :: ihwm = 1
+
 ! Inputs for RNL TLWMLES
 real(rprec), allocatable, dimension(:) :: tlwm_kxin
 integer :: tlwm_kxnum = 3
