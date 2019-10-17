@@ -856,6 +856,8 @@ do
                 call parse_vector( buff(equal_pos+1:), ic_nloc, ic_z )
             case ('IC_THETA')
                 call parse_vector( buff(equal_pos+1:), ic_nloc, ic_theta )
+            case ('IC_THETA_DNS')
+                read (buff(equal_pos+1:), *) ic_theta_dns
             case ('G')
                 read (buff(equal_pos+1:), *) g
             case ('SCAL_SOURCE')

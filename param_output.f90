@@ -233,6 +233,7 @@ write(2,f_fmt) 'scal_top : ', scal_top
 write(2,f_fmt) 'flux_top : ', flux_top
 !write(2,i_fmt) 'ic_z : ', ic_z ! need to generalize for arrays
 !write(2,i_fmt) 'ic_theta : ', ic_theta ! generalize for arrays
+write(2,i_fmt) 'ic_theta_dns : ', ic_theta_dns
 write(2,f_fmt) 'g : ', g
 write(2,f_fmt) 'scal_source : ', scal_source
 write(2,f_fmt) 'zo_s : ', zo_s

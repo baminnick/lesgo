@@ -90,6 +90,7 @@ logical, public :: read_lbc_scal = .false.
 integer, public :: ubc_scal = 0
 real(rprec), public :: scal_top = 0._rprec
 real(rprec), public :: flux_top = 0._rprec
+integer, public :: ic_theta_dns = 1
 
 ! Interpolation of bottom boundary condition
 real(rprec), dimension(:), allocatable :: t_interp, lbc_interp
@@ -308,18 +309,21 @@ do jz = lbz, nz
     z = (real(jz,rprec) - 0.5_rprec) * dz
 #endif
 
-    ! Parabolic temperature profile
-    !theta_temp(jz) = z * (1._rprec - 0.5_rprec*z)
-    !if((coord == 0) .and. (jz == 0)) then
-    !    write(*,*) '--> Using initial parabolic theta profile'
-    !endif
+    select case (ic_theta_dns)
+        ! Parabolic temperature profile
+        case (1)
+        theta_temp(jz) = z * (1._rprec - 0.5_rprec*z)
+        if((coord == 0) .and. (jz == 0)) then
+            write(*,*) '--> Using initial parabolic theta profile'
+        endif
 
-    ! Linear temperature profile using fixed Temperature BC
-    theta_temp(jz) = (scal_top - scal_bot)*z/L_z + scal_bot
-    if((coord == 0) .and. (jz==0)) then 
-        write(*,*) '--> Using initial linear theta profile'
-    endif
-
+        ! Linear temperature profile using fixed Temperature BC
+        case (2)
+        theta_temp(jz) = (scal_top - scal_bot)*z/L_z + scal_bot
+        if((coord == 0) .and. (jz==0)) then 
+            write(*,*) '--> Using initial linear theta profile'
+        endif
+    end select
 end do
 
 do jz = lbz, nz
