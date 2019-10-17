@@ -309,16 +309,16 @@ do jz = lbz, nz
 #endif
 
     ! Parabolic temperature profile
-    !theta_temp(jz) = z * (1._rprec - 0.5_rprec*z)
-    !if((coord == 0) .and. (jz == 0)) then
-    !    write(*,*) '--> Using initial parabolic theta profile'
-    !endif
+    theta_temp(jz) = z * (1._rprec - 0.5_rprec*z)
+    if((coord == 0) .and. (jz == 0)) then
+        write(*,*) '--> Using initial parabolic theta profile'
+    endif
 
     ! Linear temperature profile using fixed Temperature BC
-    theta_temp(jz) = (scal_top - scal_bot)*z/L_z + scal_bot
-    if((coord == 0) .and. (jz==0)) then 
-        write(*,*) '--> Using initial linear theta profile'
-    endif
+    !theta_temp(jz) = (scal_top - scal_bot)*z/L_z + scal_bot
+    !if((coord == 0) .and. (jz==0)) then 
+    !    write(*,*) '--> Using initial linear theta profile'
+    !endif
 
 end do
 
@@ -461,7 +461,7 @@ use fft
 use messages, only : error
 
 integer :: k, jz_min, jz_max, jx, jy, jz
-real(rprec) :: const
+real(rprec) :: const, scal_sum
 
 ! We do not advance the ground nodes, so start at k=2.
 ! For the MPI case, the means that we start from jz=2
@@ -717,16 +717,17 @@ if (modulo (jt_total, wbase) == 0) then
     if (fourier) then
         call wave2physF( theta, thetaF )
         call wave2physF( pi_z, pi_zF )
-
     endif
+    call total_scal(scal_sum)
 #ifdef PPMPI
     if(coord == 0) then
         call write_heat_flux_bot()
         write(*,'(a)') '======================= SCALARS ========================'
+        write(*,*) 'Sum theta: ', scal_sum
         if (fourier) then
-            write(*,*) 'Bottom theta: ', thetaF(nxp/2,ny/2,1:2)
+            write(*,*) 'Bot theta: ', thetaF(nxp/2,ny/2,1:2)
         else
-            write(*,*) 'Bottom theta: ', theta(nx/2,ny/2,1:2)
+            write(*,*) 'Bot theta: ', theta(nx/2,ny/2,1:2)
         endif
     end if
     call mpi_barrier(comm, ierr)
@@ -744,11 +745,12 @@ if (modulo (jt_total, wbase) == 0) then
     call write_heat_flux_bot()
     call write_heat_flux_top()
     write(*,'(a)') '======================= SCALARS ========================'
+    write(*,*) 'Sum theta: ', scal_sum
     if (fourier) then
-        write(*,*) 'Bottom theta: ', thetaF(nxp/2,ny/2,1:2)
+        write(*,*) 'Bot theta: ', thetaF(nxp/2,ny/2,1:2)
         write(*,*) 'Top theta: ', thetaF(nxp/2,ny/2,nz-2:nz-1)
     else
-        write(*,*) 'Bottom theta: ', theta(nx/2,ny/2,1:2)
+        write(*,*) 'Bot theta: ', theta(nx/2,ny/2,1:2)
         write(*,*) 'Top theta: ', theta(nx/2,ny/2,nz-2:nz-1)
     endif
     write(*,'(a)') '======================= SCALARS ========================'
@@ -1384,8 +1386,7 @@ open(2,file=path // 'output/heat_flux_bot.dat', status='unknown',          &
     form='formatted', position='append')
 
 ! one time header output
-if (jt_total==wbase) write(2,*)                                            &
-    'jt_total, heat_flux, flux_samp'
+if (jt_total==wbase) write(2,*) 'jt_total, heat_flux, flux_samp'
 
 ! continual time-related output
 if (fourier) then
@@ -1414,7 +1415,7 @@ pizavg = 0._rprec
 if (fourier) then
     do jx = 1, nxp
     do jy = 1, ny
-        pizavg = pizavg + pi_z(jx,jy,nz)
+        pizavg = pizavg + pi_zF(jx,jy,nz)
     end do
     end do
     pizavg = pizavg/(nxp*ny)
@@ -1432,17 +1433,73 @@ open(2,file=path // 'output/heat_flux_top.dat', status='unknown',          &
     form='formatted', position='append')
 
 ! one time header output
-if (jt_total==wbase) write(2,*)                                            &
-    'jt_total, heat_flux, flux_samp'
+if (jt_total==wbase) write(2,*) 'jt_total, heat_flux, flux_samp'
 
 ! continual time-related output
 if (fourier) then
-    write(2,*) jt_total, pizavg, pi_z(nxp/2,ny/2,nz)
+    write(2,*) jt_total, pizavg, pi_zF(nxp/2,ny/2,nz)
 else
     write(2,*) jt_total, pizavg, pi_z(nx/2,ny/2,nz)
 endif
 close(2)
 
 end subroutine write_heat_flux_top
+
+!*******************************************************************************
+subroutine total_scal(scal_sum)
+!*******************************************************************************
+use types, only : rprec
+use param
+use messages
+implicit none
+integer :: jx, jy, jz
+real(rprec):: scal_sum
+#ifdef PPMPI
+real(rprec) :: scal_global
+#endif
+
+! Initialize variables
+scal_sum = 0._rprec
+
+! Perform spatial averaging
+if (fourier) then
+    do jz = 1, nz-1
+    do jy = 1, ny
+    do jx = 1, nxp
+        scal_sum = scal_sum + thetaF(jx,jy,jz)
+    end do
+    end do
+    end do
+    scal_sum = scal_sum / (nxp*ny*(nz-1))
+else
+    do jz = 1, nz-1
+    do jy = 1, ny
+    do jx = 1, nx
+        scal_sum = scal_sum + theta(jx,jy,jz)
+    end do
+    end do
+    end do
+    scal_sum = scal_sum / (nx*ny*(nz-1))
+endif
+
+#ifdef PPMPI
+call mpi_reduce (scal_sum, scal_global, 1, MPI_RPREC, MPI_SUM, 0, comm, ierr)
+if (rank == 0) then  ! note that it's rank here, not coord
+    scal_sum = scal_global/nproc
+#endif
+    open(2,file=path // 'output/check_scal.dat', status='unknown',        &
+        form='formatted', position='append')
+
+    ! one time header output
+    if (jt_total==wbase) write(2,*) 'jt_total, scal_sum'
+
+    ! continual time-related output
+    write(2,*) jt_total, scal_sum
+    close(2)
+#ifdef PPMPI
+end if
+#endif
+
+end subroutine total_scal
 
 end module scalars
