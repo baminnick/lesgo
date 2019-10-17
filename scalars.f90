@@ -36,7 +36,7 @@ real(rprec), public, dimension(:,:,:), allocatable :: theta, dTdx, dTdy, dTdz, &
     pi_x, pi_y, pi_z, div_pi, temp_var
 
 ! Fourier variables
-real(rprec), dimension(:,:,:), allocatable :: thetaF, pi_zF
+real(rprec), public, dimension(:,:,:), allocatable :: thetaF, pi_zF
 
 ! SGS values
 integer, public :: sgs_model_scal

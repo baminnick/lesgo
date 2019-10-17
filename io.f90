@@ -1454,6 +1454,9 @@ use sim_param, only : dudx, dudy, dudz, dvdx, dvdy, dvdz, dwdx, dwdy, dwdz
 #ifdef PPOUTPUT_BUDGET
 use sim_param, only : p, dpdx, dpdy, dpdz, divtx, divty, divtz
 #endif
+#ifdef PPSCALARS
+use scalars, only : theta, pi_z
+#endif
 implicit none
 
 ! Determine if we are to checkpoint intermediate times
@@ -1496,6 +1499,10 @@ if (tavg_calc) then
                 call wave2phys( divty, lbz )
                 call wave2phys( divtz, lbz )
 #endif
+#ifdef PPSCALARS
+                call wave2phys( theta, lbz )
+                call wave2phys( pi_z, lbz )
+#endif
             endif
 
             ! Check if we have initialized tavg
@@ -1536,6 +1543,10 @@ if (tavg_calc) then
                 call phys2wave( divtx, lbz )
                 call phys2wave( divty, lbz )
                 call phys2wave( divtz, lbz )
+#endif
+#ifdef PPSCALARS
+                call phys2wave( theta, lbz )
+                call phys2wave( pi_z, lbz )
 #endif
             endif
 
@@ -1675,7 +1686,7 @@ use sim_param, only : uF, vF, wF, pF
 use sim_param, only : dudyF, dudzF, dvdxF, dvdzF, dwdxF, dwdyF
 use param, only : nxp
 #ifdef PPSCALARS
-use scalars, only : theta
+use scalars, only : theta, thetaF
 #endif
 
 use stat_defs, only : xplane, yplane
@@ -1738,6 +1749,9 @@ if (fourier) then
     call wave2physF( dvdz, dvdzF )
     call wave2physF( dwdx, dwdxF )
     call wave2physF( dwdy, dwdyF )
+#ifdef PPSCALARS
+    call wave2physF( theta, thetaF )
+#endif
 endif
 
 !  Allocate space for the interpolated w values
@@ -1977,6 +1991,24 @@ endif
 #ifdef PPSCALARS
     ! Common file name for all output types
     call string_splice(fname, path //'output/theta.', jt_total)
+if (fourier) then
+#if defined(PPCGNS) && defined(PPMPI)
+    ! Write CGNS Output
+    call string_concat(fname, '.cgns')
+    call write_parallel_cgns(fname, nxp, ny, nz - nz_end, nz_tot,              &
+     (/ 1, 1,   (nz-1)*coord + 1 /),                                           &
+     (/ nxp, ny, (nz-1)*(coord+1) + 1 - nz_end /),                             &
+     x(1:nxp) , y(1:ny) , z(1:(nz-nz_end) ),                                   &
+     1, (/ 'Theta' /), (/ thetaF(1:nxp,1:ny,1:(nz-nz_end)) /) )
+#else
+    ! Write binary Output
+    call string_concat(fname, bin_ext)
+    open(unit=13, file=fname, form='unformatted', convert=write_endian,        &
+     access='direct', recl=nxp*ny*nz*rprec)
+    write(13,rec=1) thetaF(:nxp,:ny,1:nz)
+    close(13)
+#endif
+else !! .not. fourier
 #if defined(PPCGNS) && defined(PPMPI)
     ! Write CGNS Output
     call string_concat(fname, '.cgns')
@@ -1993,6 +2025,7 @@ endif
     write(13,rec=1) theta(:nx,:ny,1:nz)
     close(13)
 #endif
+endif
 #endif
 
 !  Write instantaneous x-plane values
