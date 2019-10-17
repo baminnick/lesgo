@@ -309,16 +309,16 @@ do jz = lbz, nz
 #endif
 
     ! Parabolic temperature profile
-    theta_temp(jz) = z * (1._rprec - 0.5_rprec*z)
-    if((coord == 0) .and. (jz == 0)) then
-        write(*,*) '--> Using initial parabolic theta profile'
-    endif
+    !theta_temp(jz) = z * (1._rprec - 0.5_rprec*z)
+    !if((coord == 0) .and. (jz == 0)) then
+    !    write(*,*) '--> Using initial parabolic theta profile'
+    !endif
 
     ! Linear temperature profile using fixed Temperature BC
-    !theta_temp(jz) = (scal_top - scal_bot)*z/L_z + scal_bot
-    !if((coord == 0) .and. (jz==0)) then 
-    !    write(*,*) '--> Using initial linear theta profile'
-    !endif
+    theta_temp(jz) = (scal_top - scal_bot)*z/L_z + scal_bot
+    if((coord == 0) .and. (jz==0)) then 
+        write(*,*) '--> Using initial linear theta profile'
+    endif
 
 end do
 

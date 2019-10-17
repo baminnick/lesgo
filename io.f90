@@ -675,6 +675,9 @@ use sim_param, only: uF, vF, wF
 use messages
 use fft
 use functions, only: int2str
+#ifdef PPSCALARS
+use scalars, only: thetaF
+#endif
 
 implicit none
 
@@ -687,11 +690,19 @@ character(len = 10), dimension(nxp/2+1) :: fhead !! file header variable
 complex(rprec), dimension(nxp/2+1) :: bigvhat, bigwhat
 real(rprec), dimension(nxp/2+1) :: roll, bigvv, bigww
 #endif
+#ifdef PPSCALARS
+real(rprec), dimension(nxp+2,ny,lbz:nz) :: theta_pert
+complex(rprec), dimension(nxp/2+1) :: theta_hat
+real(rprec), dimension(nxp/2+1) :: theta2
+#endif
 
 #ifdef PPMPI
     real(rprec), dimension(nxp/2+1) :: ke_global
 #ifdef PPOUTPUT_SSP
     real(rprec), dimension(nxp/2+1) :: uu_global, roll_global
+#endif
+#ifdef PPSCALARS
+    real(rprec), dimension(nxp/2+1) :: theta2_global
 #endif
 #endif
 
@@ -711,6 +722,9 @@ bigww = 0.0_rprec
     uu_global = 0.0_rprec
     roll_global = 0.0_rprec
 #endif
+#ifdef PPSCALARS
+theta2_global = 0.0_rprec
+#endif
 #endif
 
 ! Initialize file, write header
@@ -724,6 +738,9 @@ endif
 call ypert_fourier(uF,upert)
 call ypert_fourier(vF,vpert)
 call ypert_fourier(wF,wpert)
+#ifdef PPSCALARS
+call ypert(thetaF,theta_pert)
+#endif
 
 ! Consider each y and z location
 do jy = 1, ny
@@ -737,6 +754,9 @@ do jz = 1, nz-1
     call dfftw_execute_dft_r2c( forw_x_fourier, vF(:,jy,jz), bigvhat)
     call dfftw_execute_dft_r2c( forw_x_fourier, wF(:,jy,jz), bigwhat)
 #endif
+#ifdef PPSCALARS
+    call dfftw_execute_dft_r2c(forw_x_fourier, theta_pert(:,jy,jz), theta_hat)
+#endif
 
     ! Normalize transformed variables
     uhat = uhat / nxp
@@ -745,6 +765,9 @@ do jz = 1, nz-1
 #ifdef PPOUTPUT_SSP
     bigvhat = bigvhat / nxp
     bigwhat = bigwhat / nxp
+#endif
+#ifdef PPSCALARS
+    theta_hat = theta_hat / nxp
 #endif
 
     ! Sum over boundary points
@@ -755,6 +778,9 @@ do jz = 1, nz-1
     bigvv(1) = bigvv(1) + 0.5d0*real(bigvhat(1)*conjg(bigvhat(1)))
     bigww(1) = bigww(1) + 0.5d0*real(bigwhat(1)*conjg(bigwhat(1)))
 #endif
+#ifdef PPSCALARS
+    theta2(1) = theta2(1) + 0.50d0*real(theta_hat(1)*conjg(theta_hat(1)))
+#endif
 
     uu(nxp/2+1) = uu(nxp/2+1) + 0.5d0*real(uhat(nxp/2+1)*conjg(uhat(nxp/2+1)))
     vv(nxp/2+1) = vv(nxp/2+1) + 0.5d0*real(vhat(nxp/2+1)*conjg(vhat(nxp/2+1)))
@@ -762,6 +788,9 @@ do jz = 1, nz-1
 #ifdef PPOUTPUT_SSP
     bigvv(nxp/2+1) = bigvv(nxp/2+1) + 0.5d0*real(bigvhat(nxp/2+1)*conjg(bigvhat(nxp/2+1)))
     bigww(nxp/2+1) = bigww(nxp/2+1) + 0.5d0*real(bigwhat(nxp/2+1)*conjg(bigwhat(nxp/2+1)))
+#endif
+#ifdef PPSCALARS
+    theta2(nxp/2+1) = theta2(nxp/2+1) + 0.5d0*real(theta_hat(nxp/2+1)*conjg(theta_hat(nxp/2+1)))
 #endif
 
     ! Sum over interior points
@@ -772,6 +801,9 @@ do jz = 1, nz-1
 #ifdef PPOUTPUT_SSP
         bigvv(jx) = bigvv(jx) + real(bigvhat(jx)*conjg(bigvhat(jx)))
         bigww(jx) = bigww(jx) + real(bigwhat(jx)*conjg(bigwhat(jx)))
+#endif
+#ifdef PPSCALARS
+        theta2(jx) = theta2(jx) + 0.5d0*real(theta_hat(jx)*conjg(theta_hat(jx)))
 #endif
     enddo
 
@@ -785,6 +817,9 @@ ww = ww / L_y
 #ifdef PPOUTPUT_SSP
 bigvv = bigvv / L_y
 bigww = bigww / L_y
+#endif
+#ifdef PPSCALARS
+theta2 = theta2 / L_y
 #endif
 
 ! Compute total kinetic energy
@@ -800,11 +835,17 @@ call mpi_reduce (ke, ke_global, nxp/2+1, MPI_RPREC, MPI_SUM, 0, comm, ierr)
 call mpi_reduce (uu, uu_global, nxp/2+1, MPI_RPREC, MPI_SUM, 0, comm, ierr)
 call mpi_reduce (roll, roll_global, nxp/2+1, MPI_RPREC, MPI_SUM, 0, comm, ierr)
 #endif
+#ifdef PPSCALARS
+call mpi_reduce (theta2, theta2_global, nxp/2+1, MPI_RPREC, MPI_SUM, 0, comm, ierr)
+#endif
 if (rank == 0) then  ! note that it's rank here, not coord
     ke = ke_global
 #ifdef PPOUTPUT_SSP
     uu = uu_global
     roll = roll_global
+#endif
+#ifdef PPSCALARS
+    theta2 = theta2_global
 #endif
 #endif
     ! kinetic energy of spanwise perturbations
@@ -816,19 +857,29 @@ if (rank == 0) then  ! note that it's rank here, not coord
 
 #ifdef PPOUTPUT_SSP
     ! Streamwise energy of spanwise perturbations - streak energy
-    open(2,file=path // 'output/streak_kx.dat', status='unknown',               &
+    open(2,file=path // 'output/streak_kx.dat', status='unknown',       &
         form='formatted', position='append')
     if (jt_total==wbase) write(2,*) 'jt_total ', fhead
     write(2,*) jt_total, uu
     close(2)
 
     ! Spanwise and Wall-normal energy - roll energy
-    open(2,file=path // 'output/roll_kx.dat', status='unknown',               &
+    open(2,file=path // 'output/roll_kx.dat', status='unknown',         &
         form='formatted', position='append')
     if (jt_total==wbase) write(2,*) 'jt_total ', fhead
     write(2,*) jt_total, roll
     close(2)
 #endif
+
+#ifdef PPSCALARS
+    ! temperature "energy" of spanwise perturbations
+     open(2,file=path // 'output/theta_kx.dat', status='unknown',       &
+        form='formatted', position='append')
+    if (jt_total==wbase) write(2,*) 'jt_total ', fhead
+    write(2,*) jt_total, theta2
+    close(2)   
+#endif
+
 #ifdef PPMPI
 end if
 #endif
