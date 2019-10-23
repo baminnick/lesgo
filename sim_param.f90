@@ -72,6 +72,10 @@ real(rprec), dimension(:,:,:), allocatable :: dudyF, dudzF,                    &
     dvdxF, dvdzF, dwdxF, dwdyF
 real(rprec), dimension(:,:,:), allocatable :: txzF, tyzF
 
+#ifdef PPCNDIFF
+real(rprec), dimension(:,:,:), allocatable :: txz_half1, txz_half2
+#endif
+
 contains
 
 !*******************************************************************************
@@ -171,6 +175,11 @@ allocate ( dwdxF(nxp+2, ny, lbz:nz) ); dwdxF = 0.0_rprec
 allocate ( dwdyF(nxp+2, ny, lbz:nz) ); dwdyF = 0.0_rprec
 allocate ( txzF(nxp+2, ny, lbz:nz) ); txzF = 0.0_rprec
 allocate ( tyzF(nxp+2, ny, lbz:nz) ); tyzF = 0.0_rprec
+
+#ifdef PPCNDIFF
+allocate ( txz_half1(ld, ny, lbz:nz) ); txz_half1 = 0.0_rprec
+allocate ( txz_half2(ld, ny, lbz:nz) ); txz_half2 = 0.0_rprec
+#endif
 
 #if defined(PPTURBINES) || defined(PPATM) || defined(PPLVLSET)
 allocate ( fxa(ld, ny, lbz:nz) ); fxa = 0.0_rprec

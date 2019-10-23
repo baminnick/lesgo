@@ -53,6 +53,9 @@ use sim_param, only : JACO2, mesh_stretch, delta_stretch
 #endif
 use sgs_param
 use messages
+#ifdef PPCNDIFF
+use sim_param, only : txz_half1, txz_half2
+#endif
 
 #ifdef PPMPI
 use mpi_defs, only : mpi_sync_real_array, MPI_SYNC_DOWN
@@ -303,7 +306,13 @@ if (coord == nproc-1) then
     tyy(1:nx,:,nz-1) = -nu_coef(1:nx,:)*dvdy(1:nx,:,nz-1) !! uvp-node(nz-1)
     tzz(1:nx,:,nz-1) = -nu_coef(1:nx,:)*dwdz(1:nx,:,nz-1) !! uvp-node(nz-1)
     ! for top wall, include w-grid stress since we touched nz-1
+#ifdef PPCNDIFF
     txz(1:nx,:,nz-1) = -nu_coef2(1:nx,:)*(0.5_rprec*(dudz(1:nx,:,nz-1)+dwdx(1:nx,:,nz-1))) !! w-node(nz-1)
+    txz_half1(1:nx,:,nz-1) = -nu_coef2(1:nx,:)*(0.5_rprec*(dwdx(1:nx,:,nz-1))) !! w-node(nz-1)
+    txz_half2(1:nx,:,nz-1) = -nu_coef2(1:nx,:)*(0.5_rprec*(dudz(1:nx,:,nz-1))) !! w-node(nz-1)
+#else
+    txz(1:nx,:,nz-1) = -nu_coef2(1:nx,:)*(0.5_rprec*(dudz(1:nx,:,nz-1)+dwdx(1:nx,:,nz-1))) !! w-node(nz-1)
+#endif
     tyz(1:nx,:,nz-1) = -nu_coef2(1:nx,:)*(0.5_rprec*(dvdz(1:nx,:,nz-1)+dwdy(1:nx,:,nz-1))) !! w-node(nz-1)
 
     ! since last level already calculated
@@ -325,7 +334,13 @@ do jz = jz_min, jz_max
     txy(1:nx,:,jz)=-nu_coef(1:nx,:)*(0.5_rprec*(dudy(1:nx,:,jz)+dvdx(1:nx,:,jz))) !! uvp-node(jz)
     tyy(1:nx,:,jz)=-nu_coef(1:nx,:)*dvdy(1:nx,:,jz) !! uvp-node(jz)
     tzz(1:nx,:,jz)=-nu_coef(1:nx,:)*dwdz(1:nx,:,jz) !! uvp-node(jz)
+#ifdef PPCNDIFF
     txz(1:nx,:,jz)=-nu_coef2(1:nx,:)*(0.5_rprec*(dudz(1:nx,:,jz)+dwdx(1:nx,:,jz))) !! w-node(jz)
+    txz_half1(1:nx,:,jz)=-nu_coef2(1:nx,:)*(0.5_rprec*(dwdx(1:nx,:,jz))) !! w-node(jz)
+    txz_half2(1:nx,:,jz)=-nu_coef2(1:nx,:)*(0.5_rprec*(dudz(1:nx,:,jz))) !! w-node(jz)
+#else
+    txz(1:nx,:,jz)=-nu_coef2(1:nx,:)*(0.5_rprec*(dudz(1:nx,:,jz)+dwdx(1:nx,:,jz))) !! w-node(jz)
+#endif
     tyz(1:nx,:,jz)=-nu_coef2(1:nx,:)*(0.5_rprec*(dvdz(1:nx,:,jz)+dwdy(1:nx,:,jz))) !! w-node(jz)
 enddo
 
@@ -341,13 +356,25 @@ call level_set_BC ()
 ! txz,tyz calculated for 1:nz-1 (on w-nodes) except bottom process
 ! (only 2:nz-1) exchange information between processors to set
 ! values at nz from jz=1 above to jz=nz below
+#ifdef PPCNDIFF
 call mpi_sync_real_array( txz, 0, MPI_SYNC_DOWN )
+call mpi_sync_real_array( txz_half1, 0, MPI_SYNC_DOWN )
+call mpi_sync_real_array( txz_half2, 0, MPI_SYNC_DOWN )
+#else
+call mpi_sync_real_array( txz, 0, MPI_SYNC_DOWN )
+#endif
 call mpi_sync_real_array( tyz, 0, MPI_SYNC_DOWN )
 #ifdef PPSAFETYMODE
 ! Set bogus values (easier to catch if there's an error)
 txx(:, :, 0) = BOGUS
 txy(:, :, 0) = BOGUS
+#ifdef PPCNDIFF
 txz(:, :, 0) = BOGUS
+txz_half1(:, :, 0) = BOGUS
+txz_half2(:, :, 0) = BOGUS
+#else
+txz(:, :, 0) = BOGUS
+#endif
 tyy(:, :, 0) = BOGUS
 tyz(:, :, 0) = BOGUS
 tzz(:, :, 0) = BOGUS

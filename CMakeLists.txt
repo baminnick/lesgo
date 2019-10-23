@@ -6,12 +6,12 @@ cmake_minimum_required(VERSION 2.8.9)
 
 # Specify Compiler
 # Options: Intel and GNU
-set(CMAKE_Fortran_COMPILER_ID "GNU")
+set(CMAKE_Fortran_COMPILER_ID "Intel")
 
 # Set the name of the computer you are compiling on.
 # Supported computers: panoramix, njord, marcc, darwin-brew
 # Otherwise, default settings are used
-set(hostname "default")
+set(hostname "marcc")
 
 # Read and write binary files as big_endian or little_endian
 # Options: DEFAULT, LITTLE, or BIG
@@ -33,6 +33,7 @@ option(USE_RNL "Enable restricted nonlinear model." OFF)
 option(USE_GQL "Enable generalized quasilinear model." OFF)
 option(USE_MAPPING "Enable grid mapping transformation." ON)
 option(USE_LVLSET_STRETCH "Enable simplified level set with mapping." OFF)
+option(USE_CNDIFF "Enable Crank-Nicolson time marching for wall-normal diffusion." ON)
 
 option(OUTPUT_SGS "Output time-averaging statistics on SGS model." OFF)
 option(OUTPUT_BUDGET "Output time-averaging statistics needed for budgets." OFF)
@@ -217,6 +218,11 @@ if (USE_LVLSET_STRETCH)
     set(Sources ${Sources} load_topography.f90 level_set2.f90)
     set(exec_name "${exec_name}-ls2")
 endif (USE_LVLSET_STRETCH)
+
+if (USE_CNDIFF)
+    add_definitions(-DPPCNDIFF)
+    set(Sources ${Sources} diff_stag_array.f90)
+endif (USE_CNDIFF)
 
 if (OUTPUT_SGS)
     add_definitions(-DPPOUTPUT_SGS)
