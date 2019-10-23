@@ -36,10 +36,15 @@ real(rprec), dimension(:,:),  allocatable :: S
 real(rprec), dimension(:,:),  allocatable :: nu_coef, nu_coef2
 
 ! RNL-LES only for sgs = 1
-!real(rprec), dimension(:,:,:), allocatable :: S11F, S22F, S33F, S12F, S13F, S23F
-!real(rprec), dimension(:,:,:), allocatable :: Nu_tF !! eddy viscosity
-!real(rprec), dimension(:,:,:), allocatable :: Cs_opt2F !! (C_s)^2, Dynamic Smag Coef
-!real(rprec), dimension(:,:), allocatable :: SF
+real(rprec), dimension(:,:,:), allocatable :: S11_big, S22_big, S33_big
+real(rprec), dimension(:,:,:), allocatable :: S12_big, S13_big, S23_big
+real(rprec), dimension(:,:),   allocatable :: S_big
+real(rprec), dimension(:,:),   allocatable :: txx_big, tyy_big, tzz_big
+real(rprec), dimension(:,:),   allocatable :: txy_big, txz_big, tyz_big
+real(rprec), dimension(:,:),   allocatable :: nu_coef_big, nu_coef2_big
+real(rprec), dimension(:,:,:), allocatable :: dudx_big, dudy_big, dudz_big
+real(rprec), dimension(:,:,:), allocatable :: dvdx_big, dvdy_big, dvdz_big
+real(rprec), dimension(:,:,:), allocatable :: dwdx_big, dwdy_big, dwdz_big
 
 ! For all dynamic models (2-5)
 real(rprec), dimension(:,:,:),allocatable :: ee_now
@@ -103,17 +108,23 @@ allocate ( nu_coef(ld,ny) ); nu_coef = 0._rprec
 allocate ( nu_coef2(ld,ny) ); nu_coef2 = 0._rprec
 
 ! RNL-LES only for sgs = 1
-!if (fourier) then
-!    allocate ( S11F(nxp+2,ny,nz) ); S11F = 0._rprec
-!    allocate ( S12F(nxp+2,ny,nz) ); S12F = 0._rprec
-!    allocate ( S13F(nxp+2,ny,nz) ); S13F = 0._rprec
-!    allocate ( S22F(nxp+2,ny,nz) ); S22F = 0._rprec
-!    allocate ( S23F(nxp+2,ny,nz) ); S23F = 0._rprec
-!    allocate ( S33F(nxp+2,ny,nz) ); S33F = 0._rprec
-!    allocate ( Nu_tF(nxp+2,ny,nz) ); Nu_tF = 0._rprec
-!    allocate ( Cs_opt2F(nxp+2,ny,nz) ); Cs_opt2F = 0._rprec
-!    allocate ( SF(nxp+2,ny) ); SF = 0._rprec
-!endif
+if (fourier) then
+    allocate ( S11_big(ld_big,ny2,nz) ); S11_big = 0.0_rprec
+    allocate ( S22_big(ld_big,ny2,nz) ); S22_big = 0.0_rprec
+    allocate ( S33_big(ld_big,ny2,nz) ); S33_big = 0.0_rprec
+    allocate ( S12_big(ld_big,ny2,nz) ); S12_big = 0.0_rprec
+    allocate ( S13_big(ld_big,ny2,nz) ); S13_big = 0.0_rprec
+    allocate ( S23_big(ld_big,ny2,nz) ); S23_big = 0.0_rprec
+    allocate ( S_big(ld_big,ny2) ); S_big = 0.0_rprec
+    allocate ( txx_big(ld_big,ny2) ); txx_big = 0.0_rprec
+    allocate ( tyy_big(ld_big,ny2) ); tyy_big = 0.0_rprec
+    allocate ( tzz_big(ld_big,ny2) ); tzz_big = 0.0_rprec
+    allocate ( txy_big(ld_big,ny2) ); txy_big = 0.0_rprec
+    allocate ( txz_big(ld_big,ny2) ); txz_big = 0.0_rprec
+    allocate ( tyz_big(ld_big,ny2) ); tyz_big = 0.0_rprec
+    allocate ( nu_coef_big(ld_big,ny2) ); nu_coef_big = 0.0_rprec
+    allocate ( nu_coef2_big(ld_big,ny2) ); nu_coef2_big = 0.0_rprec
+endif
 
 ! For dynamic models:
 if (sgs_model .ne. 1) then
