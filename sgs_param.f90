@@ -21,6 +21,7 @@
 module sgs_param
 !*******************************************************************************
 use types, only : rprec
+use param, only : fourier
 
 save
 private rprec
@@ -87,9 +88,9 @@ contains
 !*******************************************************************************
 subroutine sgs_param_init ()
 !*******************************************************************************
-use param, only : ld, ny, nz, lbz, molec, nu_molec, u_star,                    &
+use param, only : ld, ny, nz, lbz, molec, nu_molec, u_star,          &
     z_i, dx, dy, dz, sgs_model
-! use param, only : fourier, nxp
+use param, only : fourier, ld_big, ny2
 use test_filtermodule, only : filter_size
 
 implicit none
@@ -124,6 +125,15 @@ if (fourier) then
     allocate ( tyz_big(ld_big,ny2) ); tyz_big = 0.0_rprec
     allocate ( nu_coef_big(ld_big,ny2) ); nu_coef_big = 0.0_rprec
     allocate ( nu_coef2_big(ld_big,ny2) ); nu_coef2_big = 0.0_rprec
+    allocate ( dudx_big(ld_big,ny2,nz) ); dudx_big = 0.0_rprec
+    allocate ( dudy_big(ld_big,ny2,nz) ); dudy_big = 0.0_rprec
+    allocate ( dudz_big(ld_big,ny2,nz) ); dudz_big = 0.0_rprec
+    allocate ( dvdx_big(ld_big,ny2,nz) ); dvdx_big = 0.0_rprec
+    allocate ( dvdy_big(ld_big,ny2,nz) ); dvdy_big = 0.0_rprec
+    allocate ( dvdz_big(ld_big,ny2,nz) ); dvdz_big = 0.0_rprec
+    allocate ( dwdx_big(ld_big,ny2,nz) ); dwdx_big = 0.0_rprec
+    allocate ( dwdy_big(ld_big,ny2,nz) ); dwdy_big = 0.0_rprec
+    allocate ( dwdz_big(ld_big,ny2,nz) ); dwdz_big = 0.0_rprec
 endif
 
 ! For dynamic models:

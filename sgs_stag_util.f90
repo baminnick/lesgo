@@ -53,6 +53,9 @@ use sim_param, only : JACO2, mesh_stretch, delta_stretch
 #endif
 use sgs_param
 use messages
+use derivatives, only : convolve_rnl, dft_direct_back_2d_n_yonlyC_big
+use derivatives, only : dft_direct_forw_2d_n_yonlyC_big
+use fft, only : padd, unpadd
 
 #ifdef PPMPI
 use mpi_defs, only : mpi_sync_real_array, MPI_SYNC_DOWN
