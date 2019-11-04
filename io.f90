@@ -1946,6 +1946,87 @@ endif
 !  Write instantaneous x-plane values
 elseif(itype==3) then
 
+if (fourier) then
+
+    ! Not going to interpolate since physical grid is probably coarse
+    ! Instead going to use arbitrary xplane location, ignoring user-input
+    ! Assuming user only wants a single xplane location
+
+    ! Common file name portion for all output types
+    call string_splice(fname, path // 'output/vel.x-', xplane_loc(1), '.', jt_total)
+
+#if defined(PPCGNS) && defined(PPMPI)
+        ! Write CGNS Output
+        call string_concat(fname, '.cgns')
+        call write_parallel_cgns (fname,1,ny, nz - nz_end, nz_tot,     &
+                        (/ 1, 1,   (nz-1)*coord + 1 /),                &
+                        (/ 1, ny, (nz-1)*(coord+1) + 1 - nz_end /),    &
+                    xplane_loc(i:i) , y(1:ny) , z(1:(nz-nz_end) ),     &
+              3, (/ 'VelocityX', 'VelocityY', 'VelocityZ' /),          &
+              (/ uF(1,1:ny,1:(nz-nz_end)), vF(1,1:ny,1:(nz-nz_end)),   &
+                 wF(1,1:ny,1:(nz-nz_end)) /) )
+
+#else
+        ! Write binary output
+        call string_concat(fname, bin_ext)
+        open(unit=13,file=fname,form='unformatted',convert=write_endian, access='direct',recl=ny*nz*rprec)
+        write(13,rec=1) uF(1,:ny,1:nz)
+        write(13,rec=2) vF(1,:ny,1:nz)
+        write(13,rec=3) wF(1,:ny,1:nz)
+        close(13)
+#endif
+
+    ! Now to compute vorticity
+    allocate(vortx(nx,ny,lbz:nz), vorty(nx,ny,lbz:nz), vortz(nx,ny,lbz:nz))
+    allocate(vortxF(nxp,ny,lbz:nz), vortyF(nxp,ny,lbz:nz), vortzF(nxp,ny,lbz:nz))
+
+    ! Use vorticityx as an intermediate step for performing uv-w interpolation
+    ! Vorticity is written in w grid
+    vortxF(1:nxp,1:ny,lbz:nz) = 0._rprec
+    vortyF(1:nxp,1:ny,lbz:nz) = 0._rprec
+    vortzF(1:nxp,1:ny,lbz:nz) = 0._rprec
+
+    vortxF(1:nxp,1:ny,lbz:nz) = dvdxF(1:nxp,1:ny,lbz:nz) -            &
+        dudyF(1:nxp,1:ny,lbz:nz)
+    vortzF(1:nxp,1:ny,lbz:nz) =                                       &
+        interp_to_w_grid( vortxF(1:nxp,1:ny,lbz:nz), lbz)
+    vortxF(1:nxp,1:ny,lbz:nz) = dwdyF(1:nxp,1:ny,lbz:nz) -            &
+        dvdzF(1:nxp,1:ny,lbz:nz)
+    vortyF(1:nxp,1:ny,lbz:nz) = dudzF(1:nxp,1:ny,lbz:nz) -            &
+        dwdxF(1:nxp,1:ny,lbz:nz)
+
+    if (coord == 0) then
+        vortzF(1:nxp,1:ny, 1) = 0._rprec
+    end if
+ 
+    ! Common file name for all output types
+    call string_splice(fname, path // 'output/vort.x-', xplane_loc(1), '.', jt_total)
+
+#if defined(PPCGNS) && defined(PPMPI)
+    ! Write CGNS Output
+    call string_concat(fname, '.cgns')
+    call write_parallel_cgns(fname,1,ny, nz - nz_end, nz_tot,                   &
+        (/ 1, 1,   (nz-1)*coord + 1 /),                                         &
+        (/ nxp, ny, (nz-1)*(coord+1) + 1 - nz_end /),                           &
+        x(1:nxp) , y(1:ny) , zw(1:(nz-nz_end) ),                                &
+        3, (/ 'VorticityX', 'VorticityY', 'VorticityZ' /),                      &
+        (/ vortxF(1,1:ny,1:(nz-nz_end)), vortyF(1,1:ny,1:(nz-nz_end)),  &
+        vortzF(1,1:ny,1:(nz-nz_end)) /) )
+
+#else
+    ! Write binary Output
+    call string_concat(fname, bin_ext)
+    open(unit=13, file=fname, form='unformatted', convert=write_endian,        &
+        access='direct', recl=ny*nz*rprec)
+    write(13,rec=1) vortxF(1,:ny,1:nz)
+    write(13,rec=2) vortyF(1,:ny,1:nz)
+    write(13,rec=3) vortzF(1,:ny,1:nz)
+    close(13)
+#endif
+
+    deallocate(vortxF, vortyF, vortzF)
+
+else !! not fourier
     allocate(ui(1,ny,nz), vi(1,ny,nz), wi(1,ny,nz))
 
     !  Loop over all xplane locations
@@ -1988,6 +2069,7 @@ elseif(itype==3) then
     end do
 
     deallocate(ui,vi,wi)
+endif !! to fourier or not to fourier
 
 !  Write instantaneous y-plane values
 elseif(itype==4) then
