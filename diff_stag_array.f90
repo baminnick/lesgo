@@ -26,8 +26,9 @@ subroutine diff_stag_array()
 use types, only : rprec
 use param
 use messages
-use sim_param, only : u, txz_half2, RHSx, RHSx_f
+use sim_param, only : u, txz_half2, RHSx, RHSx_f, txz
 use sgs_param, only : nu, Nu_t
+use derivatives, only : ddz_w
 use fft
 #ifdef PPMAPPING
 use sim_param, only : JACO1, JACO2
@@ -37,18 +38,18 @@ implicit none
 
 real(rprec), dimension(ld,ny,1:nz-1) :: Rx
 real(rprec), dimension(ld,ny,lbz:nz) :: dtxzdz_rhs
-real(rprec), dimension(nx,ny,1:nz-1) :: ax, bx, cx
+real(rprec), dimension(nx,ny,1:nz-1) :: a, b, c
 real(rprec) :: nu_a, nu_b, nu_c, nu_r
-integer :: jz_min, jz_max
+integer :: jx, jy, jz, jz_min, jz_max
 
 ! Get the RHS ready
 ! Initialize with the explicit terms
 Rx(:,:,1:nz-1) = u(:,:,1:nz-1) +                                     &
-    dt * ( tadv1 * RHSx(:,:,nz-1) + tadv2 * RHSx_f(:,:,1:nz-1) )
+    dt * ( tadv1 * RHSx(:,:,1:nz-1) + tadv2 * RHSx_f(:,:,1:nz-1) )
 
 ! Add explicit portion of Crank-Nicolson
 call ddz_w(txz_half2, dtxzdz_rhs, lbz)
-dtxzdz_rhs(ld-1,ld, :, 1:nz-1) = 0._rprec
+dtxzdz_rhs(ld-1:ld, :, 1:nz-1) = 0._rprec
 #ifdef PPSAFETYMODE
 #ifdef PPMPI
 dtxzdz_rhs(:,:,0) = BOGUS
@@ -136,24 +137,53 @@ if (coord == nproc-1) then
             do jy = 1, ny
             do jx = 1, nx
                 if (sgs) then
-                ! Nu_t(jx,jy,nz) on w, not needed here
-
+                    ! Nu_t(jx,jy,nz) on w, not needed here
+                    nu_a = Nu_t(jx,jy,nz-1) + nu
                 else
-
+                    nu_a = nu
                 end if
-                ! txz(jx,jy,1) = 0, so nothing added to RHS
-
-
+                ! txz(jx,jy,nz) = 0, so nothing added to RHS
+                a(jx,jy,nz-1) = -(dt/(2._rprec*dz))*(1._rprec/dz)*nu_a
+                b(jx,jy,nz-1) = 1._rprec + (dt/(2._rprec*dz))*(nu_a/dz)
             end do
             end do
 
         ! DNS BC or Wall-resolved
         case (1)
-
+            do jy = 1, ny
+            do jx = 1, nx
+                if (sgs) then
+                    ! Nu_t(jx,jy,1) on uvp, not needed here
+                    nu_a = Nu_t(jx,jy,nz-1) + nu
+                else
+                    nu_a = nu
+                endif
+                ! Discretized txz(jx,jy,nz) as in wallstress,
+                ! Therefore BC treated implicitly
+                a(jx,jy,nz-1) = -(dt/(2._rprec*dz))*(1._rprec/dz)*nu_a
+                b(jx,jy,nz-1) = 1._rprec + (dt/(2._rprec*dz))*           &
+                    ((nu_a/dz) + (nu/(0.5_rprec*dz)))
+                Rx(jx,jy,nz-1) = Rx(jx,jy,nz-1) + (dt/(2._rprec*dz))*    &
+                    (nu/(0.5_rprec*dz))*utop
+            end do
+            end do
 
         ! Wall-model
-        case (2)
-
+        case (2:)
+            do jy = 1, ny
+            do jx = 1, nx
+                if (sgs) then
+                    ! Nu_t(jx,jy,nz) on uvp, not needed here
+                    nu_a = Nu_t(jx,jy,nz-1) + nu
+                else
+                    nu_a = nu
+                end if
+                ! Treating txz(jx,jy,nz) from wallstress explicitly
+                a(jx,jy,nz-1) = -(dt/(2._rprec*dz))*(1._rprec/dz)*nu_a
+                b(jx,jy,nz-1) = 1._rprec + (dt/(2._rprec*dz))*(nu_a/dz)
+                Rx(jx,jy,nz-1) = Rx(jx,jy,nz-1) - (dt/(2._rprec*dz))*txz(jx,jy,nz)
+            end do
+            end do
 
     end select
     jz_max = nz-2
@@ -169,18 +199,18 @@ do jz = jz_min, jz_max
 do jy = 1, ny
 do jx = 1, nx
     if (sgs) then
-        a_nu = Nu_t(jx,jy,jz) + nu
-        b_nu = Nu_t(jx,jy,jz+1) + Nu_t(jx,jy,jz) + 2._rprec*nu
-        c_nu = Nu_t(jx,jy,jz+1) + nu
+        nu_a = Nu_t(jx,jy,jz) + nu
+        nu_b = Nu_t(jx,jy,jz+1) + Nu_t(jx,jy,jz) + 2._rprec*nu
+        nu_c = Nu_t(jx,jy,jz+1) + nu
     else
-        a_nu = nu
-        b_nu = 2._rprec*nu
-        c_nu = nu
+        nu_a = nu
+        nu_b = 2._rprec*nu
+        nu_c = nu
     endif
 
-    ax(jx, jy, jz) = -(dt/(2._rprec*dz))*(1._rprec/dz)*a_nu
-    bx(jx, jy, jz) = 1._rprec + (dt/(2._rprec*dz))*(1._rprec/dz)*b_nu
-    cx(jx, jy, jz) = -(dt/(2._rprec*dz))*(1._rprec/dz)*c_nu
+    a(jx, jy, jz) = -(dt/(2._rprec*dz))*(1._rprec/dz)*nu_a
+    b(jx, jy, jz) = 1._rprec + (dt/(2._rprec*dz))*(1._rprec/dz)*nu_b
+    c(jx, jy, jz) = -(dt/(2._rprec*dz))*(1._rprec/dz)*nu_c
 end do
 end do
 end do

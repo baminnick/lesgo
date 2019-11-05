@@ -139,8 +139,8 @@ else if (lbc_mom==1) then
     if (coord == 0) write(*,*) '--> Creating initial boundary layer velocity ',&
         'field with LES BCs... to become DNS'
     !call ic_dns( ) ! debug
-    call ic_les()
-    !call ic_blend()
+    !call ic_les()
+    call ic_blend()
 else
     if (coord == 0) write(*,*) '--> Creating initial boundary layer velocity ',&
     'field with LES BCs'
@@ -590,8 +590,8 @@ do jz = 1, nz
 
 end do
 
-rms = 0.0_rprec !! Don't add noise for debugging
-!rms = 3._rprec
+!rms = 0.0_rprec !! Don't add noise for debugging
+rms = 3._rprec
 sigma_rv = 0.289_rprec
 
 ! Fill u, v, and w with uniformly distributed random numbers between 0 and 1
@@ -717,8 +717,8 @@ do jz = 1, nz
 
 end do
 
-!rms = 0.0_rprec !! Don't add noise for debugging
-rms = 3._rprec
+rms = 0.0_rprec !! Don't add noise for debugging
+!rms = 3._rprec
 sigma_rv = 0.289_rprec
 
 ! Fill u, v, and w with uniformly distributed random numbers between 0 and 1
