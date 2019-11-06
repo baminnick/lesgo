@@ -36,9 +36,9 @@ use sim_param, only : JACO1, JACO2
 
 implicit none
 
-real(rprec), dimension(ld,ny,1:nz-1) :: Rx
+real(rprec), dimension(ld,ny,0:nz) :: Rx, usol
+real(rprec), dimension(nx,ny,0:nz) :: a, b, c
 real(rprec), dimension(ld,ny,lbz:nz) :: dtxzdz_rhs
-real(rprec), dimension(nx,ny,1:nz-1) :: a, b, c
 real(rprec) :: nu_a, nu_b, nu_c, nu_r
 integer :: jx, jy, jz, jz_min, jz_max
 
@@ -193,7 +193,7 @@ else
 endif
 #endif
 
-! Compute coefficients
+! Compute coefficients in domain
 ! Treating SGS viscosity explicitly!
 do jz = jz_min, jz_max
 do jy = 1, ny
@@ -216,6 +216,9 @@ end do
 end do
 
 ! Find intermediate velocity in TDMA
-call tridag_array_diff (a, b, c, Rx, u)
+call tridag_array_diff (a, b, c, Rx, usol)
+
+! Fill velocity solution
+u(:nx,:ny,1:nz-1) = usol(:nx,:ny,1:nz-1)
 
 end subroutine diff_stag_array

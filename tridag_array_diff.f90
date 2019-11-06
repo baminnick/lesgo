@@ -25,28 +25,24 @@ use types, only : rprec
 use param
 implicit none
 
-real(rprec), dimension(nx,ny,nz-1), intent(in) :: a, b, c
-real(rprec), dimension(ld,ny,nz-1), intent(in) :: r
-real(rprec), dimension(ld,ny,nz-1), intent(out) :: u
+real(rprec), dimension(nx,ny,0:nz), intent(in) :: a, b, c
+real(rprec), dimension(ld,ny,0:nz), intent(in) :: r
+real(rprec), dimension(ld,ny,0:nz), intent(out) :: u
 
-integer :: n, nchunks
-integer :: chunksize
+integer :: nchunks, chunksize
 integer :: cstart, cend
-integer :: jx, jy, j, j_min, j_max
-integer :: tag0
-integer :: q
+integer :: jx, jy, j
+integer :: tag0, q
+integer :: j_minf, j_minb, j_maxf, j_maxb
 
 real(rprec) :: bet(nx, ny)
-real(rprec), dimension(nx,ny,nz-1) :: gam
+real(rprec), dimension(nx,ny,0:nz) :: gam
 
 ! Initialize variables
-n = nz - 1
 nchunks = ny
 
 ! make sure nchunks divides ny evenly
 chunksize = ny / nchunks
-
-!write(*,*) '1', coord, 'here!' !! debug
 
 if (coord == 0) then
     do jy = 1, ny
@@ -61,18 +57,19 @@ if (coord == 0) then
         end do
     end do
     bet = b(:, :, 1)
-    j_min = 1  ! this is only for backward pass
+    j_minf = 2 ! this is only for forward pass
 else
-    j_min = 2  ! this is only for backward pass
+    j_minf = 1 ! this is only for forward pass
 end if
+
+j_maxf = nz-1 ! this is only for forward pass
+j_minb = 1 ! this is only for backward pass
 
 if (coord == nproc-1) then
-    j_max = n
+    j_maxb = nz-2 ! this is only for backward pass
 else
-    j_max = n-1
+    j_maxb = nz-1 ! this is only for backward pass
 end if
-
-!write(*,*) '2', coord, 'here!' !! debug
 
 do q = 1, nchunks
     cstart = 1 + (q - 1) * chunksize
@@ -80,16 +77,16 @@ do q = 1, nchunks
     tag0 = 0 + 10 * (q - 1)
 
     if (coord /= 0) then
-        ! wait for c(:,:,1), bet(:,:), u(:,:,1) from "down"
-        call mpi_recv(c(1, cstart, 1), nx*chunksize, MPI_RPREC, down, tag0+1,  &
+        ! wait for c(:,:,0), bet(:,:), u(:,:,0) from "down"
+        call mpi_recv(c(1, cstart, 0), nx*chunksize, MPI_RPREC, down, tag0+1,  &
                        comm, status, ierr)
         call mpi_recv(bet(1, cstart), nx*chunksize, MPI_RPREC, down, tag0+2,   &
                        comm, status, ierr)
-        call mpi_recv(u(1,cstart,1), ld*chunksize, MPI_RPREC, down, tag0+3,    &
+        call mpi_recv(u(1, cstart, 0), ld*chunksize, MPI_RPREC, down, tag0+3,  &
                        comm, status, ierr)
     end if
 
-    do j = 2, j_max
+    do j = j_minf, j_maxf
         do jy = cstart, cend
             do jx = 1, nx
                 gam(jx, jy, j) = c(jx, jy, j-1) / bet(jx, jy)
@@ -110,17 +107,15 @@ do q = 1, nchunks
     end do
 
     if (coord /= nproc - 1) then
-        ! send c(n-1), bet, u(n-1) to "up"
-        call mpi_send (c(1, cstart, n-1), nx*chunksize, MPI_RPREC, up, tag0+1, &
+        ! send c(nz-1), bet, u(nz-1) to "up"
+        call mpi_send (c(1, cstart, nz-1), nx*chunksize, MPI_RPREC, up, tag0+1, &
                        comm, ierr)
         call mpi_send (bet(1, cstart), nx*chunksize, MPI_RPREC, up, tag0+2,    &
                        comm, ierr)
-        call mpi_send (u(1, cstart, n-1), ld*chunksize, MPI_RPREC, up, tag0+3, &
+        call mpi_send (u(1, cstart, nz-1), ld*chunksize, MPI_RPREC, up, tag0+3, &
                        comm, ierr)                   
     end if
 end do
-
-!write(*,*) '3', coord, 'here!' !! debug
 
 do q = 1, nchunks
     cstart = 1 + (q - 1) * chunksize
@@ -129,15 +124,15 @@ do q = 1, nchunks
 
     if (coord /= nproc - 1) then  
         ! wait for u(n), gam(n) from "up"
-        call mpi_recv (u(1, cstart, n), ld*chunksize, MPI_RPREC, up, tag0+4,   &
+        call mpi_recv (u(1, cstart, nz), ld*chunksize, MPI_RPREC, up, tag0+4,   &
                        comm, status, ierr)
-        call mpi_recv (gam(1, cstart, n), nx*chunksize, MPI_RPREC, up, tag0+5, &
+        call mpi_recv (gam(1, cstart, nz), nx*chunksize, MPI_RPREC, up, tag0+5, &
                        comm, status, ierr)
     end if
 
-    do j = n-1, j_min, -1
+    do j = j_maxb, j_minb, -1
         do jy = cstart, cend
-            do jx = 1, lh-1
+            do jx = 1, nx
                 u(jx, jy, j) = u(jx, jy, j) - gam(jx, jy, j+1) *         &
                     u(jx, jy, j+1)
             end do
@@ -145,14 +140,12 @@ do q = 1, nchunks
     end do
 
     ! send u(2), gam(2) to "down"
-    call mpi_send (u(1, cstart, 2), ld*chunksize, MPI_RPREC, down, tag0+4,     &
+    call mpi_send (u(1, cstart, 1), ld*chunksize, MPI_RPREC, down, tag0+4,     &
                    comm, ierr)
-    call mpi_send (gam(1, cstart, 2), nx*chunksize, MPI_RPREC, down, tag0+5,   &
+    call mpi_send (gam(1, cstart, 1), nx*chunksize, MPI_RPREC, down, tag0+5,   &
                    comm, ierr)
 
 end do
-
-!write(*,*) '4', coord, 'here!' !! debug
 
 end subroutine tridag_array_diff
 
