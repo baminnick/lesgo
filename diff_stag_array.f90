@@ -27,6 +27,7 @@ use types, only : rprec
 use param
 use messages
 use sim_param, only : u, txz_half2, RHSx, RHSx_f, txz
+use sim_param, only : v, tyz_half2, RHSy, RHSy_f, tyz
 use sgs_param, only : nu, Nu_t
 use derivatives, only : ddz_w
 use fft
@@ -36,9 +37,9 @@ use sim_param, only : JACO1, JACO2, mesh_stretch
 
 implicit none
 
-real(rprec), dimension(ld,ny,0:nz) :: Rx, usol
+real(rprec), dimension(ld,ny,0:nz) :: Rx, usol, Ry, vsol
 real(rprec), dimension(nx,ny,0:nz) :: a, b, c
-real(rprec), dimension(ld,ny,lbz:nz) :: dtxzdz_rhs
+real(rprec), dimension(ld,ny,lbz:nz) :: dtxzdz_rhs, dtyzdz_rhs
 real(rprec) :: nu_a, nu_b, nu_c, nu_r, const1, const2, const3
 integer :: jx, jy, jz, jz_min, jz_max
 
@@ -51,18 +52,25 @@ const3 = (1._rprec/(0.5_rprec*dz))
 ! Initialize with the explicit terms
 Rx(:,:,1:nz-1) = u(:,:,1:nz-1) +                                     &
     dt * ( tadv1 * RHSx(:,:,1:nz-1) + tadv2 * RHSx_f(:,:,1:nz-1) )
+Ry(:,:,1:nz-1) = v(:,:,1:nz-1) +                                     &
+    dt * ( tadv1 * RHSy(:,:,1:nz-1) + tadv2 * RHSy_f(:,:,1:nz-1) )
 
 ! Add explicit portion of Crank-Nicolson
 call ddz_w(txz_half2, dtxzdz_rhs, lbz)
+call ddz_w(tyz_half2, dtyzdz_rhs, lbz)
 dtxzdz_rhs(ld-1:ld, :, 1:nz-1) = 0._rprec
+dtyzdz_rhs(ld-1:ld, :, 1:nz-1) = 0._rprec
 #ifdef PPSAFETYMODE
 #ifdef PPMPI
 dtxzdz_rhs(:,:,0) = BOGUS
+dtyzdz_rhs(:,:,0) = BOGUS
 #endif
 dtxzdz_rhs(:,:,nz) = BOGUS
+dtyzdz_rhs(:,:,nz) = BOGUS
 #endif
 ! Assuming fixed dt here!
 Rx(:,:,1:nz-1) = Rx(:,:,1:nz-1) - dt * 0.5_rprec * dtxzdz_rhs(:,:,1:nz-1)
+Ry(:,:,1:nz-1) = Ry(:,:,1:nz-1) - dt * 0.5_rprec * dtyzdz_rhs(:,:,1:nz-1)
 
 ! Get bottom row 
 if (coord == 0) then
@@ -104,6 +112,7 @@ if (coord == 0) then
                 end if
                 ! Discretized txz(jx,jy,1) as in wallstress,
                 ! Therefore BC treated implicitly
+                ! vbot = 0 so no changes to Ry
 #ifdef PPMAPPING
                 b(jx,jy,1) = 1._rprec + const1*(1._rprec/JACO2(1))*        &
                     (const2*(1._rprec/JACO1(2))*nu_c + (nu/mesh_stretch(1)))
@@ -134,10 +143,12 @@ if (coord == 0) then
                     const2*(1._rprec/JACO1(2))*nu_c
                 c(jx,jy,1) = -const1*(1._rprec/JACO2(1))*const2*(1._rprec/JACO1(2))*nu_c
                 Rx(jx,jy,1) = Rx(jx,jy,1) + const1*(1._rprec/JACO2(1))*txz(jx,jy,1)
+                Ry(jx,jy,1) = Ry(jx,jy,1) + const1*(1._rprec/JACO2(1))*tyz(jx,jy,1)
 #else
                 b(jx,jy,1) = 1._rprec + const1*const2*nu_c
                 c(jx,jy,1) = -const1*const2*nu_c
                 Rx(jx,jy,1) = Rx(jx,jy,1) + const1*txz(jx,jy,1)
+                Ry(jx,jy,1) = Ry(jx,jy,1) + const1*tyz(jx,jy,1)
 #endif
             end do
             end do
@@ -190,6 +201,7 @@ if (coord == nproc-1) then
                 endif
                 ! Discretized txz(jx,jy,nz) as in wallstress,
                 ! Therefore BC treated implicitly
+                ! vtop = 0 so no changes to Ry
 #ifdef PPMAPPING
                 a(jx,jy,nz-1) = -const1*(1._rprec/JACO2(nz-1))*const2*(1._rprec/JACO1(nz-1))*nu_a
                 b(jx,jy,nz-1) = 1._rprec + const1*(1._rprec/JACO2(nz-1))*          &
@@ -220,10 +232,12 @@ if (coord == nproc-1) then
                 b(jx,jy,nz-1) = 1._rprec + const1*(1._rprec/JACO2(nz-1))*            &
                     const2*(1._rprec/JACO1(nz-1))*nu_a
                 Rx(jx,jy,nz-1) = Rx(jx,jy,nz-1) - const1*(1._rprec/JACO2(nz-1))*txz(jx,jy,nz)
+                Ry(jx,jy,nz-1) = Ry(jx,jy,nz-1) - const1*(1._rprec/JACO2(nz-1))*tyz(jx,jy,nz)
 #else
                 a(jx,jy,nz-1) = -const1*const2*nu_a
                 b(jx,jy,nz-1) = 1._rprec + const1*const2*nu_a
                 Rx(jx,jy,nz-1) = Rx(jx,jy,nz-1) - const1*txz(jx,jy,nz)
+                Ry(jx,jy,nz-1) = Ry(jx,jy,nz-1) - const1*tyz(jx,jy,nz)
 #endif
             end do
             end do
@@ -274,8 +288,10 @@ end do
 
 ! Find intermediate velocity in TDMA
 call tridag_array_diff (a, b, c, Rx, usol)
+call tridag_array_diff (a, b, c, Ry, vsol)
 
 ! Fill velocity solution
 u(:nx,:ny,1:nz-1) = usol(:nx,:ny,1:nz-1)
+v(:nx,:ny,1:nz-1) = vsol(:nx,:ny,1:nz-1)
 
 end subroutine diff_stag_array

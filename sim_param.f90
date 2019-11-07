@@ -74,6 +74,7 @@ real(rprec), dimension(:,:,:), allocatable :: txzF, tyzF
 
 #ifdef PPCNDIFF
 real(rprec), dimension(:,:,:), allocatable :: txz_half1, txz_half2
+real(rprec), dimension(:,:,:), allocatable :: tyz_half1, tyz_half2
 #endif
 
 contains
@@ -179,6 +180,8 @@ allocate ( tyzF(nxp+2, ny, lbz:nz) ); tyzF = 0.0_rprec
 #ifdef PPCNDIFF
 allocate ( txz_half1(ld, ny, lbz:nz) ); txz_half1 = 0.0_rprec
 allocate ( txz_half2(ld, ny, lbz:nz) ); txz_half2 = 0.0_rprec
+allocate ( tyz_half1(ld, ny, lbz:nz) ); tyz_half1 = 0.0_rprec
+allocate ( tyz_half2(ld, ny, lbz:nz) ); tyz_half2 = 0.0_rprec
 #endif
 
 #if defined(PPTURBINES) || defined(PPATM) || defined(PPLVLSET)

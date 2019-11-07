@@ -243,7 +243,7 @@ time_loop: do jt_step = nstart, nsteps
     ! the divt's and the diagonal elements of t are not equivalenced
     ! in this version. Provides divtz 1:nz-1, except 1:nz at top process
 #ifdef PPCNDIFF
-    call divstress_uv(divtx, divty, txx, txy, txz_half1, tyy, tyz)
+    call divstress_uv(divtx, divty, txx, txy, txz_half1, tyy, tyz_half1)
 #else
     call divstress_uv(divtx, divty, txx, txy, txz, tyy, tyz)
 #endif
@@ -421,13 +421,13 @@ time_loop: do jt_step = nstart, nsteps
     ! Calculate intermediate velocity field
     !   only 1:nz-1 are valid
 #ifdef PPCNDIFF
-    call diff_stag_array()
+    call diff_stag_array() !! gives both u and v
 #else
     u(:,:,1:nz-1) = u(:,:,1:nz-1) +                                     &
         dt * ( tadv1 * RHSx(:,:,1:nz-1) + tadv2 * RHSx_f(:,:,1:nz-1) )
-#endif
     v(:,:,1:nz-1) = v(:,:,1:nz-1) +                                     &
         dt * ( tadv1 * RHSy(:,:,1:nz-1) + tadv2 * RHSy_f(:,:,1:nz-1) )
+#endif
     w(:,:,1:nz-1) = w(:,:,1:nz-1) +                                     &
         dt * ( tadv1 * RHSz(:,:,1:nz-1) + tadv2 * RHSz_f(:,:,1:nz-1) )
     if (coord == nproc-1) then
