@@ -420,7 +420,6 @@ time_loop: do jt_step = nstart, nsteps
     !//////////////////////////////////////////////////////
     ! Calculate intermediate velocity field
     !   only 1:nz-1 are valid
-
 #ifdef PPCNDIFF
     call diff_stag_array()
 #else
