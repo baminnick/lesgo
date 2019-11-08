@@ -244,10 +244,11 @@ time_loop: do jt_step = nstart, nsteps
     ! in this version. Provides divtz 1:nz-1, except 1:nz at top process
 #ifdef PPCNDIFF
     call divstress_uv(divtx, divty, txx, txy, txz_half1, tyy, tyz_half1)
+    call divstress_w_cndiff(divtz, txz, tyz)
 #else
     call divstress_uv(divtx, divty, txx, txy, txz, tyy, tyz)
-#endif
     call divstress_w(divtz, txz, tyz, tzz)
+#endif
 
 
     ! Calculates u x (omega) term in physical space. Uses 3/2 rule for
@@ -421,19 +422,19 @@ time_loop: do jt_step = nstart, nsteps
     ! Calculate intermediate velocity field
     !   only 1:nz-1 are valid
 #ifdef PPCNDIFF
-    call diff_stag_array() !! gives both u and v
+    call diff_stag_array() !! gives both u, v, and w
 #else
     u(:,:,1:nz-1) = u(:,:,1:nz-1) +                                     &
         dt * ( tadv1 * RHSx(:,:,1:nz-1) + tadv2 * RHSx_f(:,:,1:nz-1) )
     v(:,:,1:nz-1) = v(:,:,1:nz-1) +                                     &
         dt * ( tadv1 * RHSy(:,:,1:nz-1) + tadv2 * RHSy_f(:,:,1:nz-1) )
-#endif
     w(:,:,1:nz-1) = w(:,:,1:nz-1) +                                     &
         dt * ( tadv1 * RHSz(:,:,1:nz-1) + tadv2 * RHSz_f(:,:,1:nz-1) )
     if (coord == nproc-1) then
         w(:,:,nz) = w(:,:,nz) +                                         &
             dt * ( tadv1 * RHSz(:,:,nz) + tadv2 * RHSz_f(:,:,nz) )
     end if
+#endif
 
     ! Set unused values to BOGUS so unintended uses will be noticable
 #ifdef PPSAFETYMODE

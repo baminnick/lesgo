@@ -29,7 +29,7 @@ use messages
 use sim_param, only : u, txz_half2, RHSx, RHSx_f, txz
 use sim_param, only : v, tyz_half2, RHSy, RHSy_f, tyz
 use sgs_param, only : nu, Nu_t
-use derivatives, only : ddz_w
+use derivatives, only : ddz_w, ddz_uv
 use fft
 #ifdef PPMAPPING
 use sim_param, only : JACO1, JACO2, mesh_stretch
@@ -37,9 +37,9 @@ use sim_param, only : JACO1, JACO2, mesh_stretch
 
 implicit none
 
-real(rprec), dimension(ld,ny,0:nz) :: Rx, usol, Ry, vsol
+real(rprec), dimension(ld,ny,0:nz) :: Rx, usol, Ry, vsol, Rz, wsol
 real(rprec), dimension(nx,ny,0:nz) :: a, b, c
-real(rprec), dimension(ld,ny,lbz:nz) :: dtxzdz_rhs, dtyzdz_rhs
+real(rprec), dimension(ld,ny,lbz:nz) :: dtxzdz_rhs, dtyzdz_rhs, dtzzdz_rhs
 real(rprec) :: nu_a, nu_b, nu_c, nu_r, const1, const2, const3
 integer :: jx, jy, jz, jz_min, jz_max
 
@@ -54,16 +54,25 @@ Rx(:,:,1:nz-1) = u(:,:,1:nz-1) +                                     &
     dt * ( tadv1 * RHSx(:,:,1:nz-1) + tadv2 * RHSx_f(:,:,1:nz-1) )
 Ry(:,:,1:nz-1) = v(:,:,1:nz-1) +                                     &
     dt * ( tadv1 * RHSy(:,:,1:nz-1) + tadv2 * RHSy_f(:,:,1:nz-1) )
+Rz(:,:,1:nz-1) = w(:,:,1:nz-1) +                                     &
+    dt * ( tadv1 * RHSz(:,:,1:nz-1) + tadv2 * RHSz_f(:,:,1:nz-1) )
+if (coord == nproc-1) then
+    Rz(:,:,nz) = w(:,:,nz) +                                         &
+        dt * ( tadv1 * RHSz(:,:,nz) + tadv2 * RHSz_f(:,:,nz) )
+endif
 
 ! Add explicit portion of Crank-Nicolson
 call ddz_w(txz_half2, dtxzdz_rhs, lbz)
 call ddz_w(tyz_half2, dtyzdz_rhs, lbz)
+call ddz_uv(tzz, dtzdz_rhs, lbz)
 dtxzdz_rhs(ld-1:ld, :, 1:nz-1) = 0._rprec
 dtyzdz_rhs(ld-1:ld, :, 1:nz-1) = 0._rprec
+dtzzdz_rhs(ld-1:ld, :, 1:nz-1) = 0._rprec
 #ifdef PPSAFETYMODE
 #ifdef PPMPI
 dtxzdz_rhs(:,:,0) = BOGUS
 dtyzdz_rhs(:,:,0) = BOGUS
+dtzzdz_rhs(:,:,0) = BOGUS
 #endif
 dtxzdz_rhs(:,:,nz) = BOGUS
 dtyzdz_rhs(:,:,nz) = BOGUS
@@ -71,6 +80,8 @@ dtyzdz_rhs(:,:,nz) = BOGUS
 ! Assuming fixed dt here!
 Rx(:,:,1:nz-1) = Rx(:,:,1:nz-1) - dt * 0.5_rprec * dtxzdz_rhs(:,:,1:nz-1)
 Ry(:,:,1:nz-1) = Ry(:,:,1:nz-1) - dt * 0.5_rprec * dtyzdz_rhs(:,:,1:nz-1)
+Rz(:,:,1:nz-1) = Rz(:,:,1:nz-1) - dt * 0.5_rprec * dtzzdz_rhs(:,:,1:nz-1)
+if (coord == nproc-1) Rz(:,:,nz) = Rz(:,:,nz) - dt * 0.5_rprec * dtzzdz_rhs(:,:,nz)
 
 ! Get bottom row 
 if (coord == 0) then
