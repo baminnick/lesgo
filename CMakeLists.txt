@@ -221,7 +221,8 @@ endif (USE_LVLSET_STRETCH)
 
 if (USE_CNDIFF)
     add_definitions(-DPPCNDIFF)
-    set(Sources ${Sources} diff_stag_array.f90 tridag_array_diff.f90 divstress_w_cndiff.f90)
+    set(Sources ${Sources} diff_stag_array_uv.f90 diff_stag_array_w.f90
+        tridag_array_diff.f90 divstress_w_cndiff.f90)
 endif (USE_CNDIFF)
 
 if (OUTPUT_SGS)
