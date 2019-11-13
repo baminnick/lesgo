@@ -40,6 +40,7 @@ real(rprec), dimension(ld,ny,0:nz) :: Rz, wsol
 real(rprec), dimension(nx,ny,0:nz) :: a, b, c
 real(rprec), dimension(ld,ny,lbz:nz) :: dtzzdz_rhs
 real(rprec) :: nu_a, nu_b, nu_c, nu_r, const1, const2
+real(rprec), dimension(nx,ny) :: Nu_up
 integer :: jx, jy, jz, jz_min, jz_max
 
 ! Set constants
@@ -56,7 +57,7 @@ if (coord == nproc-1) then
 endif
 
 ! Add explicit portion of Crank-Nicolson
-call ddz_uv(tzz, dtzdz_rhs, lbz)
+call ddz_uv(tzz, dtzzdz_rhs, lbz)
 dtzzdz_rhs(ld-1:ld, :, 1:nz-1) = 0._rprec
 #ifdef PPSAFETYMODE
 #ifdef PPMPI
@@ -141,9 +142,10 @@ if (coord == 0) then
 #endif
             end do
             end do
+    end select
     jz_min = 3
 else
-    jz_min = 1
+    jz_min = 2
 endif
 
 ! Get top row
@@ -193,12 +195,12 @@ if (coord == nproc-1) then
                 a(jx,jy,nz-1) = -const1*(1._rprec/JACO2(nz-1))*const2*(1._rprec/JACO1(nz-1))*nu_a
                 b(jx,jy,nz-1) = 1._rprec + const1*(1._rprec/JACO2(nz-1))*          &
                     (const2*(1._rprec/JACO1(2))*nu_a + (nu/(L_z-mesh_stretch(nz-1))))
-                Rx(jx,jy,nz-1) = Rx(jx,jy,nz-1) + const1*(1._rprec/JACO2(1))*      &
+                Rz(jx,jy,nz-1) = Rz(jx,jy,nz-1) + const1*(1._rprec/JACO2(1))*      &
                     (nu/(L_z-mesh_stretch(nz-1)))*utop
 #else
                 a(jx,jy,nz-1) = -const1*const2*nu_a
                 b(jx,jy,nz-1) = 1._rprec + const1*(const2*nu_a + const3*nu)
-                Rx(jx,jy,nz-1) = Rx(jx,jy,nz-1) + const1*const3*nu*utop
+                Rz(jx,jy,nz-1) = Rz(jx,jy,nz-1) + const1*const3*nu*utop
 #endif
             end do
             end do
@@ -208,6 +210,52 @@ if (coord == nproc-1) then
 #ifdef PPMPI
 else
     jz_max = nz-1
+endif
+#endif
+
+! Compute coefficients in domain near bottom interface
+! This involves passing SGS viscosity from down coord
+#ifdef PPMPI
+! Pass SGS info up
+if (sgs) then
+    call mpi_sendrecv ( Nu_t(1,1,nz-1), nx*ny, MPI_RPREC, up, 9,            &
+        Nu_up(1, 1), nx*ny, MPI_RPREC, down, 9, comm, status, ierr)
+endif
+
+! Now compute coefficients
+if (coord > 0) then
+    do jy = 1, ny
+    do jx = 1, nx
+        if (sgs) then
+            ! Interpolate eddy viscosity onto uv-grid
+            nu_a = 0.5_rprec*(Nu_t(jx,jy,1) + Nu_up(jx,jy)) + nu
+            nu_c = 0.5_rprec*(Nu_t(jx,jy,2) + Nu_t(jx,jy,1)) + nu
+#ifdef PPMAPPING
+            nu_b = (nu_c/JACO2(1)) + (nu_a/JACO2(0))
+#else
+            nu_b = nu_a + nu_c
+#endif
+        else
+            nu_a = nu
+#ifdef PPMAPPING
+            nu_b = (nu/JACO2(1)) + (nu/JACO2(0))
+#else
+            nu_b = 2._rprec*nu
+#endif
+            nu_c = nu
+        endif
+
+#ifdef PPMAPPING
+        a(jx,jy,1) = -const1*(1._rprec/JACO1(1))*const2*(1._rprec/JACO2(0))*nu_a
+        b(jx,jy,1) = 1._rprec + const1*(1._rprec/JACO1(1))*const2*nu_b
+        c(jx,jy,1) = -const1*(1._rprec/JACO1(1))*const2*(1._rprec/JACO2(1))*nu_a
+#else
+        a(jx,jy,1) = -const1*const2*nu_a
+        b(jx,jy,1) = 1._rprec + const1*const2*nu_b
+        c(jx,jy,1) = -const1*const2*nu_c
+#endif
+    end do
+    end do
 endif
 #endif
 
@@ -249,9 +297,13 @@ end do
 end do
 
 ! Find intermediate velocity in TDMA
-call tridag_array_diff (a, b, c, Rz, wsol)
+call tridag_array_diff_w (a, b, c, Rz, wsol)
 
 ! Fill velocity solution
-w(:nx,:ny,1:nz-1) = wsol(:nx,:ny,1:nz-1)
+if (coord == 0) then
+    w(:nx,:ny,2:nz-1) = wsol(:nx,:ny,2:nz-1)
+else
+    w(:nx,:ny,1:nz-1) = wsol(:nx,:ny,1:nz-1)
+endif
 
 end subroutine diff_stag_array_w

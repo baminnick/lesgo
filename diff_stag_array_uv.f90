@@ -287,8 +287,8 @@ end do
 end do
 
 ! Find intermediate velocity in TDMA
-call tridag_array_diff (a, b, c, Rx, usol)
-call tridag_array_diff (a, b, c, Ry, vsol)
+call tridag_array_diff_uv (a, b, c, Rx, usol)
+call tridag_array_diff_uv (a, b, c, Ry, vsol)
 
 ! Fill velocity solution
 u(:nx,:ny,1:nz-1) = usol(:nx,:ny,1:nz-1)

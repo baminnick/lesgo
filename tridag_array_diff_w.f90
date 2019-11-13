@@ -19,7 +19,7 @@
 
 #ifdef PPMPI
 !*******************************************************************************
-subroutine tridag_array_diff (a, b, c, r, u)
+subroutine tridag_array_diff_w (a, b, c, r, u)
 !*******************************************************************************
 use types, only : rprec
 use param
@@ -48,22 +48,23 @@ if (coord == 0) then
     do jy = 1, ny
         do jx = 1, nx
 #ifdef PPSAFETYMODE
-            if (b(jx, jy, 1) == 0._rprec) then
+            if (b(jx, jy, 2) == 0._rprec) then
                 write (*, *) 'tridag_array_diff: rewrite eqs, jx, jy= ', jx, jy
                 stop
             end if
 #endif
-            u(jx,jy,1) = r(jx,jy,1) / b(jx,jy,1)
+            u(jx,jy,2) = r(jx,jy,2) / b(jx,jy,2)
         end do
     end do
-    bet = b(:, :, 1)
-    j_minf = 2 ! this is only for forward pass
+    bet = b(:, :, 2)
+    j_minf = 3 ! this is only for forward pass
+    j_minb = 2 ! this is only for backward pass
 else
     j_minf = 1 ! this is only for forward pass
+    j_minb = 1 ! this is only for backward pass
 end if
 
 j_maxf = nz-1 ! this is only for forward pass
-j_minb = 1 ! this is only for backward pass
 
 if (coord == nproc-1) then
     j_maxb = nz-2 ! this is only for backward pass
@@ -147,7 +148,7 @@ do q = 1, nchunks
 
 end do
 
-end subroutine tridag_array_diff
+end subroutine tridag_array_diff_w
 
 #else
 !*******************************************************************************
