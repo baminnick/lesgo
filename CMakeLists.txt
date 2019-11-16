@@ -33,7 +33,7 @@ option(USE_RNL "Enable restricted nonlinear model." OFF)
 option(USE_GQL "Enable generalized quasilinear model." OFF)
 option(USE_MAPPING "Enable grid mapping transformation." ON)
 option(USE_LVLSET_STRETCH "Enable simplified level set with mapping." OFF)
-option(USE_CNDIFF "Enable Crank-Nicolson time marching for wall-normal diffusion." OFF)
+option(USE_CNDIFF "Enable Crank-Nicolson time marching for wall-normal diffusion." ON)
 
 option(OUTPUT_SGS "Output time-averaging statistics on SGS model." ON)
 option(OUTPUT_BUDGET "Output time-averaging statistics needed for budgets." OFF)
@@ -222,7 +222,8 @@ endif (USE_LVLSET_STRETCH)
 if (USE_CNDIFF)
     add_definitions(-DPPCNDIFF)
     set(Sources ${Sources} diff_stag_array_uv.f90 diff_stag_array_w.f90
-        tridag_array_diff.f90 divstress_w_cndiff.f90)
+        tridag_array_diff_uv.f90 tridag_array_diff_w.f90
+        divstress_w_cndiff.f90)
 endif (USE_CNDIFF)
 
 if (OUTPUT_SGS)
