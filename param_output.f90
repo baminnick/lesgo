@@ -132,6 +132,7 @@ write(2,f_fmt) 'ubot : ', ubot
 write(2,f_fmt) 'utop : ', utop
 write(2,f_fmt) 'zo : ', zo
 #ifdef PPOUTPUT_WMLES
+write(2,i_fmt) 'ihwm : ', ihwm
 write(2,f_fmt) 'hwm : ', hwm
 write(2,i_fmt) 'nzr : ', nzr
 #endif

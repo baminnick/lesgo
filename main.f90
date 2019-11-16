@@ -264,8 +264,14 @@ time_loop: do jt_step = nstart, nsteps
     ! Compute divergence of SGS shear stresses
     ! the divt's and the diagonal elements of t are not equivalenced
     ! in this version. Provides divtz 1:nz-1, except 1:nz at top process
+#ifdef PPCNDIFF
+    call divstress_uv(divtx, divty, txx, txy, txz_half1, tyy, tyz_half1)
+    call divstress_w_cndiff(divtz, txz, tyz)
+#else
     call divstress_uv(divtx, divty, txx, txy, txz, tyy, tyz)
     call divstress_w(divtz, txz, tyz, tzz)
+#endif
+
 
     ! Calculates u x (omega) term in physical space. Uses 3/2 rule for
     ! dealiasing. Stores this term in RHS (right hand side) variable
@@ -450,6 +456,10 @@ time_loop: do jt_step = nstart, nsteps
     !//////////////////////////////////////////////////////
     ! Calculate intermediate velocity field
     !   only 1:nz-1 are valid
+#ifdef PPCNDIFF
+    call diff_stag_array_uv()
+    call diff_stag_array_w()
+#else
     u(:,:,1:nz-1) = u(:,:,1:nz-1) +                                     &
         dt * ( tadv1 * RHSx(:,:,1:nz-1) + tadv2 * RHSx_f(:,:,1:nz-1) )
     v(:,:,1:nz-1) = v(:,:,1:nz-1) +                                     &
@@ -460,6 +470,7 @@ time_loop: do jt_step = nstart, nsteps
         w(:,:,nz) = w(:,:,nz) +                                         &
             dt * ( tadv1 * RHSz(:,:,nz) + tadv2 * RHSz_f(:,:,nz) )
     end if
+#endif
 
     ! Set unused values to BOGUS so unintended uses will be noticable
 #ifdef PPSAFETYMODE

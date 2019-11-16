@@ -6,12 +6,12 @@ cmake_minimum_required(VERSION 2.8.9)
 
 # Specify Compiler
 # Options: Intel and GNU
-set(CMAKE_Fortran_COMPILER_ID "GNU")
+set(CMAKE_Fortran_COMPILER_ID "Intel")
 
 # Set the name of the computer you are compiling on.
 # Supported computers: panoramix, njord, marcc, darwin-brew
 # Otherwise, default settings are used
-set(hostname "default")
+set(hostname "marcc")
 
 # Read and write binary files as big_endian or little_endian
 # Options: DEFAULT, LITTLE, or BIG
@@ -33,6 +33,7 @@ option(USE_RNL "Enable restricted nonlinear model." OFF)
 option(USE_GQL "Enable generalized quasilinear model." OFF)
 option(USE_MAPPING "Enable grid mapping transformation." ON)
 option(USE_LVLSET_STRETCH "Enable simplified level set with mapping." OFF)
+option(USE_CNDIFF "Enable Crank-Nicolson time marching for wall-normal diffusion." OFF)
 
 option(OUTPUT_SGS "Output time-averaging statistics on SGS model." ON)
 option(OUTPUT_BUDGET "Output time-averaging statistics needed for budgets." OFF)
@@ -218,6 +219,12 @@ if (USE_LVLSET_STRETCH)
     set(exec_name "${exec_name}-ls2")
 endif (USE_LVLSET_STRETCH)
 
+if (USE_CNDIFF)
+    add_definitions(-DPPCNDIFF)
+    set(Sources ${Sources} diff_stag_array_uv.f90 diff_stag_array_w.f90
+        tridag_array_diff.f90 divstress_w_cndiff.f90)
+endif (USE_CNDIFF)
+
 if (OUTPUT_SGS)
     add_definitions(-DPPOUTPUT_SGS)
 endif (OUTPUT_SGS)
@@ -256,8 +263,8 @@ endif (READ_ENDIAN STREQUAL "BIG")
 
 # Intel
 if (CMAKE_Fortran_COMPILER_ID STREQUAL "Intel")
-    set (CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -cpp -O2 -funroll-loops -no-wrap-margin -assume byterecl")
-    #set (CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -cpp -O0 -g -traceback -no-wrap-margin -assume byterecl")
+    #set (CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -cpp -O2 -funroll-loops -no-wrap-margin -assume byterecl")
+    set (CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -cpp -O0 -g -traceback -no-wrap-margin -assume byterecl")
 # GNU
 else (CMAKE_Fortran_COMPILER_ID STREQUAL "Intel")
     set (CMAKE_Fortran_FLAGS "-cpp -O2 -ffast-math -funroll-loops -fall-intrinsics -Wall -fcheck=all")

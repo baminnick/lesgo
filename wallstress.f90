@@ -183,16 +183,25 @@ end subroutine ws_dns_lbc
 !*******************************************************************************
 subroutine ws_dns_ubc
 !*******************************************************************************
-use param, only : nx, ny, nu_molec, z_i, u_star, dz
-use param, only : utop
+use param, only : nx, ny, nu_molec, z_i, u_star, utop, L_z
+#ifdef PPMAPPING
+use sim_param, only : mesh_stretch
+#else
+use param, only : dz
+#endif
 use sim_param , only : u, v
 implicit none
 integer :: i, j
 
 do j = 1, ny
     do i = 1, nx
+#ifdef PPMAPPING
+        dudz(i,j,nz) = ( utop - u(i,j,nz-1) ) / (L_z - mesh_stretch(nz-1))
+        dvdz(i,j,nz) = -v(i,j,nz-1) / (L_z - mesh_stretch(nz-1))
+#else
         dudz(i,j,nz) = ( utop - u(i,j,nz-1) ) / (0.5_rprec*dz)
         dvdz(i,j,nz) = -v(i,j,nz-1) / (0.5_rprec*dz)
+#endif
         txz(i,j,nz) = -nu_molec/(z_i*u_star)*dudz(i,j,nz)
         tyz(i,j,nz) = -nu_molec/(z_i*u_star)*dvdz(i,j,nz)
     end do
@@ -213,16 +222,19 @@ implicit none
 integer :: i, j
 real(rprec), dimension(nx, ny) :: denom, u_avg, ustar
 real(rprec), dimension(ld, ny) :: u1, v1
-real(rprec) :: const
+real(rprec) :: const, const2
 
 u1 = u(:,:,1)
 v1 = v(:,:,1)
 call test_filter(u1)
 call test_filter(v1)
+
 #ifdef PPMAPPING
 denom = log(0.5_rprec*JACO2(1)*dz/zo)
+const2 = JACO2(1)
 #else
 denom = log(0.5_rprec*dz/zo)
+const2 = 1._rprec
 #endif
 u_avg = sqrt(u1(1:nx,1:ny)**2+v1(1:nx,1:ny)**2)
 ustar = u_avg*vonk/denom
@@ -233,13 +245,9 @@ do j = 1, ny
         txz(i,j,1) = const*u1(i,j)
         tyz(i,j,1) = const*v1(i,j)
         !this is as in Moeng 84
-#ifdef PPMAPPING
-        dudz(i,j,1) = ustar(i,j)/(0.5_rprec*JACO2(1)*dz*vonK)*u(i,j,1)/u_avg(i,j)
-        dvdz(i,j,1) = ustar(i,j)/(0.5_rprec*JACO2(1)*dz*vonK)*v(i,j,1)/u_avg(i,j)
-#else
-        dudz(i,j,1) = ustar(i,j)/(0.5_rprec*dz*vonK)*u(i,j,1)/u_avg(i,j)
-        dvdz(i,j,1) = ustar(i,j)/(0.5_rprec*dz*vonK)*v(i,j,1)/u_avg(i,j)
-#endif
+        dudz(i,j,1) = ustar(i,j)/(0.5_rprec*const2*dz*vonK)*u(i,j,1)/u_avg(i,j)
+        dvdz(i,j,1) = ustar(i,j)/(0.5_rprec*const2*dz*vonK)*v(i,j,1)/u_avg(i,j)
+
         dudz(i,j,1) = merge(0._rprec,dudz(i,j,1),u(i,j,1).eq.0._rprec)
         dvdz(i,j,1) = merge(0._rprec,dvdz(i,j,1),v(i,j,1).eq.0._rprec)
     end do
