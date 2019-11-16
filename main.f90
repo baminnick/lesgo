@@ -422,8 +422,8 @@ time_loop: do jt_step = nstart, nsteps
     ! Calculate intermediate velocity field
     !   only 1:nz-1 are valid
 #ifdef PPCNDIFF
-    call diff_stag_array_uv() !! gives both u and v
-    call diff_stag_array_w()  !! gives w
+    call diff_stag_array_uv()
+    call diff_stag_array_w()
 #else
     u(:,:,1:nz-1) = u(:,:,1:nz-1) +                                     &
         dt * ( tadv1 * RHSx(:,:,1:nz-1) + tadv2 * RHSx_f(:,:,1:nz-1) )

@@ -301,9 +301,14 @@ call tridag_array_diff_w (a, b, c, Rz, wsol)
 
 ! Fill velocity solution
 if (coord == 0) then
+    w(:,:,1) = w(:,:,1) + dt * ( tadv1 * RHSz(:,:,1) + tadv2 * RHSz_f(:,:,1) )
     w(:nx,:ny,2:nz-1) = wsol(:nx,:ny,2:nz-1)
 else
     w(:nx,:ny,1:nz-1) = wsol(:nx,:ny,1:nz-1)
+endif
+
+if (coord == nproc-1) then
+    w(:,:,nz) = w(:,:,nz) + dt * ( tadv1 * RHSz(:,:,nz) + tadv2 * RHSz_f(:,:,nz) )
 endif
 
 end subroutine diff_stag_array_w
