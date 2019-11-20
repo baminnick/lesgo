@@ -539,15 +539,17 @@ time_loop: do jt_step = nstart, nsteps
 
         ! Send top wall stress to bottom process
 #ifdef PPMPI
-        if ( (coord == nproc-1) .and. (ubc_mom >0) ) then
-            tau_top = get_tau_wall_top()
-        else
-            tau_top = 0._rprec
-        endif
+        if (ubc_mom >0) then
+            if (coord == nproc-1) then
+                tau_top = get_tau_wall_top()
+            else
+                tau_top = 0._rprec
+            endif
 
-        call mpi_allreduce(tau_top, maxdummy, 1, mpi_rprec,               &
-            MPI_SUM, comm, ierr)
-        tau_top = maxdummy
+            call mpi_allreduce(tau_top, maxdummy, 1, mpi_rprec,               &
+                MPI_SUM, comm, ierr)
+            tau_top = maxdummy
+        endif
 #endif
 
         if (coord == 0) then
