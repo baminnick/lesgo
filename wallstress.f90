@@ -53,6 +53,9 @@ use messages, only : error
 use iwmles, only : iwm_wallstress
 use tlwmles, only : tlwm
 use sim_param, only : txz, tyz, dudz, dvdz
+#ifdef PPCNDIFF
+use sim_param, only : txz_half2, tyz_half2
+#endif
 implicit none
 character(*), parameter :: sub_name = 'wallstress'
 
@@ -173,8 +176,15 @@ do j = 1, ny
         dudz(i,j,1) = ( u(i,j,1) - ubot ) / ( 0.5_rprec*dz )
         dvdz(i,j,1) = v(i,j,1) / ( 0.5_rprec*dz )
 #endif
+#ifdef PPCNDIFF
         txz(i,j,1) = -nu_molec/(z_i*u_star)*dudz(i,j,1)
         tyz(i,j,1) = -nu_molec/(z_i*u_star)*dvdz(i,j,1)
+        txz_half2(i,j,1) = 0.5_rprec*txz(i,j,1)
+        tyz_half2(i,j,1) = 0.5_rprec*tyz(i,j,1)
+#else
+        txz(i,j,1) = -nu_molec/(z_i*u_star)*dudz(i,j,1)
+        tyz(i,j,1) = -nu_molec/(z_i*u_star)*dvdz(i,j,1)
+#endif
     end do
 end do
 
@@ -202,8 +212,15 @@ do j = 1, ny
         dudz(i,j,nz) = ( utop - u(i,j,nz-1) ) / (0.5_rprec*dz)
         dvdz(i,j,nz) = -v(i,j,nz-1) / (0.5_rprec*dz)
 #endif
+#ifdef PPCNDIFF
         txz(i,j,nz) = -nu_molec/(z_i*u_star)*dudz(i,j,nz)
         tyz(i,j,nz) = -nu_molec/(z_i*u_star)*dvdz(i,j,nz)
+        txz_half2(i,j,nz) = 0.5_rprec*txz(i,j,nz)
+        tyz_half2(i,j,nz) = 0.5_rprec*tyz(i,j,nz)
+#else
+        txz(i,j,nz) = -nu_molec/(z_i*u_star)*dudz(i,j,nz)
+        tyz(i,j,nz) = -nu_molec/(z_i*u_star)*dvdz(i,j,nz)
+#endif
     end do
 end do
 
