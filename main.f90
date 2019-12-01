@@ -250,7 +250,6 @@ time_loop: do jt_step = nstart, nsteps
     call divstress_w(divtz, txz, tyz, tzz)
 #endif
 
-
     ! Calculates u x (omega) term in physical space. Uses 3/2 rule for
     ! dealiasing. Stores this term in RHS (right hand side) variable
 

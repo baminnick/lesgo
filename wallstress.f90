@@ -179,8 +179,8 @@ do j = 1, ny
 #ifdef PPCNDIFF
         txz(i,j,1) = -nu_molec/(z_i*u_star)*dudz(i,j,1)
         tyz(i,j,1) = -nu_molec/(z_i*u_star)*dvdz(i,j,1)
-        txz_half2(i,j,1) = 0.5_rprec*txz(i,j,1)
-        tyz_half2(i,j,1) = 0.5_rprec*tyz(i,j,1)
+        txz_half2(i,j,1) = txz(i,j,1)
+        tyz_half2(i,j,1) = tyz(i,j,1)
 #else
         txz(i,j,1) = -nu_molec/(z_i*u_star)*dudz(i,j,1)
         tyz(i,j,1) = -nu_molec/(z_i*u_star)*dvdz(i,j,1)
@@ -215,8 +215,8 @@ do j = 1, ny
 #ifdef PPCNDIFF
         txz(i,j,nz) = -nu_molec/(z_i*u_star)*dudz(i,j,nz)
         tyz(i,j,nz) = -nu_molec/(z_i*u_star)*dvdz(i,j,nz)
-        txz_half2(i,j,nz) = 0.5_rprec*txz(i,j,nz)
-        tyz_half2(i,j,nz) = 0.5_rprec*tyz(i,j,nz)
+        txz_half2(i,j,nz) = txz(i,j,nz)
+        tyz_half2(i,j,nz) = tyz(i,j,nz)
 #else
         txz(i,j,nz) = -nu_molec/(z_i*u_star)*dudz(i,j,nz)
         tyz(i,j,nz) = -nu_molec/(z_i*u_star)*dvdz(i,j,nz)
