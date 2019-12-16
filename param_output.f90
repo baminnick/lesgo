@@ -239,6 +239,7 @@ write(2,f_fmt) 'scal_source : ', scal_source
 write(2,f_fmt) 'zo_s : ', zo_s
 write(2,f_fmt) 'T_scale : ', T_scale
 write(2,l_fmt) 'passive_scalar : ', passive_scalar
+write(2,f_fmt) 'Ri : ', Ri
 write(2,i_fmt) 'sgs_model_scal : ', sgs_model_scal
 write(2,f_fmt) 'Pr_sgs : ', Pr_sgs
 write(2,i_fmt) 'cs_count_scal : ', cs_count_scal

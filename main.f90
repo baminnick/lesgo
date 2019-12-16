@@ -70,8 +70,7 @@ use functions, only : gql_filter
 #endif
 
 #ifdef PPSCALARS
-! use scalars, only : buoyancy_force, scalars_transport, scalars_deriv
-use scalars, only : scalars_transport, scalars_deriv
+use scalars, only : buoyancy_force, scalars_transport, scalars_deriv
 #endif
 
 use messages
@@ -345,7 +344,7 @@ time_loop: do jt_step = nstart, nsteps
 
 #ifdef PPSCALARS
     call scalars_transport()
-!    call buoyancy_force()
+    call buoyancy_force()
 #endif
 
     ! Coriolis: add forcing to RHS

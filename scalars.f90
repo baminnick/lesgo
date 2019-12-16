@@ -74,6 +74,9 @@ logical, public :: inits = .true.
 character(64) :: fname
 ! Reference temperature scale
 real(rprec), public :: T_scale = 300._rprec
+! Richardson number
+real(rprec), public :: Ri = 0._rprec
+
 
 ! Boundary conditions
 ! lbc: lower boundary condition
@@ -812,7 +815,7 @@ subroutine buoyancy_force
 !*******************************************************************************
 ! This subroutine calculates the buoyancy term due to temperature to be added to
 ! the RHS of the vertical momentum equation.
-use param, only : coord, nx, ny, nz
+use param, only : coord, nx, ny, nz, fourier
 use sim_param, only :  RHSz
 
 integer :: k, jz_min
@@ -833,10 +836,22 @@ real(rprec) :: theta_bar
 
 ! Add to RHSz
 if ( .not.passive_scalar ) then
-    do k = jz_min, nz-1
-        theta_bar = sum(0.5_rprec*(theta(1:nx,:,k)+theta(1:nx,:,k-1)))/nx/ny
-        RHSz(1:nx,:,k) = RHSz(1:nx,:,k) + g*(0.5_rprec*(theta(1:nx,:,k)+theta(1:nx,:,k-1)) - theta_bar)
-    end do
+
+    if (fourier) then
+        ! Add buoyancy forcing to all modes except kx = ky = 0
+        do k = jz_min, nz-1
+            RHSz(2:nx,2:,k) = RHSz(2:nx,2:,k) + Ri*(0.5_rprec*(theta(2:nx,2:,k)+theta(2:nx,2:,k-1)))
+            RHSz(1,2:,k) = RHSz(1,2:,k) + Ri*(0.5_rprec*(theta(1,2:,k)+theta(1,2:,k-1)))
+            RHSz(2:nx,1,k) = RHSz(2:nx,1,k) + Ri*(0.5_rprec*(theta(2:nx,1,k)+theta(2:nx,1,k-1)))
+        end do
+    else
+        do k = jz_min, nz-1
+            theta_bar = sum(0.5_rprec*(theta(1:nx,:,k)+theta(1:nx,:,k-1)))/nx/ny
+            ! RHSz(1:nx,:,k) = RHSz(1:nx,:,k) + g*(0.5_rprec*(theta(1:nx,:,k)+theta(1:nx,:,k-1)) - theta_bar)
+            RHSz(1:nx,:,k) = RHSz(1:nx,:,k) + Ri*(0.5_rprec*(theta(1:nx,:,k)+theta(1:nx,:,k-1)) - theta_bar)
+        end do
+    end if
+
 end if
 
 end subroutine buoyancy_force
