@@ -79,6 +79,17 @@ end type tavg_scal_t
 type rs_scal_t
     real(rprec) :: thetap2, upthetap, vpthetap, wpthetap
 end type rs_scal_t
+
+#ifdef PPOUTPUT_TURBSPEC
+type tavg_scal_turbspec_t
+    complex(rprec) :: thetaf
+    real(rprec) :: theta2, utheta, vtheta, wtheta
+end type tavg_scal_turbspec_t
+
+type scal_turbspec_t
+    real(rprec) :: thetap2, upthetap, vpthetap, wpthetap
+end type scal_turbspec_t
+#endif
 #endif
 
 #ifdef PPOUTPUT_SGS
@@ -198,6 +209,12 @@ type(rs_t), allocatable, dimension(:) :: rs_zplane, cnpy_zplane
 #ifdef PPSCALARS
 type(tavg_scal_t), allocatable, dimension(:,:,:) :: tavg_scal
 type(rs_scal_t), allocatable, dimension(:,:,:) :: rs_scal
+#ifdef PPOUTPUT_TURBSPEC
+type(tavg_scal_turbspec_t), allocatable, dimension(:,:,:) :: tavg_scal_turbspecx
+type(tavg_scal_turbspec_t), allocatable, dimension(:,:,:) :: tavg_scal_turbspecy
+type(scal_turbspec_t), allocatable, dimension(:,:,:) :: scal_turbspecx
+type(scal_turbspec_t), allocatable, dimension(:,:,:) :: scal_turbspecy
+#endif
 #endif
 
 #ifdef PPOUTPUT_SGS
@@ -399,6 +416,32 @@ c % vpthetap = a % vtheta - b % v * a % theta
 c % wpthetap = a % wtheta - b % w * a % theta
 
 end function rs_scal_compute
+
+#ifdef PPOUTPUT_TURBSPEC
+!*******************************************************************************
+function scal_turbspec_compute( a , b, lbz2 ) result( c )
+!*******************************************************************************
+implicit none
+integer, intent(in) :: lbz2
+type(tavg_scal_turbspec_t), dimension(:,:,lbz2:), intent(in) :: a
+type(tavg_turbspec_t), dimension(:,:,lbz2:), intent(in) :: b
+type(scal_turbspec_t), allocatable, dimension(:,:,:) :: c
+
+integer :: ubx, uby, ubz
+
+ubx = ubound(a,1)
+uby = ubound(a,2)
+ubz = ubound(a,3)
+
+allocate(c(ubx,uby,lbz2:ubz))
+
+c % thetap2  = a % theta2 - real( a % thetaf * conjg( a % thetaf ) )
+c % upthetap = a % utheta - real( b % uf * conjg( a % thetaf ) )
+c % vpthetap = a % vtheta - real( b % vf * conjg( a % thetaf ) )
+c % wpthetap = a % wtheta - real( b % wf * conjg( a % thetaf ) )
+
+end function scal_turbspec_compute
+#endif
 #endif
 
 #ifdef PPOUTPUT_BUDGET
