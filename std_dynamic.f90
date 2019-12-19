@@ -28,6 +28,9 @@ use types, only : rprec
 use param, only : ld, ny, nz, coord
 use test_filtermodule
 use sim_param, only : u, v, w
+#ifdef PPMAPPING
+use sim_param, only : delta_stretch
+#endif
 use sgs_param, only : ee_now, S11, S12, S13, S22, S23, S33, delta, S,          &
     u_bar, v_bar, w_bar, L11, L12, L13, L22, L23, L33,                         &
     M11, M12, M13, M22, M23, M33,                                              &
@@ -126,7 +129,11 @@ do jz = 1, nz
     call test_filter ( S_S33_bar )
 
     ! now put beta back into M_ij
+#ifdef PPMAPPING
+    const = 2._rprec*delta_stretch(jz)**2
+#else
     const = 2._rprec*delta**2
+#endif
     M11 = const*(S_S11_bar - 4._rprec*S_bar*S11_bar)
     M12 = const*(S_S12_bar - 4._rprec*S_bar*S12_bar)
     M13 = const*(S_S13_bar - 4._rprec*S_bar*S13_bar)

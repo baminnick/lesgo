@@ -198,7 +198,11 @@ if (sgs) then
     ! Dynamic procedures: modify/set Sij and Cs_opt2 (specific to sgs_model)
     else
         ! recall: l is the filter size
+#ifdef PPMAPPING
+        l(:) = delta_stretch(1:nz) ! delta_stretch from lbz:nz, l from 1:nz
+#else
         l = delta
+#endif
 
         ! Use the Smagorinsky model until DYN_init timestep
         if ((jt == 1) .and. (inilag)) then
