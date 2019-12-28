@@ -109,13 +109,23 @@ if (sgs) then
             if (coord == 0) then
                 ! z's nondimensional, l here is on uv-nodes
 #ifdef PPMAPPING
-                zz(1) = mesh_stretch(1)
-                l(1) = ( Co**(wall_damp_exp)*(vonk*zz(1))**(-wall_damp_exp)    &
-                    + (delta_stretch(1))**(-wall_damp_exp) )**(-1._rprec/wall_damp_exp)
+                if (damp_model == 1) then
+                    zz(1) = mesh_stretch(1)
+                    l(1) = ( Co**(wall_damp_exp)*(vonk*zz(1))**(-wall_damp_exp)    &
+                        + (delta_stretch(1))**(-wall_damp_exp) )**(-1._rprec/wall_damp_exp)
+                else
+                    zz(1) = mesh_stretch(1)*u_star/nu_molec !! plus units
+                    l(1) = delta_stretch(1)*(1.0_rprec - exp(-zz(1)/25.0_rprec)) !! A+ = 25.0
+                end if
 #else
-                zz(1) = 0.5_rprec * dz
-                l(1) = ( Co**(wall_damp_exp)*(vonk*zz(1))**(-wall_damp_exp)    &
-                    + (delta)**(-wall_damp_exp) )**(-1._rprec/wall_damp_exp)
+                if (damp_model == 1) then
+                    zz(1) = 0.5_rprec * dz
+                    l(1) = ( Co**(wall_damp_exp)*(vonk*zz(1))**(-wall_damp_exp)    &
+                        + (delta)**(-wall_damp_exp) )**(-1._rprec/wall_damp_exp)
+                else
+                    zz(1) = 0.5_rprec * dz * u_star / nu_molec !! plus units
+                    l(1) = delta*(1.0_rprec - exp(-zz(1)/25.0_rprec)) !! A+ = 25.0
+                end if
 #endif
                 jz_min = 2
             else
@@ -125,13 +135,23 @@ if (sgs) then
             do jz = jz_min, nz
                 ! z's nondimensional, l here is on w-nodes
 #ifdef PPMAPPING
-                zz(jz) = mesh_stretch(jz)-0.5*JACO2(jz)*dz
-                l(jz) = ( Co**(wall_damp_exp)*(vonk*zz(jz))**(-wall_damp_exp)  &
-                    + (delta_stretch(jz))**(-wall_damp_exp) )**(-1._rprec/wall_damp_exp)
+                if (damp_model == 1) then
+                    zz(jz) = mesh_stretch(jz)-0.5*JACO2(jz)*dz
+                    l(jz) = ( Co**(wall_damp_exp)*(vonk*zz(jz))**(-wall_damp_exp)  &
+                        + (delta_stretch(jz))**(-wall_damp_exp) )**(-1._rprec/wall_damp_exp)
+                else
+                    zz(jz) = (mesh_stretch(jz)-0.5*JACO2(jz)*dz) * u_star / nu_molec !! plus units
+                    l(jz) = delta_stretch(jz)*(1.0_rprec - exp(-zz(jz)/25.0_rprec)) !! A= = 25.0
+                endif
 #else
-                zz(jz) = ((jz - 1) + coord * (nz - 1)) * dz
-                l(jz) = ( Co**(wall_damp_exp)*(vonk*zz(jz))**(-wall_damp_exp)  &
-                    + (delta)**(-wall_damp_exp) )**(-1._rprec/wall_damp_exp)
+                if (damp_model == 1) then
+                    zz(jz) = ((jz - 1) + coord * (nz - 1)) * dz
+                    l(jz) = ( Co**(wall_damp_exp)*(vonk*zz(jz))**(-wall_damp_exp)  &
+                        + (delta)**(-wall_damp_exp) )**(-1._rprec/wall_damp_exp)
+                else
+                    zz(jz) = (((jz - 1) + coord * (nz - 1)) * dz) * u_star / nu_molec !! plus units
+                    l(jz) = delta*(1.0_rprec - exp(-zz(jz)/25.0_rprec)) !! A= = 25.0
+                end if
 #endif
             end do
 

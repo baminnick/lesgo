@@ -29,7 +29,7 @@ subroutine divstress_w_cndiff(divt, tx, ty)
 ! treated implicitly
 !
 use types, only : rprec
-use param, only : ld, nx, ny, nz, coord, BOGUS, lbz, nproc, coord
+use param, only : ld, nx, ny, nz, BOGUS, lbz
 use derivatives, only : ddx, ddy, ddz_uv
 implicit none
 
