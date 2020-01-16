@@ -350,9 +350,9 @@ if (coord == 0) then
         call padd( nu_coef_big(:,:), nu_coef(:,:) )
         call dft_direct_back_2d_n_yonlyC_big( nu_coef_big(:,:) )
 
-        txx_big(:,:) = convolve_rnl( -nu_coef_big(:,:), dudx_big(1:nx,:,1) )
-        txy_big(:,:) = convolve_rnl( -nu_coef_big(:,:), 0.5_rprec*(dudy_big(1:nx,:,1)+dvdx_big(1:nx,:,1)) )
-        tyy_big(:,:) = convolve_rnl( -nu_coef_big(:,:), dvdy_big(1:nx,:,1) )
+        txx_big(:,:) = convolve_rnl( -nu_coef_big(:,:), dudx_big(:,:,1) )
+        txy_big(:,:) = convolve_rnl( -nu_coef_big(:,:), 0.5_rprec*(dudy_big(:,:,1)+dvdx_big(:,:,1)) )
+        tyy_big(:,:) = convolve_rnl( -nu_coef_big(:,:), dvdy_big(:,:,1) )
         tzz_big(:,:) = convolve_rnl( -nu_coef_big(:,:), dwdz_big(:,:,1) )
 
         call dft_direct_forw_2d_n_yonlyC_big( txx_big(:,:) )
@@ -408,13 +408,13 @@ if (coord == nproc-1) then
         call dft_direct_back_2d_n_yonlyC_big( nu_coef_big(:,:) )
         call dft_direct_back_2d_n_yonlyC_big( nu_coef2_big(:,:) )
 
-        txx_big(:,:) = convolve_rnl( -nu_coef_big(:,:), dudx_big(1:nx,:,nz-1) )
-        txy_big(:,:) = convolve_rnl( -nu_coef_big(:,:), 0.5_rprec*(dudy_big(1:nx,:,nz-1)+dvdx_big(1:nx,:,nz-1)) )
-        tyy_big(:,:) = convolve_rnl( -nu_coef_big(:,:), dvdy_big(1:nx,:,nz-1) )
-        tzz_big(:,:) = convolve_rnl( -nu_coef_big(:,:), dwdz_big(1:nx,:,nz-1) )
+        txx_big(:,:) = convolve_rnl( -nu_coef_big(:,:), dudx_big(:,:,nz-1) )
+        txy_big(:,:) = convolve_rnl( -nu_coef_big(:,:), 0.5_rprec*(dudy_big(:,:,nz-1)+dvdx_big(:,:,nz-1)) )
+        tyy_big(:,:) = convolve_rnl( -nu_coef_big(:,:), dvdy_big(:,:,nz-1) )
+        tzz_big(:,:) = convolve_rnl( -nu_coef_big(:,:), dwdz_big(:,:,nz-1) )
         ! for top wall, include w-grid stress since we touched nz-1
-        txz_big(:,:) = convolve_rnl( -nu_coef2_big(:,:), 0.5_rprec*(dudz_big(1:nx,:,nz-1)+dwdx_big(1:nx,:,nz-1)) )
-        tyz_big(:,:) = convolve_rnl( -nu_coef2_big(:,:), 0.5_rprec*(dvdz_big(1:nx,:,nz-1)+dwdy_big(1:nx,:,nz-1)) )
+        txz_big(:,:) = convolve_rnl( -nu_coef2_big(:,:), 0.5_rprec*(dudz_big(:,:,nz-1)+dwdx_big(:,:,nz-1)) )
+        tyz_big(:,:) = convolve_rnl( -nu_coef2_big(:,:), 0.5_rprec*(dvdz_big(:,:,nz-1)+dwdy_big(:,:,nz-1)) )
 
         call dft_direct_forw_2d_n_yonlyC_big( txx_big(:,:) )
         call dft_direct_forw_2d_n_yonlyC_big( txy_big(:,:) )
@@ -467,13 +467,13 @@ do jz = jz_min, jz_max
         call dft_direct_back_2d_n_yonlyC_big( nu_coef_big(:,:) )
         call dft_direct_back_2d_n_yonlyC_big( nu_coef2_big(:,:) )
 
-        txx_big(:,:) = convolve_rnl( -nu_coef_big(:,:), dudx_big(1:nx,:,jz) )
-        txy_big(:,:) = convolve_rnl( -nu_coef_big(:,:), 0.5_rprec*(dudy_big(1:nx,:,jz)+dvdx_big(1:nx,:,jz)) )
-        tyy_big(:,:) = convolve_rnl( -nu_coef_big(:,:), dvdy_big(1:nx,:,jz) )
-        tzz_big(:,:) = convolve_rnl( -nu_coef_big(:,:), dwdz_big(1:nx,:,jz) )
+        txx_big(:,:) = convolve_rnl( -nu_coef_big(:,:), dudx_big(:,:,jz) )
+        txy_big(:,:) = convolve_rnl( -nu_coef_big(:,:), 0.5_rprec*(dudy_big(:,:,jz)+dvdx_big(:,:,jz)) )
+        tyy_big(:,:) = convolve_rnl( -nu_coef_big(:,:), dvdy_big(:,:,jz) )
+        tzz_big(:,:) = convolve_rnl( -nu_coef_big(:,:), dwdz_big(:,:,jz) )
         ! for top wall, include w-grid stress since we touched nz-1
-        txz_big(:,:) = convolve_rnl( -nu_coef2_big(:,:), 0.5_rprec*(dudz_big(1:nx,:,jz)+dwdx_big(1:nx,:,jz)) )
-        tyz_big(:,:) = convolve_rnl( -nu_coef2_big(:,:), 0.5_rprec*(dvdz_big(1:nx,:,jz)+dwdy(1:nx,:,jz)) )
+        txz_big(:,:) = convolve_rnl( -nu_coef2_big(:,:), 0.5_rprec*(dudz_big(:,:,jz)+dwdx_big(:,:,jz)) )
+        tyz_big(:,:) = convolve_rnl( -nu_coef2_big(:,:), 0.5_rprec*(dvdz_big(:,:,jz)+dwdy_big(:,:,jz)) )
 
         call dft_direct_forw_2d_n_yonlyC_big( txx_big(:,:) )
         call dft_direct_forw_2d_n_yonlyC_big( txy_big(:,:) )
