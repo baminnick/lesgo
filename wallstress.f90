@@ -60,19 +60,19 @@ character(*), parameter :: sub_name = 'wallstress'
 if (coord == 0) then
     select case (lbc_mom)
         ! Stress free
-        case (0)                        
+        case (0)
             call ws_free_lbc
 
         ! DNS wall
-        case (1)                        
+        case (1)
             call ws_dns_lbc
 
         ! Equilibrium wall model
-        case (2)                       
+        case (2)
             call ws_equilibrium_lbc
 
         ! Integral wall model (not implemented for top wall)
-        case (3)                        
+        case (3)
             call iwm_wallstress()
 
         ! Smooth equilibrium wall model
@@ -84,16 +84,20 @@ if (coord == 0) then
             call tlwm()
 
         ! two-layer nonequilibrium wall model
-        case (6) 
+        case (6)
             call tlwm()
 
         ! two-layer equilibrium wall model in (kx,ky) space
-        case (7) 
+        case (7)
             call tlwm()
 
         ! two-layer nonequilibrium wall model in (kx,ky) space
         case (8)
             call tlwm()
+
+        ! Equilibrium wall model for RNL-LES
+        case (9)
+            call ws_equilibrium_lbc_fourier
 
         ! Otherwise, invalid
         case default
@@ -254,6 +258,82 @@ do j = 1, ny
 end do
 
 end subroutine ws_equilibrium_lbc
+
+!*******************************************************************************
+subroutine ws_equilibrium_lbc_fourier
+!*******************************************************************************
+! 
+! This subroutine is only to be used if sgs = true, molec = false, and
+! when fourier = true. This routine mimics ws_equilibrium_lbc, but with
+! some additional assumptions since working in Fourier space.
+! 
+! Note the routine assumes a uniform grid, i.e. mapping not used.
+! 
+use param, only : dz, ld, nx, ny, vonk, zo, ld_big, ny2
+use sim_param, only : u, v
+use derivatives, only : dft_direct_back_2d_n_yonlyC_big, dft_direct_forw_2d_n_yonlyC_big
+use derivatives, only : convolve_rnl
+use fft, only : padd, unpadd
+!use test_filtermodule
+implicit none
+integer :: i, j
+real(rprec), dimension(ld, ny) :: u1, v1, u_avg
+!real(rprec), dimension(ld, ny) :: ustar
+real(rprec), dimension(ld_big,ny2) :: u1_big, v1_big, s1_big, txz_big, tyz_big
+real(rprec) :: const, denom
+
+u1 = u(:,:,1)
+v1 = v(:,:,1)
+! Not test filtering for fourier
+!call test_filter(u1)
+!call test_filter(v1)
+denom = log(0.5_rprec*dz/zo)
+
+! Compute u_avg = sqrt( u**2 + v**2 ) and ustar
+u1_big = 0._rprec
+v1_big = 0._rprec
+s1_big = 0._rprec
+call padd(u1_big(:,:), u1(:,:))
+call padd(v1_big(:,:), v1(:,:))
+call dft_direct_back_2d_n_yonlyC_big(u1_big(:,:))
+call dft_direct_back_2d_n_yonlyC_big(v1_big(:,:))
+s1_big = convolve_rnl(u1_big(:,:),u1_big(:,:)) + convolve_rnl(v1_big(:,:),v1_big(:,:))
+call dft_direct_forw_2d_n_yonlyC_big(s1_big(:,:))
+call unpadd(u_avg(:,:), s1_big(:,:))
+! Use horizontal average of u_avg, zero out kx & ky varying modes
+u_avg(1,1) = sqrt( u_avg(1,1) )
+u_avg(2:ld,1:ny) = 0._rprec
+u_avg(1,2:ny) = 0._rprec
+!ustar = u_avg*vonk/denom ! not used, already made simplifications below
+
+! More simplified here than original ws_equilibrium_lbc because of above assumptions
+const = -((vonk/denom)**2) * u_avg(1,1)
+
+! Rewrite s1_big variable to convolve const with u1/v1 to find txz/tyz
+s1_big = 0._rprec
+s1_big(1,1) = const
+call dft_direct_back_2d_n_yonlyC_big(s1_big(:,:))
+
+! Compute txz & tyz
+txz_big(:,:) = convolve_rnl(s1_big(:,:), u1_big(:,:))
+tyz_big(:,:) = convolve_rnl(s1_big(:,:), v1_big(:,:))
+call dft_direct_forw_2d_n_yonlyC_big(txz_big(:,:))
+call dft_direct_forw_2d_n_yonlyC_big(tyz_big(:,:))
+call unpadd(txz(:,:,1), txz_big(:,:))
+call unpadd(tyz(:,:,1), tyz_big(:,:))
+
+! Compute dudz & dvdz, again more simplified than original ws_equilibrium_lbc
+dudz(:,:,1) = 1._rprec/(0.5_rprec*dz*denom) * u(:,:,1)
+dvdz(:,:,1) = 1._rprec/(0.5_rprec*dz*denom) * v(:,:,1)
+
+do j = 1, ny
+    do i = 1, nx
+        dudz(i,j,1) = merge(0._rprec,dudz(i,j,1),u(i,j,1).eq.0._rprec)
+        dvdz(i,j,1) = merge(0._rprec,dvdz(i,j,1),v(i,j,1).eq.0._rprec)
+    end do
+end do
+
+end subroutine ws_equilibrium_lbc_fourier
 
 !*******************************************************************************
 subroutine ws_equilibrium_ubc
