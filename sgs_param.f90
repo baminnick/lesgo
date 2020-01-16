@@ -226,7 +226,8 @@ if (sgs_model .eq. 5) then
 endif
 
 ! Set dimensionless constants
-delta = filter_size*(dx*dy*dz)**(1._rprec/3._rprec)
+delta = filter_size*(dy*dz)**(1._rprec/2._rprec)
+!delta = filter_size*(dx*dy*dz)**(1._rprec/3._rprec)
 if (molec) then
     nu = (nu_molec/(u_star*z_i))
 else
