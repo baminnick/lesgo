@@ -144,7 +144,6 @@ if (sgs) then
                 zz(1) = 0.5_rprec * dz
                 l(1) = ( Co**(wall_damp_exp)*(vonk*zz(1))**(-wall_damp_exp)&
                     + (delta)**(-wall_damp_exp) )**(-1._rprec/wall_damp_exp)
-
                 jz_min = 2
             else
                 jz_min = 1
@@ -378,7 +377,7 @@ else
     jz_min = 1
 end if
 
-! Calculate txx, txy, tyy, tzz for bottom level: jz=nz node (coord==nproc-1)
+! Calculate txx, txy, tyy, tzz for top level: jz=nz node (coord==nproc-1)
 if (coord == nproc-1) then
     if (sgs) then
         select case (ubc_mom)
@@ -420,6 +419,8 @@ if (coord == nproc-1) then
         call dft_direct_forw_2d_n_yonlyC_big( txy_big(:,:) )
         call dft_direct_forw_2d_n_yonlyC_big( tyy_big(:,:) )
         call dft_direct_forw_2d_n_yonlyC_big( tzz_big(:,:) )
+        call dft_direct_forw_2d_n_yonlyC_big( txz_big(:,:) )
+        call dft_direct_forw_2d_n_yonlyC_big( tyz_big(:,:) )
 
         call unpadd( txx(:,:,nz-1), txx_big(:,:) )
         call unpadd( txy(:,:,nz-1), txy_big(:,:) )
@@ -460,6 +461,10 @@ do jz = jz_min, jz_max
             nu_coef(1:nx,:) = 2.0_rprec*(0.5_rprec*(Nu_t(1:nx,:,jz) + Nu_t(1:nx,:,jz+1)) + nu) !! uvp-node(jz)
             nu_coef2(1:nx,:) = 2.0_rprec*(Nu_t(1:nx,:,jz) + nu) !! w-node(jz)
         endif
+
+!debug
+!if (coord == 0) write(*,*) jz, nu_coef(1,1), nu_coef2(1,1)
+
     endif
     if ((fourier) .and. (sgs)) then !! only convolve if sgs since nu_coef is a function of kx
         call padd( nu_coef_big(:,:), nu_coef(:,:) )
@@ -479,13 +484,15 @@ do jz = jz_min, jz_max
         call dft_direct_forw_2d_n_yonlyC_big( txy_big(:,:) )
         call dft_direct_forw_2d_n_yonlyC_big( tyy_big(:,:) )
         call dft_direct_forw_2d_n_yonlyC_big( tzz_big(:,:) )
+        call dft_direct_forw_2d_n_yonlyC_big( txz_big(:,:) )
+        call dft_direct_forw_2d_n_yonlyC_big( tyz_big(:,:) )
 
-        call unpadd( txx(:,:,nz-1), txx_big(:,:) )
-        call unpadd( txy(:,:,nz-1), txy_big(:,:) )
-        call unpadd( tyy(:,:,nz-1), tyy_big(:,:) )
-        call unpadd( tzz(:,:,nz-1), tzz_big(:,:) )
-        call unpadd( txz(:,:,nz-1), txz_big(:,:) )
-        call unpadd( tyz(:,:,nz-1), tyz_big(:,:) )
+        call unpadd( txx(:,:,jz), txx_big(:,:) )
+        call unpadd( txy(:,:,jz), txy_big(:,:) )
+        call unpadd( tyy(:,:,jz), tyy_big(:,:) )
+        call unpadd( tzz(:,:,jz), tzz_big(:,:) )
+        call unpadd( txz(:,:,jz), txz_big(:,:) )
+        call unpadd( tyz(:,:,jz), tyz_big(:,:) )
 
     else
         txx(1:nx,:,jz)=-nu_coef(1:nx,:)*dudx(1:nx,:,jz) !! uvp-node(jz)
@@ -496,6 +503,13 @@ do jz = jz_min, jz_max
         tyz(1:nx,:,jz)=-nu_coef2(1:nx,:)*(0.5_rprec*(dvdz(1:nx,:,jz)+dwdy(1:nx,:,jz))) !! w-node(jz)
     endif
 enddo
+
+!debug
+!if (coord == 0) then
+!do jz = 1, nz
+!write(*,*) jz, txz(1,1,jz), dudz(1,1,jz), dwdx(1,1,jz)
+!end do
+!endif
 
 #ifdef PPLVLSET
 !--at this point tij are only set for 1:nz-1
