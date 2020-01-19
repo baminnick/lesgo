@@ -3780,7 +3780,9 @@ do jz = 1, nz
     call dfftw_execute_dft_r2c( forw_y, vorty(jx,:,jz), vortyfy )
     call dfftw_execute_dft_r2c( forw_y, vortz(jx,:,jz), vortzfy )
     !call dfftw_execute_dft_r2c( forw_y, vort(jx,:,jz),  vortfy )
+#ifdef PPSCALARS
     call dfftw_execute_dft_r2c( forw_y, theta_w(jx,:,jz), thetafy )
+#endif
 
     ! Multiply together and time-average
     do jy = 1, ny/2 + 1
