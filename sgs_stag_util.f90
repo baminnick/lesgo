@@ -55,6 +55,8 @@ use sgs_param
 use messages
 use derivatives, only : convolve_rnl, dft_direct_back_2d_n_yonlyC_big
 use derivatives, only : dft_direct_forw_2d_n_yonlyC_big
+use derivatives, only : dft_direct_back_2d_n_yonlyC
+use derivatives, only : dft_direct_forw_2d_n_yonlyC
 use fft, only : padd, unpadd
 
 #ifdef PPMPI
@@ -71,6 +73,7 @@ character (*), parameter :: sub_name = 'sgs_stag'
 
 real(rprec), dimension(nz) :: l, ziko, zz
 integer :: jz, jz_min, jz_max
+integer :: jy !! debug
 
 if (sgs) then
     ! Cs is Smagorinsky's constant. l is a filter size (non-dim.)
@@ -243,7 +246,7 @@ if (sgs) then
     !   stored on w-nodes (on uvp node for jz=1 or nz for 'wall' BC only)
     if (fourier) then
         do jz = 1, nz
-            ! Padd to prepare for y-transform
+            ! Padd to prepare for convolution
             call padd(S11_big(:,:,jz), S11(:,:,jz))
             call padd(S22_big(:,:,jz), S22(:,:,jz))
             call padd(S33_big(:,:,jz), S33(:,:,jz))
@@ -267,18 +270,28 @@ if (sgs) then
                                    convolve_rnl(S13_big(:,:,jz),S13_big(:,:,jz)) + &
                                    convolve_rnl(S23_big(:,:,jz),S23_big(:,:,jz))))
 
+            ! Code below uses a streamwise average instead of streamwise and 
+            ! spanwise average as used in Bretheim et al. 2018
+            S_big(1,1:ny2) = sqrt( abs( S_big(1,1:ny2) ) )
+            ! S_big(1,1:ny2) = sqrt( S_big(1,1:ny2) )
+            S_big(2:ld,1:ny2) = 0._rprec 
+
             ! y --> ky
             call dft_direct_forw_2d_n_yonlyC_big( S_big(:,:) )
             call unpadd( S(:,:), S_big(:,:) )
 
+            ! ! Commented code below is the SGS model used in Bretheim et al. 2018
+            ! ! It uses a streamwise and spanwise average of the strain-rate magnitude
+            ! ! Only consider streamwise and spanwise average
+            ! S(1,1) = sqrt( S(1,1) )
+            ! S(2:ld, 1:ny) = 0._rprec
+            ! S(1,2:ny) = 0._rprec
+
             ! Compute eddy viscosity
-            S(1,1) = sqrt( S(1,1) )
-            S(2:ld, 1:ny) = 0._rprec
-            S(1,2:ny) = 0._rprec
             Nu_t(:,:,jz) = S(:,:)*Cs_opt2(:,:,jz)*l(jz)**2
 
         end do
-    else
+    else !! not fourier
         do jz = 1, nz
             S(1:nx,:) = sqrt( 2.0_rprec*(S11(1:nx,:,jz)**2 +          &
                 S22(1:nx,:,jz)**2 + S33(1:nx,:,jz)**2 +               &
@@ -336,8 +349,8 @@ if (coord == 0) then
             ! Wall
             case (1:)
                 if (fourier) then
-                    nu_coef(:,:) = 0._rprec
-                    ! add nu only to the mean --> (kx,ky) = (0,0)
+                    nu_coef(:,:) = 2._rprec*Nu_t(:,:,1) !! Initialize
+                    ! overwrite and add nu only to the mean --> (kx,ky) = (0,0)
                     nu_coef(1,1) = 2._rprec*(Nu_t(1,1,1)+nu)
                 else
                     nu_coef(1:nx,:) = 2.0_rprec*(Nu_t(1:nx,:,1)+nu) !! Nu_t on uvp-node(1) here
@@ -384,9 +397,9 @@ if (coord == nproc-1) then
             ! Stress free
             case (0)
                 if (fourier) then
-                    nu_coef(:,:) = 0._rprec
-                    nu_coef2(:,:) = 0._rprec
-                    ! add nu only to the mean --> (kx,ky) = (0,0)
+                    nu_coef(:,:) = 2.0_rprec*(0.5_rprec*(Nu_t(:,:,nz-1) + Nu_t(:,:,nz))) !! initialize
+                    nu_coef2(:,:) = 2.0_rprec*Nu_t(:,:,nz-1) !! initialize
+                    ! overwrite and add nu only to the mean --> (kx,ky) = (0,0)
                     nu_coef(1,1) = 2.0_rprec*(0.5_rprec*(Nu_t(1,1,nz-1) + Nu_t(1,1,nz)) + nu) !! uvp-node(nz-1)
                     nu_coef2(1,1) = 2.0_rprec*(Nu_t(1,1,nz-1) + nu) !! w-node(nz-1)
                 else
@@ -452,8 +465,8 @@ end if
 do jz = jz_min, jz_max
     if (sgs) then
         if (fourier) then
-            nu_coef(:,:) = 0._rprec
-            nu_coef2(:,:) = 0._rprec
+            nu_coef(:,:) = 2.0_rprec*(0.5_rprec*(Nu_t(:,:,jz) + Nu_t(:,:,jz+1))) !! initialize
+            nu_coef2(:,:) = 2.0_rprec*Nu_t(:,:,jz) !! initialize
             ! add nu only to the mean --> (kx,ky) = (0,0)
             nu_coef(1,1) = 2.0_rprec*(0.5_rprec*(Nu_t(1,1,jz) + Nu_t(1,1,jz+1)) + nu) !! uvp-node(jz)
             nu_coef2(1,1) = 2.0_rprec*(Nu_t(1,1,jz) + nu) !! w-node(jz)
@@ -461,10 +474,6 @@ do jz = jz_min, jz_max
             nu_coef(1:nx,:) = 2.0_rprec*(0.5_rprec*(Nu_t(1:nx,:,jz) + Nu_t(1:nx,:,jz+1)) + nu) !! uvp-node(jz)
             nu_coef2(1:nx,:) = 2.0_rprec*(Nu_t(1:nx,:,jz) + nu) !! w-node(jz)
         endif
-
-!debug
-!if (coord == 0) write(*,*) jz, nu_coef(1,1), nu_coef2(1,1)
-
     endif
     if ((fourier) .and. (sgs)) then !! only convolve if sgs since nu_coef is a function of kx
         call padd( nu_coef_big(:,:), nu_coef(:,:) )
