@@ -32,7 +32,7 @@ private
 public ddx, ddy, ddxy, filt_da, ddz_uv, ddz_w,                          &
     phys2wave, wave2phys, phys2waveF, wave2physF,                       &
     dft_direct_forw_2d_n_yonlyC_big, dft_direct_back_2d_n_yonlyC_big,   &
-    convolve_rnl
+    dft_direct_forw_2d_n_yonlyC, dft_direct_back_2d_n_yonlyC, convolve_rnl
 
 contains
 
@@ -570,6 +570,89 @@ do jx = 1, kx_num
 enddo
 
 end subroutine dft_direct_back_2d_n_yonlyC_big
+
+!*******************************************************************************
+subroutine dft_direct_forw_2d_n_yonlyC(f)
+!*******************************************************************************
+! 
+! Computes 2D DFT directly, no FFT in x-direction.
+! 
+! This function is inteded to be used for fourier
+! 
+use types, only: rprec
+use param, only: ny, kx_num
+use fft
+implicit none
+
+integer :: jx, jy, ii, ir
+real(rprec), dimension(:,:), intent(inout) :: f
+real(rprec) :: const
+complex(rprec), dimension(ny) :: fhat
+
+const = 1._rprec / real(ny,rprec)
+f(:,:) = const * f(:,:)
+fhat(:) = ( 0._rprec, 0._rprec )
+
+do jx = 1, kx_num
+    ! un-interleave the real array into a complex array
+    ii = 2*jx ! imag index
+    ir = ii-1 ! real index
+
+    do jy = 1, ny
+        fhat(jy) = cmplx( f(ir,jy), f(ii,jy), rprec )
+    enddo
+
+    ! remains in complex space
+    call dfftw_execute_dft(ycomp_forw, fhat(1:ny), fhat(1:ny) )
+
+    ! interleave the complex array into a real array
+    do jy = 1, ny
+        f(ir,jy) = real( fhat(jy), rprec )
+        f(ii,jy) = aimag( fhat(jy) ) !! or dimag?
+    enddo
+enddo
+
+end subroutine dft_direct_forw_2d_n_yonlyC
+
+!*******************************************************************************
+subroutine dft_direct_back_2d_n_yonlyC(f)
+!*******************************************************************************
+! 
+! Computes 2D inverse DFT directly, no FFT in x-direction.
+! 
+! This function is inteded to be used for fourier
+! 
+use types, only: rprec
+use param, only: ny, kx_num
+use fft
+implicit none
+
+integer :: jx, jy, ii, ir
+real(rprec), dimension(:,:), intent(inout) :: f
+complex(rprec), dimension(ny) :: fhat
+
+fhat(:) = ( 0._rprec, 0._rprec )
+
+do jx = 1, kx_num
+    ! un-interleave the real array into a complex array
+    ii = 2*jx ! imag index
+    ir = ii-1 ! real index
+
+    do jy = 1, ny
+        fhat(jy) = cmplx( f(ir,jy), f(ii,jy), rprec )
+    enddo
+
+    ! remains in complex space
+    call dfftw_execute_dft(ycomp_back, fhat(1:ny), fhat(1:ny) )
+
+    ! interleave the complex array into a real array
+    do jy = 1, ny
+        f(ir,jy) = real( fhat(jy), rprec )
+        f(ii,jy) = aimag( fhat(jy) ) !! or dimag?
+    enddo
+enddo
+
+end subroutine dft_direct_back_2d_n_yonlyC
 
 !*******************************************************************************
 function convolve_rnl(f,g) result(out)

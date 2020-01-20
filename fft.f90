@@ -35,6 +35,7 @@ public :: forw, back, forw_big, back_big
 public :: forw_x, back_x, forw_y, forw_x_fourier
 public :: forw_fourier, back_fourier
 public :: ycomp_forw_big, ycomp_back_big
+public :: ycomp_forw, ycomp_back
 
 real(rprec), allocatable, dimension(:,:) :: kx, ky, k2
 
@@ -42,6 +43,7 @@ integer*8 :: forw, back, forw_big, back_big
 integer*8 :: forw_x, back_x, forw_y, forw_x_fourier
 integer*8 :: forw_fourier, back_fourier
 integer*8 :: ycomp_forw_big, ycomp_back_big
+integer*8 :: ycomp_forw, ycomp_back
 
 real (rprec), dimension (:, :), allocatable :: data, data_big
 
@@ -51,6 +53,8 @@ complex (rprec), dimension (:), allocatable :: data_x_out, data_y_out, data_x_fo
 real (rprec), dimension (:, :), allocatable :: data_fourier
 
 complex (rprec), dimension(:), allocatable :: ycomp_data_big
+
+complex (rprec), dimension(:), allocatable :: ycomp_data
 
 contains
 
@@ -134,6 +138,8 @@ allocate( data_fourier(nxp+2, ny) )
 
 allocate( ycomp_data_big(ny2) ) !! complex stored as real
 
+allocate( ycomp_data(ny) ) !! complex stored as real
+
 ! Create the forward and backward plans for the unpadded and padded
 ! domains. Notice we are using FFTW_UNALIGNED since the arrays used will not be
 ! guaranteed to be memory aligned.
@@ -165,6 +171,11 @@ call dfftw_plan_dft_1d(ycomp_forw_big, ny2, ycomp_data_big,                    &
 call dfftw_plan_dft_1d(ycomp_back_big, ny2, ycomp_data_big,                    &
     ycomp_data_big, FFTW_BACKWARD, FFTW_PATIENT, FFTW_UNALIGNED)
 
+call dfftw_plan_dft_1d(ycomp_forw, ny, ycomp_data,                             &
+    ycomp_data, FFTW_FORWARD, FFTW_PATIENT, FFTW_UNALIGNED)
+call dfftw_plan_dft_1d(ycomp_back, ny, ycomp_data,                             &
+    ycomp_data, FFTW_BACKWARD, FFTW_PATIENT, FFTW_UNALIGNED)
+
 deallocate(data)
 deallocate(data_big)
 
@@ -179,6 +190,8 @@ deallocate(data_x_fourier_out)
 deallocate(data_fourier)
 
 deallocate(ycomp_data_big)
+
+deallocate(ycomp_data)
 
 call init_wavenumber()
 end subroutine init_fft
