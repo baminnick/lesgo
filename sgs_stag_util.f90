@@ -246,39 +246,60 @@ if (sgs) then
     !   stored on w-nodes (on uvp node for jz=1 or nz for 'wall' BC only)
     if (fourier) then
         do jz = 1, nz
-            ! Padd to prepare for convolution
-            call padd(S11_big(:,:,jz), S11(:,:,jz))
-            call padd(S22_big(:,:,jz), S22(:,:,jz))
-            call padd(S33_big(:,:,jz), S33(:,:,jz))
-            call padd(S12_big(:,:,jz), S12(:,:,jz))
-            call padd(S13_big(:,:,jz), S13(:,:,jz))
-            call padd(S23_big(:,:,jz), S23(:,:,jz))
 
-            ! ky --> y
-            call dft_direct_back_2d_n_yonlyC_big(S11_big(:,:,jz))
-            call dft_direct_back_2d_n_yonlyC_big(S22_big(:,:,jz))
-            call dft_direct_back_2d_n_yonlyC_big(S33_big(:,:,jz))
-            call dft_direct_back_2d_n_yonlyC_big(S12_big(:,:,jz))
-            call dft_direct_back_2d_n_yonlyC_big(S13_big(:,:,jz))
-            call dft_direct_back_2d_n_yonlyC_big(S23_big(:,:,jz))
+            ! Transform ky --> y
+            call dft_direct_back_2d_n_yonlyC( S11(:,:,jz) )
+            call dft_direct_back_2d_n_yonlyC( S22(:,:,jz) )
+            call dft_direct_back_2d_n_yonlyC( S33(:,:,jz) )
+            call dft_direct_back_2d_n_yonlyC( S12(:,:,jz) )
+            call dft_direct_back_2d_n_yonlyC( S13(:,:,jz) )
+            call dft_direct_back_2d_n_yonlyC( S23(:,:,jz) )
 
-            ! Convolve to find strain-rate magnitude
-            S_big(:,:) = 2._rprec*(convolve_rnl(S11_big(:,:,jz),S11_big(:,:,jz)) + &
-                                   convolve_rnl(S22_big(:,:,jz),S22_big(:,:,jz)) + &
-                                   convolve_rnl(S33_big(:,:,jz),S33_big(:,:,jz)) + &
-                         2._rprec*(convolve_rnl(S12_big(:,:,jz),S12_big(:,:,jz)) + &
-                                   convolve_rnl(S13_big(:,:,jz),S13_big(:,:,jz)) + &
-                                   convolve_rnl(S23_big(:,:,jz),S23_big(:,:,jz))))
+            ! Use only kx = 0 when computing strain-rate magnitude (SRM)
+            ! Assuming streamwise average
+            S(1,:) = sqrt( 2.0_rprec*(S11(1,:,jz)**2 +          &
+                S22(1,:,jz)**2 + S33(1,:,jz)**2 +               &
+                2.0_rprec*(S12(1,:,jz)**2 + S13(1,:,jz)**2 +    &
+                S23(1,:,jz)**2 )))
+            S(2:ld,:) = 0.0_rprec
 
-            ! Code below uses a streamwise average instead of streamwise and 
-            ! spanwise average as used in Bretheim et al. 2018
-            S_big(1,1:ny2) = sqrt( abs( S_big(1,1:ny2) ) )
-            ! S_big(1,1:ny2) = sqrt( S_big(1,1:ny2) )
-            S_big(2:ld,1:ny2) = 0._rprec 
+            ! Transform SRM y --> ky
+            ! No need to transform Sij, gets overwritten in calc_Sij
+            call dft_direct_forw_2d_n_yonlyC( S(:,:) )
 
-            ! y --> ky
-            call dft_direct_forw_2d_n_yonlyC_big( S_big(:,:) )
-            call unpadd( S(:,:), S_big(:,:) )
+            !! Padd to prepare for convolution
+            !call padd(S11_big(:,:,jz), S11(:,:,jz))
+            !call padd(S22_big(:,:,jz), S22(:,:,jz))
+            !call padd(S33_big(:,:,jz), S33(:,:,jz))
+            !call padd(S12_big(:,:,jz), S12(:,:,jz))
+            !call padd(S13_big(:,:,jz), S13(:,:,jz))
+            !call padd(S23_big(:,:,jz), S23(:,:,jz))
+
+            !! ky --> y
+            !call dft_direct_back_2d_n_yonlyC_big(S11_big(:,:,jz))
+            !call dft_direct_back_2d_n_yonlyC_big(S22_big(:,:,jz))
+            !call dft_direct_back_2d_n_yonlyC_big(S33_big(:,:,jz))
+            !call dft_direct_back_2d_n_yonlyC_big(S12_big(:,:,jz))
+            !call dft_direct_back_2d_n_yonlyC_big(S13_big(:,:,jz))
+            !call dft_direct_back_2d_n_yonlyC_big(S23_big(:,:,jz))
+
+            !! Convolve to find strain-rate magnitude
+            !S_big(:,:) = 2._rprec*(convolve_rnl(S11_big(:,:,jz),S11_big(:,:,jz)) + &
+            !                       convolve_rnl(S22_big(:,:,jz),S22_big(:,:,jz)) + &
+            !                       convolve_rnl(S33_big(:,:,jz),S33_big(:,:,jz)) + &
+            !             2._rprec*(convolve_rnl(S12_big(:,:,jz),S12_big(:,:,jz)) + &
+            !                       convolve_rnl(S13_big(:,:,jz),S13_big(:,:,jz)) + &
+            !                       convolve_rnl(S23_big(:,:,jz),S23_big(:,:,jz))))
+
+            !! Code below uses a streamwise average instead of streamwise and 
+            !! spanwise average as used in Bretheim et al. 2018
+            !S_big(1,1:ny2) = sqrt( abs( S_big(1,1:ny2) ) )
+            !! S_big(1,1:ny2) = sqrt( S_big(1,1:ny2) )
+            !S_big(2:ld,1:ny2) = 0._rprec 
+
+            !! y --> ky
+            !call dft_direct_forw_2d_n_yonlyC_big( S_big(:,:) )
+            !call unpadd( S(:,:), S_big(:,:) )
 
             ! ! Commented code below is the SGS model used in Bretheim et al. 2018
             ! ! It uses a streamwise and spanwise average of the strain-rate magnitude
