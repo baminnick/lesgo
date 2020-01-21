@@ -30,6 +30,7 @@ integer, parameter :: filter_size=1
 ! alpha is ratio of test filter to grid filter widths
 real(rprec) :: alpha_test = 2.0_rprec * filter_size 
 real(rprec) :: alpha_test_test = 4.0_rprec * filter_size
+real(rprec) :: alpha_test_fourier = 2.0_rprec * filter_size
 real(rprec), dimension(:,:), allocatable :: G_test, G_test_test
 real(rprec), dimension(:,:), allocatable :: G_test_fourier
 
@@ -60,7 +61,7 @@ G_test_fourier = 1._rprec
 ! Filter characteristic width
 ! "2d-delta", not full 3d one
 delta_test = alpha_test * sqrt(dx*dy) 
-delta_test_fourier = alpha_test * dy
+delta_test_fourier = alpha_test_fourier * dy
 
 ! Calculate the kernel
 ! spectral cutoff filter

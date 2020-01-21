@@ -356,7 +356,8 @@ subroutine ws_equilibrium_lbc_fourier_xavg
 use param, only : dz, ld, nx, ny, vonk, zo
 use sim_param, only : u, v
 use derivatives, only : dft_direct_back_2d_n_yonlyC
-use test_filtermodule, only : test_filter_fourier
+use derivatives, only : dft_direct_forw_2d_n_yonlyC
+!use test_filtermodule, only : test_filter_fourier
 implicit none
 integer :: i, j
 real(rprec), dimension(ld, ny) :: u1, v1
@@ -366,8 +367,8 @@ real(rprec) :: denom, const, const2
 u1 = u(:,:,1)
 v1 = v(:,:,1)
 
-call test_filter_fourier( u1 )
-call test_filter_fourier( v1 )
+!call test_filter_fourier( u1 )
+!call test_filter_fourier( v1 )
 
 ! Instead of test-filtering, use streamwise average
 ! Transform (kx,ky) --> (kx,y)
@@ -382,22 +383,28 @@ denom = log(0.5_rprec*dz/zo)
 u_avg = sqrt(u1_avg(1:ny)**2+v1_avg(1:ny)**2)
 ustar = u_avg*vonk/denom
 
-! remember ustar(y) and u_avg(y), but u1(x,y) and v1(x,y)
+! remember ustar(y) and u_avg(y), but u1(kx,y) and v1(kx,y)
 do j = 1, ny
     const = -(ustar(j)**2)/u_avg(j)
     const2 = ustar(j)/(0.5_rprec*dz*vonK)/u_avg(j)
     do i = 1, nx
-        ! Using u(:,:,1) instead of u1 to avoid transforming u1 back
-        txz(i,j,1) = const*u(i,j,1)
-        tyz(i,j,1) = const*v(i,j,1)
+        ! Using u1 & v1, still has non-zero kx modes
+        txz(i,j,1) = const*u1(i,j)
+        tyz(i,j,1) = const*v1(i,j)
         !this is as in Moeng 84
-        dudz(i,j,1) = const2*u(i,j,1)
-        dvdz(i,j,1) = const2*v(i,j,1)
+        dudz(i,j,1) = const2*u1(i,j)
+        dvdz(i,j,1) = const2*v1(i,j)
 
         dudz(i,j,1) = merge(0._rprec,dudz(i,j,1),u(i,j,1).eq.0._rprec)
         dvdz(i,j,1) = merge(0._rprec,dvdz(i,j,1),v(i,j,1).eq.0._rprec)
     end do
 end do
+
+! Transform (kx,y) --> (kx,ky)
+call dft_direct_forw_2d_n_yonlyC(txz(:,:,1))
+call dft_direct_forw_2d_n_yonlyC(tyz(:,:,1))
+call dft_direct_forw_2d_n_yonlyC(dudz(:,:,1))
+call dft_direct_forw_2d_n_yonlyC(dvdz(:,:,1))
 
 end subroutine ws_equilibrium_lbc_fourier_xavg
 
