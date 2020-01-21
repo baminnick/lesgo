@@ -73,7 +73,6 @@ character (*), parameter :: sub_name = 'sgs_stag'
 
 real(rprec), dimension(nz) :: l, ziko, zz
 integer :: jz, jz_min, jz_max
-integer :: jy !! debug
 
 if (sgs) then
     ! Cs is Smagorinsky's constant. l is a filter size (non-dim.)
@@ -294,7 +293,7 @@ if (sgs) then
             !! Code below uses a streamwise average instead of streamwise and 
             !! spanwise average as used in Bretheim et al. 2018
             !S_big(1,1:ny2) = sqrt( abs( S_big(1,1:ny2) ) )
-            !! S_big(1,1:ny2) = sqrt( S_big(1,1:ny2) )
+            !! S_big(1,1:ny2) = sqrt( S_big(1,1:ny2) ) !! sometimes gives sqrt(negative number)!
             !S_big(2:ld,1:ny2) = 0._rprec 
 
             !! y --> ky
@@ -533,13 +532,6 @@ do jz = jz_min, jz_max
         tyz(1:nx,:,jz)=-nu_coef2(1:nx,:)*(0.5_rprec*(dvdz(1:nx,:,jz)+dwdy(1:nx,:,jz))) !! w-node(jz)
     endif
 enddo
-
-!debug
-!if (coord == 0) then
-!do jz = 1, nz
-!write(*,*) jz, txz(1,1,jz), dudz(1,1,jz), dwdx(1,1,jz)
-!end do
-!endif
 
 #ifdef PPLVLSET
 !--at this point tij are only set for 1:nz-1
