@@ -356,6 +356,7 @@ subroutine ws_equilibrium_lbc_fourier_xavg
 use param, only : dz, ld, nx, ny, vonk, zo
 use sim_param, only : u, v
 use derivatives, only : dft_direct_back_2d_n_yonlyC
+use test_filtermodule, only : test_filter_fourier
 implicit none
 integer :: i, j
 real(rprec), dimension(ld, ny) :: u1, v1
@@ -364,6 +365,9 @@ real(rprec) :: denom, const, const2
 
 u1 = u(:,:,1)
 v1 = v(:,:,1)
+
+call test_filter_fourier( u1 )
+call test_filter_fourier( v1 )
 
 ! Instead of test-filtering, use streamwise average
 ! Transform (kx,ky) --> (kx,y)

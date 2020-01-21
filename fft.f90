@@ -202,7 +202,7 @@ subroutine init_wavenumber()
 use param, only : lh, ny, L_x, L_y, pi
 use param, only : kxs_in, fourier, kx_num, coord
 implicit none
-integer :: jx,jy
+integer :: jx, jy
 
 ! Allocate wavenumbers
 allocate( kx(lh,ny), ky(lh,ny), k2(lh,ny) )
