@@ -271,11 +271,14 @@ if (sgs) then
         S(1:nx,:) = sqrt( 2.0_rprec*(S11(1:nx,:,jz)**2 + S22(1:nx,:,jz)**2 +       &
             S33(1:nx,:,jz)**2 + 2.0_rprec*(S12(1:nx,:,jz)**2 +                     &
             S13(1:nx,:,jz)**2 + S23(1:nx,:,jz)**2 )))
-        if ((hybrid_baseline) .and. (zhyb(jz))) then !! assuming no sgs in fourier
-            Nu_t(1:nx,:,jz) = 0.0_rprec
-        else !! fourier, not fourier, or hybrid_fourier in physical
-            Nu_t(1:nx,:,jz) = S(1:nx,:)*Cs_opt2(1:nx,:,jz)*l(jz)**2
-        endif
+
+        Nu_t(1:nx,:,jz) = S(1:nx,:)*Cs_opt2(1:nx,:,jz)*l(jz)**2
+
+       ! if ((hybrid_baseline) .and. (zhyb(jz))) then !! assuming no sgs in fourier
+       !     Nu_t(1:nx,:,jz) = 0.0_rprec
+       ! else !! fourier, not fourier, or hybrid_fourier in physical
+       !     Nu_t(1:nx,:,jz) = S(1:nx,:)*Cs_opt2(1:nx,:,jz)*l(jz)**2
+       ! endif
     end do
 
 else
