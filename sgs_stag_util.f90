@@ -227,7 +227,7 @@ if (sgs) then
         ! Use the Smagorinsky model until DYN_init timestep
         if ((jt == 1) .and. (inilag)) then
 #ifdef PPOUTPUT_SGS
-            write(*,*) 'CS_opt2 initialiazed'
+            if (coord == 0) write(*,*) 'CS_opt2 initialiazed'
 #endif
             Cs_opt2 = 0.03_rprec
 
@@ -236,7 +236,7 @@ if (sgs) then
             (mod(jt_total,cs_count)==0) ) then
 
 #ifdef PPOUTPUT_SGS
-            if (jt == DYN_init) then
+            if ((jt == DYN_init) .and. (coord == 0)) then
                 write(*,*) 'running dynamic sgs_model = ', sgs_model
             end if
 #endif
