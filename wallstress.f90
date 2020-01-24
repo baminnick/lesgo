@@ -367,13 +367,15 @@ real(rprec) :: denom, const, const2
 u1 = u(:,:,1)
 v1 = v(:,:,1)
 
-!call test_filter_fourier( u1 )
-!call test_filter_fourier( v1 )
-
 ! Instead of test-filtering, use streamwise average
 ! Transform (kx,ky) --> (kx,y)
 call dft_direct_back_2d_n_yonlyC(u1(:,:))
 call dft_direct_back_2d_n_yonlyC(v1(:,:))
+
+! Test-filter in only the spanwise direction
+!call test_filter_fourier( u1 )
+!call test_filter_fourier( v1 )
+
 ! Take only kx=0 mode, effectively streamwise averaging
 u1_avg(1:ny) = u1(1,:)
 v1_avg(1:ny) = v1(1,:)

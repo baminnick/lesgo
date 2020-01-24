@@ -55,7 +55,7 @@ allocate( G_test_fourier(lh,ny) )
 ! Include the normalization for the forward FFT
 G_test = 1._rprec/(nx*ny)
 
-! Don't normalize in fourier because not transforming
+! Normalization accounted for in dft_direct_forw/back_2d_n_yonlyC
 G_test_fourier = 1._rprec
 
 ! Filter characteristic width
@@ -162,18 +162,24 @@ end subroutine test_filter
 subroutine test_filter_fourier(f)
 !*******************************************************************************
 ! This is only for fourier mode. Applies test filter in only the y direction.
-! Unlike test_filter, this subroutine assumes f is already in kx, ky space.
+! Unlike test_filter, this subroutine assumes f is already in kx, y space.
 use types, only : rprec
-use fft
+use derivatives, only : dft_direct_forw_2d_n_yonlyC, dft_direct_back_2d_n_yonlyC
 use param, only : ny
 use emul_complex, only : OPERATOR(.MULR.)
 implicit none
 
 real(rprec), dimension(:,:), intent(inout) :: f
 
+! Perform in-place FFT, y --> ky
+call dft_direct_forw_2d_n_yonlyC( f(:,:) )
+
 ! Perform f = G_test*f, emulating f as complex
 ! Nyquist frequency and normalization is taken care of with G_test_fourier
 f = f .MULR. G_test_fourier
+
+! Transform back, ky --> y
+call dft_direct_back_2d_n_yonlyC( f(:,:) )
 
 end subroutine test_filter_fourier
 
