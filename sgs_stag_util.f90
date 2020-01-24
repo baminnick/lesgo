@@ -246,14 +246,7 @@ if (sgs) then
     if (fourier) then
         do jz = 1, nz
 
-            ! Transform ky --> y
-            call dft_direct_back_2d_n_yonlyC( S11(:,:,jz) )
-            call dft_direct_back_2d_n_yonlyC( S22(:,:,jz) )
-            call dft_direct_back_2d_n_yonlyC( S33(:,:,jz) )
-            call dft_direct_back_2d_n_yonlyC( S12(:,:,jz) )
-            call dft_direct_back_2d_n_yonlyC( S13(:,:,jz) )
-            call dft_direct_back_2d_n_yonlyC( S23(:,:,jz) )
-
+            ! Remember Sij(kx,y,z) at the end of calc_Sij
             ! Use only kx = 0 when computing strain-rate magnitude (SRM)
             ! Assuming streamwise average
             S(1,:) = sqrt( 2.0_rprec*(S11(1,:,jz)**2 +          &
@@ -266,6 +259,7 @@ if (sgs) then
             ! No need to transform Sij, gets overwritten in calc_Sij
             call dft_direct_forw_2d_n_yonlyC( S(:,:) )
 
+            ! Commented code below used Bretheim et al. 2018, assumes Sij(kx,ky,z) at this point
             !! Padd to prepare for convolution
             !call padd(S11_big(:,:,jz), S11(:,:,jz))
             !call padd(S22_big(:,:,jz), S22(:,:,jz))
@@ -582,6 +576,7 @@ use types, only : rprec
 use param
 use sim_param, only : dudx, dudy, dudz, dvdx, dvdy, dvdz, dwdx, dwdy, dwdz
 use sgs_param
+use derivatives, only : dft_direct_back_2d_n_yonlyC
 #ifdef PPMPI
 use mpi_defs, only : mpi_sync_real_array, MPI_SYNC_DOWN
 #endif
@@ -704,6 +699,18 @@ do jz = jz_min, jz_max
     S23(1:nx,:,jz) = 0.5_rprec*(dvdz(1:nx,:,jz) + dwdy(1:nx,:,jz))   !! w-node(jz)
     S33(1:nx,:,jz) = 0.5_rprec*(dwdz(1:nx,:,jz) + dwdz(1:nx,:,jz-1)) !! w-node(jz)
 end do
+
+if (fourier) then
+    do jz = 1, nz
+        ! Transform ky --> y
+        call dft_direct_back_2d_n_yonlyC( S11(:,:,jz) )
+        call dft_direct_back_2d_n_yonlyC( S22(:,:,jz) )
+        call dft_direct_back_2d_n_yonlyC( S33(:,:,jz) )
+        call dft_direct_back_2d_n_yonlyC( S12(:,:,jz) )
+        call dft_direct_back_2d_n_yonlyC( S13(:,:,jz) )
+        call dft_direct_back_2d_n_yonlyC( S23(:,:,jz) )
+    end do
+endif
 
 end subroutine calc_Sij
 
