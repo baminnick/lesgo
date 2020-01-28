@@ -8,6 +8,7 @@ real(kind=rprec),dimension(nx*ny)  ::FIELD1
 !real(kind=rprec),dimension(nx*ny/4)::FIELD2
 !character(120)::ffname1
 integer:: i, j, k
+real(rprec) :: z_uv, z_w
 
 open(1,file=path//'hij.dat')
 
