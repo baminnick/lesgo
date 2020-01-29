@@ -448,7 +448,7 @@ time_loop: do jt_step = nstart, nsteps
 
     ! SIMPLIFIED LEVEL SET METHOD WITH MAPPING CAPABILITY
 #ifdef PPLVLSET_STRETCH
-    call level_set2(IBFx,IBFy,IBFz)
+    ! call level_set2(IBFx,IBFy,IBFz) !! only for DNS mode
 #endif
 
     ! Add pressure gradients to RHS variables (for next time step)

@@ -225,6 +225,7 @@ use sim_param, only : u, v
 #ifdef PPMAPPING
 use sim_param, only : JACO2
 #endif
+use sim_param, only : hij
 use test_filtermodule
 implicit none
 integer :: i, j
@@ -241,14 +242,16 @@ call test_filter(v1)
 denom = log(0.5_rprec*JACO2(1)*dz/zo)
 const2 = JACO2(1)
 #else
-denom = log(0.5_rprec*dz/zo)
+!denom = log(0.5_rprec*dz/zo) !! moved into loop
 const2 = 1._rprec
 #endif
 u_avg = sqrt(u1(1:nx,1:ny)**2+v1(1:nx,1:ny)**2)
-ustar = u_avg*vonk/denom
+!ustar = u_avg*vonk/denom !! moved into the loop
 
 do j = 1, ny
     do i = 1, nx
+        denom(i,j) = log(0.5_rprec*dz/(hij(i,j)*zo)) !! hij acts as lambda here
+        ustar(i,j) = u_avg(i,j)*vonk/denom(i,j)
         const = -(ustar(i,j)**2)/u_avg(i,j)
         txz(i,j,1) = const*u1(i,j)
         tyz(i,j,1) = const*v1(i,j)
