@@ -150,8 +150,8 @@ else if (lbc_mom==1) then
     if (coord == 0) write(*,*) '--> Creating initial boundary layer velocity ',&
         'field with LES BCs... to become DNS'
     !call ic_dns( ) ! debug
-    call ic_les()
-    !call ic_blend()
+    !call ic_les()
+    call ic_blend()
 else
     if (coord == 0) write(*,*) '--> Creating initial boundary layer velocity ',&
     'field with LES BCs'
@@ -178,7 +178,6 @@ call ic_scal()
 
 ! call mpi_barrier(comm, ierr)
 ! stop
-
 ! Write averaged vertical profiles to standard output
 !do jz = 1, nz
 !#ifdef PPSCALARS
@@ -190,6 +189,9 @@ call ic_scal()
 !    write(6,7780) jz, sum (u(1:nx, :, jz)) / (nx * ny),                        &
 !                  sum (v(1:nx, :, jz)) / (nx * ny),                            &
 !                  sum (w(1:nx, :, jz)) / (nx * ny)
+!    write(6,7780) jz, u(nx/2, ny/2, jz),                        &
+!                  v(nx/2, ny/2, jz),                            &
+!                  w(nx/2, ny/2, jz)
 !#endif
 !end do
 !#ifdef PPSCALARS
@@ -715,6 +717,7 @@ integer :: jz, jz_abs
 real(rprec), dimension(nz) :: ubar
 real(rprec) :: rms, sigma_rv, ulam, uturb, gam, z, nu_eff
 real(rprec) :: angle
+real(rprec) :: wall_noise, decay
 character(*), parameter :: sub_name = 'ic'
 
 do jz = 1, nz
@@ -746,6 +749,8 @@ end do
 !rms = 0.0_rprec !! Don't add noise for debugging
 rms = 3._rprec
 sigma_rv = 0.289_rprec
+wall_noise = 10 !! dictates how strong the noise is at the wall
+! The higher wall_noise is, the stronger the noise is
 
 ! Fill u, v, and w with uniformly distributed random numbers between 0 and 1
 call init_random_seed
@@ -785,15 +790,11 @@ do jz = 1, nz
     ! For upside-down half-channel, choose upper wall
     if(lbc_mom == 0 .and. ubc_mom > 0) z = dz*nproc*(nz-1)*z_i - z
 
-    if (z <= z_i) then
-        u(:,:,jz) = u(:,:,jz) * (1._rprec-z / z_i) + ubar(jz)*cos(angle)
-        v(:,:,jz) = v(:,:,jz) * (1._rprec-z / z_i) + ubar(jz)*sin(angle)
-        w(:,:,jz) = w(:,:,jz) * (1._rprec-z / z_i)
-    else
-        u(:,:,jz) = u(:,:,jz) * 0.01_rprec + ubar(jz)*cos(angle)
-        v(:,:,jz) = v(:,:,jz) * 0.01_rprec + ubar(jz)*sin(angle)
-        w(:,:,jz) = w(:,:,jz) * 0.01_rprec
-    end if
+    decay = (1-exp(-wall_noise*z))/(1-exp(-wall_noise))
+    u(:,:,jz) = u(:,:,jz) * decay + ubar(jz)*cos(angle)
+    v(:,:,jz) = v(:,:,jz) * decay + ubar(jz)*sin(angle)
+    w(:,:,jz) = w(:,:,jz) * decay
+
 end do
 
 ! Bottom boundary conditions
