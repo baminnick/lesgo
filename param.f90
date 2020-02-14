@@ -41,6 +41,7 @@ integer, parameter :: CHAR_BUFF_LENGTH = 1024 ! Default size of string buffers w
 character(*), parameter :: PATH = './'
 character(*), parameter :: checkpoint_file = path // 'vel.out'
 character(*), parameter :: checkpoint_tavg_file = path // 'tavg.out'
+character(*), parameter :: checkpoint_tavg_vort_file = path // 'tavg_vort.out'
 #ifdef PPOUTPUT_SGS
 character(*), parameter :: checkpoint_tavg_sgs_file = path // 'tavg_sgs.out'
 #endif
