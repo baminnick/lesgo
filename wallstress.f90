@@ -63,19 +63,19 @@ character(*), parameter :: sub_name = 'wallstress'
 if (coord == 0) then
     select case (lbc_mom)
         ! Stress free
-        case (0)                        
+        case (0)
             call ws_free_lbc
 
         ! DNS wall
-        case (1)                        
+        case (1)
             call ws_dns_lbc
 
         ! Equilibrium wall model
-        case (2)                       
+        case (2)
             call ws_equilibrium_lbc
 
         ! Integral wall model (not implemented for top wall)
-        case (3)                        
+        case (3)
             call iwm_wallstress()
 
         ! Smooth equilibrium wall model
@@ -87,16 +87,24 @@ if (coord == 0) then
             call tlwm()
 
         ! two-layer nonequilibrium wall model
-        case (6) 
+        case (6)
             call tlwm()
 
         ! two-layer equilibrium wall model in (kx,ky) space
-        case (7) 
+        case (7)
             call tlwm()
 
         ! two-layer nonequilibrium wall model in (kx,ky) space
         case (8)
             call tlwm()
+
+        ! Equilibrium wall model for RNL-LES, assumes horizontal average
+        case (9)
+            call ws_equilibrium_lbc_fourier_xyavg
+
+        ! Equilibrium wall model for RNL-LES, assumes streamwise average
+        case (10)
+            call ws_equilibrium_lbc_fourier_xavg
 
         ! Otherwise, invalid
         case default
@@ -271,6 +279,153 @@ do j = 1, ny
 end do
 
 end subroutine ws_equilibrium_lbc
+
+!*******************************************************************************
+subroutine ws_equilibrium_lbc_fourier_xyavg
+!*******************************************************************************
+! 
+! This subroutine is only to be used if sgs = true, molec = false, and
+! when fourier = true. This routine mimics ws_equilibrium_lbc, but with
+! some additional assumptions since working in Fourier space.
+! 
+! This is the wall-model used in Bretheim et al. 2018, and assumes averaging
+! in the streamwise and spanwise direction for the prefactor, the outputted
+! wallstress is in (kx,y) space because of u1 and v1.
+! 
+! Note the routine assumes a uniform grid, i.e. mapping not used.
+! 
+use param, only : dz, ld, nx, ny, vonk, zo, ld_big, ny2
+use sim_param, only : u, v
+use derivatives, only : dft_direct_back_2d_n_yonlyC_big, dft_direct_forw_2d_n_yonlyC_big
+use derivatives, only : convolve_rnl
+use fft, only : padd, unpadd
+!use test_filtermodule
+implicit none
+integer :: i, j
+real(rprec), dimension(ld, ny) :: u1, v1, u_avg
+!real(rprec), dimension(ld, ny) :: ustar
+real(rprec), dimension(ld_big,ny2) :: u1_big, v1_big, s1_big, txz_big, tyz_big
+real(rprec) :: const, denom
+
+u1 = u(:,:,1)
+v1 = v(:,:,1)
+! Not test filtering for fourier
+!call test_filter(u1)
+!call test_filter(v1)
+denom = log(0.5_rprec*dz/zo)
+
+! Compute u_avg = sqrt( u**2 + v**2 ) and ustar
+u1_big = 0._rprec
+v1_big = 0._rprec
+s1_big = 0._rprec
+call padd(u1_big(:,:), u1(:,:))
+call padd(v1_big(:,:), v1(:,:))
+call dft_direct_back_2d_n_yonlyC_big(u1_big(:,:))
+call dft_direct_back_2d_n_yonlyC_big(v1_big(:,:))
+s1_big = convolve_rnl(u1_big(:,:),u1_big(:,:)) + convolve_rnl(v1_big(:,:),v1_big(:,:))
+call dft_direct_forw_2d_n_yonlyC_big(s1_big(:,:))
+call unpadd(u_avg(:,:), s1_big(:,:))
+! Use horizontal average of u_avg, zero out kx & ky varying modes
+u_avg(1,1) = sqrt( u_avg(1,1) )
+u_avg(2:ld,1:ny) = 0._rprec
+u_avg(1,2:ny) = 0._rprec
+!ustar = u_avg*vonk/denom ! not used, already made simplifications below
+
+! More simplified here than original ws_equilibrium_lbc because of above assumptions
+const = -((vonk/denom)**2) * u_avg(1,1)
+
+! Rewrite s1_big variable to convolve const with u1/v1 to find txz/tyz
+s1_big = 0._rprec
+s1_big(1,1) = const
+call dft_direct_back_2d_n_yonlyC_big(s1_big(:,:))
+
+! Compute txz & tyz
+txz_big(:,:) = convolve_rnl(s1_big(:,:), u1_big(:,:))
+tyz_big(:,:) = convolve_rnl(s1_big(:,:), v1_big(:,:))
+call dft_direct_forw_2d_n_yonlyC_big(txz_big(:,:))
+call dft_direct_forw_2d_n_yonlyC_big(tyz_big(:,:))
+call unpadd(txz(:,:,1), txz_big(:,:))
+call unpadd(tyz(:,:,1), tyz_big(:,:))
+
+! Compute dudz & dvdz, again more simplified than original ws_equilibrium_lbc
+dudz(:,:,1) = 1._rprec/(0.5_rprec*dz*denom) * u(:,:,1)
+dvdz(:,:,1) = 1._rprec/(0.5_rprec*dz*denom) * v(:,:,1)
+
+do j = 1, ny
+    do i = 1, nx
+        dudz(i,j,1) = merge(0._rprec,dudz(i,j,1),u(i,j,1).eq.0._rprec)
+        dvdz(i,j,1) = merge(0._rprec,dvdz(i,j,1),v(i,j,1).eq.0._rprec)
+    end do
+end do
+
+end subroutine ws_equilibrium_lbc_fourier_xyavg
+
+!*******************************************************************************
+subroutine ws_equilibrium_lbc_fourier_xavg
+!*******************************************************************************
+! 
+! Similar to ws_equilibrium_lbc_fourier_xyavg, this wall-model is only for
+! sgs = true, molec = false, and fourier = true. Instead of assuming a 
+! streamwise and spanwise average, only a streamwise average is used.
+! 
+! Note the routine assumes a uniform grid, i.e. mapping not used.
+! 
+use param, only : dz, ld, nx, ny, vonk, zo
+use sim_param, only : u, v
+use derivatives, only : dft_direct_back_2d_n_yonlyC
+use derivatives, only : dft_direct_forw_2d_n_yonlyC
+!use test_filtermodule, only : test_filter_fourier
+implicit none
+integer :: i, j
+real(rprec), dimension(ld, ny) :: u1, v1
+real(rprec), dimension(ny) :: u1_avg, v1_avg, u_avg, ustar
+real(rprec) :: denom, const, const2
+
+u1 = u(:,:,1)
+v1 = v(:,:,1)
+
+! Instead of test-filtering, use streamwise average
+! Transform (kx,ky) --> (kx,y)
+call dft_direct_back_2d_n_yonlyC(u1(:,:))
+call dft_direct_back_2d_n_yonlyC(v1(:,:))
+
+! Test-filter in only the spanwise direction
+!call test_filter_fourier( u1 )
+!call test_filter_fourier( v1 )
+
+! Take only kx=0 mode, effectively streamwise averaging
+u1_avg(1:ny) = u1(1,:)
+v1_avg(1:ny) = v1(1,:)
+
+! Compute prefactor
+denom = log(0.5_rprec*dz/zo)
+u_avg = sqrt(u1_avg(1:ny)**2+v1_avg(1:ny)**2)
+ustar = u_avg*vonk/denom
+
+! remember ustar(y) and u_avg(y), but u1(kx,y) and v1(kx,y)
+do j = 1, ny
+    const = -(ustar(j)**2)/u_avg(j)
+    const2 = ustar(j)/(0.5_rprec*dz*vonK)/u_avg(j)
+    do i = 1, nx
+        ! Using u1 & v1, still has non-zero kx modes
+        txz(i,j,1) = const*u1(i,j)
+        tyz(i,j,1) = const*v1(i,j)
+        !this is as in Moeng 84
+        dudz(i,j,1) = const2*u1(i,j)
+        dvdz(i,j,1) = const2*v1(i,j)
+
+        dudz(i,j,1) = merge(0._rprec,dudz(i,j,1),u(i,j,1).eq.0._rprec)
+        dvdz(i,j,1) = merge(0._rprec,dvdz(i,j,1),v(i,j,1).eq.0._rprec)
+    end do
+end do
+
+! Transform (kx,y) --> (kx,ky)
+call dft_direct_forw_2d_n_yonlyC(txz(:,:,1))
+call dft_direct_forw_2d_n_yonlyC(tyz(:,:,1))
+call dft_direct_forw_2d_n_yonlyC(dudz(:,:,1))
+call dft_direct_forw_2d_n_yonlyC(dvdz(:,:,1))
+
+end subroutine ws_equilibrium_lbc_fourier_xavg
 
 !*******************************************************************************
 subroutine ws_equilibrium_ubc

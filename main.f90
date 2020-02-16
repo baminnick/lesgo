@@ -327,7 +327,6 @@ time_loop: do jt_step = nstart, nsteps
         RHSz = RHSz - RHSz_high + 2.0_rprec*gql_filter( RHSz_high )
     endif
 
-
 #endif
 
 #endif

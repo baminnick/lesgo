@@ -55,7 +55,13 @@ use sgs_param
 use messages
 #ifdef PPCNDIFF
 use sim_param, only : txz_half1, txz_half2, tyz_half1, tyz_half2
+use sim_param, only : txz_half1_big, txz_half2_big, tyz_half1_big, tyz_half2_big
 #endif
+use derivatives, only : convolve_rnl, dft_direct_back_2d_n_yonlyC_big
+use derivatives, only : dft_direct_forw_2d_n_yonlyC_big
+use derivatives, only : dft_direct_back_2d_n_yonlyC
+use derivatives, only : dft_direct_forw_2d_n_yonlyC
+use fft, only : padd, unpadd
 
 #ifdef PPMPI
 use mpi_defs, only : mpi_sync_real_array, MPI_SYNC_DOWN
@@ -164,7 +170,6 @@ if (sgs) then
                 zz(1) = 0.5_rprec * dz
                 l(1) = ( Co**(wall_damp_exp)*(vonk*zz(1))**(-wall_damp_exp)&
                     + (delta)**(-wall_damp_exp) )**(-1._rprec/wall_damp_exp)
-
                 jz_min = 2
             else
                 jz_min = 1
@@ -266,12 +271,77 @@ if (sgs) then
 
     ! Define |S| and eddy viscosity (nu_t= c_s^2 l^2 |S|) for entire domain
     !   stored on w-nodes (on uvp node for jz=1 or nz for 'wall' BC only)
-    do jz = 1, nz
-        S(1:nx,:) = sqrt( 2.0_rprec*(S11(1:nx,:,jz)**2 + S22(1:nx,:,jz)**2 +       &
-            S33(1:nx,:,jz)**2 + 2.0_rprec*(S12(1:nx,:,jz)**2 +                     &
-            S13(1:nx,:,jz)**2 + S23(1:nx,:,jz)**2 )))
-        Nu_t(1:nx,:,jz) = S(1:nx,:)*Cs_opt2(1:nx,:,jz)*l(jz)**2
-    end do
+    if (fourier) then
+        do jz = 1, nz
+
+            ! Remember Sij(kx,y,z) at the end of calc_Sij
+            ! Use only kx = 0 when computing strain-rate magnitude (SRM)
+            ! Assuming streamwise average
+            S(1,:) = sqrt( 2.0_rprec*(S11(1,:,jz)**2 +          &
+                S22(1,:,jz)**2 + S33(1,:,jz)**2 +               &
+                2.0_rprec*(S12(1,:,jz)**2 + S13(1,:,jz)**2 +    &
+                S23(1,:,jz)**2 )))
+            S(2:ld,:) = 0.0_rprec
+
+            ! Transform SRM y --> ky
+            ! No need to transform Sij, gets overwritten in calc_Sij
+            call dft_direct_forw_2d_n_yonlyC( S(:,:) )
+
+            ! Commented code below used Bretheim et al. 2018, assumes Sij(kx,ky,z) at this point
+            !! Padd to prepare for convolution
+            !call padd(S11_big(:,:,jz), S11(:,:,jz))
+            !call padd(S22_big(:,:,jz), S22(:,:,jz))
+            !call padd(S33_big(:,:,jz), S33(:,:,jz))
+            !call padd(S12_big(:,:,jz), S12(:,:,jz))
+            !call padd(S13_big(:,:,jz), S13(:,:,jz))
+            !call padd(S23_big(:,:,jz), S23(:,:,jz))
+
+            !! ky --> y
+            !call dft_direct_back_2d_n_yonlyC_big(S11_big(:,:,jz))
+            !call dft_direct_back_2d_n_yonlyC_big(S22_big(:,:,jz))
+            !call dft_direct_back_2d_n_yonlyC_big(S33_big(:,:,jz))
+            !call dft_direct_back_2d_n_yonlyC_big(S12_big(:,:,jz))
+            !call dft_direct_back_2d_n_yonlyC_big(S13_big(:,:,jz))
+            !call dft_direct_back_2d_n_yonlyC_big(S23_big(:,:,jz))
+
+            !! Convolve to find strain-rate magnitude
+            !S_big(:,:) = 2._rprec*(convolve_rnl(S11_big(:,:,jz),S11_big(:,:,jz)) + &
+            !                       convolve_rnl(S22_big(:,:,jz),S22_big(:,:,jz)) + &
+            !                       convolve_rnl(S33_big(:,:,jz),S33_big(:,:,jz)) + &
+            !             2._rprec*(convolve_rnl(S12_big(:,:,jz),S12_big(:,:,jz)) + &
+            !                       convolve_rnl(S13_big(:,:,jz),S13_big(:,:,jz)) + &
+            !                       convolve_rnl(S23_big(:,:,jz),S23_big(:,:,jz))))
+
+            !! Code below uses a streamwise average instead of streamwise and 
+            !! spanwise average as used in Bretheim et al. 2018
+            !S_big(1,1:ny2) = sqrt( abs( S_big(1,1:ny2) ) )
+            !! S_big(1,1:ny2) = sqrt( S_big(1,1:ny2) ) !! sometimes gives sqrt(negative number)!
+            !S_big(2:ld,1:ny2) = 0._rprec 
+
+            !! y --> ky
+            !call dft_direct_forw_2d_n_yonlyC_big( S_big(:,:) )
+            !call unpadd( S(:,:), S_big(:,:) )
+
+            ! ! Commented code below is the SGS model used in Bretheim et al. 2018
+            ! ! It uses a streamwise and spanwise average of the strain-rate magnitude
+            ! ! Only consider streamwise and spanwise average
+            ! S(1,1) = sqrt( S(1,1) )
+            ! S(2:ld, 1:ny) = 0._rprec
+            ! S(1,2:ny) = 0._rprec
+
+            ! Compute eddy viscosity
+            Nu_t(:,:,jz) = S(:,:)*Cs_opt2(:,:,jz)*l(jz)**2
+
+        end do
+    else !! not fourier
+        do jz = 1, nz
+            S(1:nx,:) = sqrt( 2.0_rprec*(S11(1:nx,:,jz)**2 +          &
+                S22(1:nx,:,jz)**2 + S33(1:nx,:,jz)**2 +               &
+                2.0_rprec*(S12(1:nx,:,jz)**2 + S13(1:nx,:,jz)**2 +    &
+                S23(1:nx,:,jz)**2 )))
+            Nu_t(1:nx,:,jz) = S(1:nx,:)*Cs_opt2(1:nx,:,jz)*l(jz)**2
+        end do
+    endif
 
 else
 
@@ -284,6 +354,32 @@ else
 
 end if !! if (sgs)
 
+! Padd velocity gradients before convolution with Nu_t
+if ((fourier) .and. (sgs)) then !! RNL-LES
+    do jz = 1, nz
+        call padd( dudx_big(:,:,jz), dudx(:,:,jz) )
+        call padd( dudy_big(:,:,jz), dudy(:,:,jz) )
+        call padd( dudz_big(:,:,jz), dudz(:,:,jz) )
+        call padd( dvdx_big(:,:,jz), dvdx(:,:,jz) )
+        call padd( dvdy_big(:,:,jz), dvdy(:,:,jz) )
+        call padd( dvdz_big(:,:,jz), dvdz(:,:,jz) )
+        call padd( dwdx_big(:,:,jz), dwdx(:,:,jz) )
+        call padd( dwdy_big(:,:,jz), dwdy(:,:,jz) )
+        call padd( dwdz_big(:,:,jz), dwdz(:,:,jz) )
+
+        ! ky --> y
+        call dft_direct_back_2d_n_yonlyC_big(dudx_big(:,:,jz))
+        call dft_direct_back_2d_n_yonlyC_big(dudy_big(:,:,jz))
+        call dft_direct_back_2d_n_yonlyC_big(dudz_big(:,:,jz))
+        call dft_direct_back_2d_n_yonlyC_big(dvdx_big(:,:,jz))
+        call dft_direct_back_2d_n_yonlyC_big(dvdy_big(:,:,jz))
+        call dft_direct_back_2d_n_yonlyC_big(dvdz_big(:,:,jz))
+        call dft_direct_back_2d_n_yonlyC_big(dwdx_big(:,:,jz))
+        call dft_direct_back_2d_n_yonlyC_big(dwdy_big(:,:,jz))
+        call dft_direct_back_2d_n_yonlyC_big(dwdz_big(:,:,jz))
+    end do
+end if
+
 ! Calculate txx, txy, tyy, tzz for bottom level: jz=1 node (coord==0 only)
 if (coord == 0) then
     if (sgs) then
@@ -294,14 +390,41 @@ if (coord == 0) then
 
             ! Wall
             case (1:)
-                nu_coef(1:nx,:) = 2.0_rprec*(Nu_t(1:nx,:,1)+nu) !! Nu_t on uvp-node(1) here
+                if (fourier) then
+                    nu_coef(:,:) = 2._rprec*Nu_t(:,:,1) !! Initialize
+                    ! overwrite and add nu only to the mean --> (kx,ky) = (0,0)
+                    nu_coef(1,1) = 2._rprec*(Nu_t(1,1,1)+nu)
+                else
+                    nu_coef(1:nx,:) = 2.0_rprec*(Nu_t(1:nx,:,1)+nu) !! Nu_t on uvp-node(1) here
+                end if
 
         end select
     endif
-    txx(1:nx,:,1) = -nu_coef(1:nx,:)*dudx(1:nx,:,1) !! uvp-node(1)
-    txy(1:nx,:,1) = -nu_coef(1:nx,:)*(0.5_rprec*(dudy(1:nx,:,1)+dvdx(1:nx,:,1))) !! uvp-node(1)
-    tyy(1:nx,:,1) = -nu_coef(1:nx,:)*dvdy(1:nx,:,1) !! uvp-node(1)
-    tzz(1:nx,:,1) = -nu_coef(1:nx,:)*dwdz(1:nx,:,1) !! uvp-node(1)
+    if ((fourier) .and. (sgs)) then !! only convolve if sgs since nu_coef is a function of kx
+        call padd( nu_coef_big(:,:), nu_coef(:,:) )
+        call dft_direct_back_2d_n_yonlyC_big( nu_coef_big(:,:) )
+
+        txx_big(:,:) = convolve_rnl( -nu_coef_big(:,:), dudx_big(:,:,1) )
+        txy_big(:,:) = convolve_rnl( -nu_coef_big(:,:), 0.5_rprec*(dudy_big(:,:,1)+dvdx_big(:,:,1)) )
+        tyy_big(:,:) = convolve_rnl( -nu_coef_big(:,:), dvdy_big(:,:,1) )
+        tzz_big(:,:) = convolve_rnl( -nu_coef_big(:,:), dwdz_big(:,:,1) )
+
+        call dft_direct_forw_2d_n_yonlyC_big( txx_big(:,:) )
+        call dft_direct_forw_2d_n_yonlyC_big( txy_big(:,:) )
+        call dft_direct_forw_2d_n_yonlyC_big( tyy_big(:,:) )
+        call dft_direct_forw_2d_n_yonlyC_big( tzz_big(:,:) )
+
+        call unpadd( txx(:,:,1), txx_big(:,:) )
+        call unpadd( txy(:,:,1), txy_big(:,:) )
+        call unpadd( tyy(:,:,1), tyy_big(:,:) )
+        call unpadd( tzz(:,:,1), tzz_big(:,:) )
+
+    else
+        txx(1:nx,:,1) = -nu_coef(1:nx,:)*dudx(1:nx,:,1) !! uvp-node(1)
+        txy(1:nx,:,1) = -nu_coef(1:nx,:)*(0.5_rprec*(dudy(1:nx,:,1)+dvdx(1:nx,:,1))) !! uvp-node(1)
+        tyy(1:nx,:,1) = -nu_coef(1:nx,:)*dvdy(1:nx,:,1) !! uvp-node(1)
+        tzz(1:nx,:,1) = -nu_coef(1:nx,:)*dwdz(1:nx,:,1) !! uvp-node(1)
+    endif
 
     ! since first level already calculated
     jz_min = 2
@@ -309,14 +432,22 @@ else
     jz_min = 1
 end if
 
-! Calculate txx, txy, tyy, tzz for bottom level: jz=nz node (coord==nproc-1)
+! Calculate txx, txy, tyy, tzz for top level: jz=nz node (coord==nproc-1)
 if (coord == nproc-1) then
     if (sgs) then
-        select case (lbc_mom)
+        select case (ubc_mom)
             ! Stress free
             case (0)
-                nu_coef(1:nx,:) = 2.0_rprec*(0.5_rprec*(Nu_t(1:nx,:,nz-1) + Nu_t(1:nx,:,nz)) + nu) !! uvp-node(nz-1)
-                nu_coef2(1:nx,:) = 2.0_rprec*(Nu_t(1:nx,:,nz-1) + nu) !! w-node(nz-1)
+                if (fourier) then
+                    nu_coef(:,:) = 2.0_rprec*(0.5_rprec*(Nu_t(:,:,nz-1) + Nu_t(:,:,nz))) !! initialize
+                    nu_coef2(:,:) = 2.0_rprec*Nu_t(:,:,nz-1) !! initialize
+                    ! overwrite and add nu only to the mean --> (kx,ky) = (0,0)
+                    nu_coef(1,1) = 2.0_rprec*(0.5_rprec*(Nu_t(1,1,nz-1) + Nu_t(1,1,nz)) + nu) !! uvp-node(nz-1)
+                    nu_coef2(1,1) = 2.0_rprec*(Nu_t(1,1,nz-1) + nu) !! w-node(nz-1)
+                else
+                    nu_coef(1:nx,:) = 2.0_rprec*(0.5_rprec*(Nu_t(1:nx,:,nz-1) + Nu_t(1:nx,:,nz)) + nu) !! uvp-node(nz-1)
+                    nu_coef2(1:nx,:) = 2.0_rprec*(Nu_t(1:nx,:,nz-1) + nu) !! w-node(nz-1)
+                end if
 
             ! Wall
             case (1:)
@@ -325,22 +456,80 @@ if (coord == nproc-1) then
 
         end select
     endif
-    txx(1:nx,:,nz-1) = -nu_coef(1:nx,:)*dudx(1:nx,:,nz-1) !! uvp-node(nz-1)
-    txy(1:nx,:,nz-1) = -nu_coef(1:nx,:)*(0.5_rprec*(dudy(1:nx,:,nz-1)+dvdx(1:nx,:,nz-1))) !! uvp-node(nz-1)
-    tyy(1:nx,:,nz-1) = -nu_coef(1:nx,:)*dvdy(1:nx,:,nz-1) !! uvp-node(nz-1)
-    tzz(1:nx,:,nz-1) = -nu_coef(1:nx,:)*dwdz(1:nx,:,nz-1) !! uvp-node(nz-1)
-    ! for top wall, include w-grid stress since we touched nz-1
+
+    if ((fourier) .and. (sgs)) then !! only convolve if sgs since nu_coef is a function of kx
+        call padd( nu_coef_big(:,:), nu_coef(:,:) )
+        call padd( nu_coef2_big(:,:), nu_coef2(:,:) )
+        call dft_direct_back_2d_n_yonlyC_big( nu_coef_big(:,:) )
+        call dft_direct_back_2d_n_yonlyC_big( nu_coef2_big(:,:) )
+
+        txx_big(:,:) = convolve_rnl( -nu_coef_big(:,:), dudx_big(:,:,nz-1) )
+        txy_big(:,:) = convolve_rnl( -nu_coef_big(:,:), 0.5_rprec*(dudy_big(:,:,nz-1)+dvdx_big(:,:,nz-1)) )
+        tyy_big(:,:) = convolve_rnl( -nu_coef_big(:,:), dvdy_big(:,:,nz-1) )
+        tzz_big(:,:) = convolve_rnl( -nu_coef_big(:,:), dwdz_big(:,:,nz-1) )
+        ! for top wall, include w-grid stress since we touched nz-1
 #ifdef PPCNDIFF
-    txz(1:nx,:,nz-1) = -nu_coef2(1:nx,:)*(0.5_rprec*(dudz(1:nx,:,nz-1)+dwdx(1:nx,:,nz-1))) !! w-node(nz-1)
-    txz_half1(1:nx,:,nz-1) = -nu_coef2(1:nx,:)*(0.5_rprec*(dwdx(1:nx,:,nz-1))) !! w-node(nz-1)
-    txz_half2(1:nx,:,nz-1) = -nu_coef2(1:nx,:)*(0.5_rprec*(dudz(1:nx,:,nz-1))) !! w-node(nz-1)
-    tyz(1:nx,:,nz-1) = -nu_coef2(1:nx,:)*(0.5_rprec*(dvdz(1:nx,:,nz-1)+dwdy(1:nx,:,nz-1))) !! w-node(nz-1)
-    tyz_half1(1:nx,:,nz-1) = -nu_coef2(1:nx,:)*(0.5_rprec*(dwdy(1:nx,:,nz-1))) !! w-node(nz-1)
-    tyz_half2(1:nx,:,nz-1) = -nu_coef2(1:nx,:)*(0.5_rprec*(dvdz(1:nx,:,nz-1))) !! w-node(nz-1)
+        txz_big(:,:) = convolve_rnl( -nu_coef2_big(:,:), 0.5_rprec*(dudz_big(:,:,nz-1)+dwdx_big(:,:,nz-1)) )
+        txz_half1_big(:,:) = convolve_rnl( -nu_coef2_big(:,:), 0.5_rprec*(dwdx_big(:,:,nz-1)) )
+        txz_half2_big(:,:) = convolve_rnl( -nu_coef2_big(:,:), 0.5_rprec*(dudz_big(:,:,nz-1)) )
+        tyz_big(:,:) = convolve_rnl( -nu_coef2_big(:,:), 0.5_rprec*(dvdz_big(:,:,nz-1)+dwdy_big(:,:,nz-1)) )
+        tyz_half1_big(:,:) = convolve_rnl( -nu_coef2_big(:,:), 0.5_rprec*(dwdy_big(:,:,nz-1)) )
+        tyz_half2_big(:,:) = convolve_rnl( -nu_coef2_big(:,:), 0.5_rprec*(dvdz_big(:,:,nz-1)) )
 #else
-    txz(1:nx,:,nz-1) = -nu_coef2(1:nx,:)*(0.5_rprec*(dudz(1:nx,:,nz-1)+dwdx(1:nx,:,nz-1))) !! w-node(nz-1)
-    tyz(1:nx,:,nz-1) = -nu_coef2(1:nx,:)*(0.5_rprec*(dvdz(1:nx,:,nz-1)+dwdy(1:nx,:,nz-1))) !! w-node(nz-1)
+        txz_big(:,:) = convolve_rnl( -nu_coef2_big(:,:), 0.5_rprec*(dudz_big(:,:,nz-1)+dwdx_big(:,:,nz-1)) )
+        tyz_big(:,:) = convolve_rnl( -nu_coef2_big(:,:), 0.5_rprec*(dvdz_big(:,:,nz-1)+dwdy_big(:,:,nz-1)) )
 #endif
+
+        call dft_direct_forw_2d_n_yonlyC_big( txx_big(:,:) )
+        call dft_direct_forw_2d_n_yonlyC_big( txy_big(:,:) )
+        call dft_direct_forw_2d_n_yonlyC_big( tyy_big(:,:) )
+        call dft_direct_forw_2d_n_yonlyC_big( tzz_big(:,:) )
+#ifdef PPCNDIFF
+        call dft_direct_forw_2d_n_yonlyC_big( txz_big(:,:) )
+        call dft_direct_forw_2d_n_yonlyC_big( txz_half1_big(:,:) )
+        call dft_direct_forw_2d_n_yonlyC_big( txz_half2_big(:,:) )
+        call dft_direct_forw_2d_n_yonlyC_big( tyz_big(:,:) )
+        call dft_direct_forw_2d_n_yonlyC_big( tyz_half1_big(:,:) )
+        call dft_direct_forw_2d_n_yonlyC_big( tyz_half2_big(:,:) )
+#else
+        call dft_direct_forw_2d_n_yonlyC_big( txz_big(:,:) )
+        call dft_direct_forw_2d_n_yonlyC_big( tyz_big(:,:) )
+#endif
+
+        call unpadd( txx(:,:,nz-1), txx_big(:,:) )
+        call unpadd( txy(:,:,nz-1), txy_big(:,:) )
+        call unpadd( tyy(:,:,nz-1), tyy_big(:,:) )
+        call unpadd( tzz(:,:,nz-1), tzz_big(:,:) )
+#ifdef PPCNDIFF
+        call unpadd( txz(:,:,nz-1), txz_big(:,:) )
+        call unpadd( txz_half1(:,:,nz-1), txz_half1_big(:,:) )
+        call unpadd( txz_half2(:,:,nz-1), txz_half2_big(:,:) )
+        call unpadd( tyz(:,:,nz-1), tyz_big(:,:) )
+        call unpadd( tyz_half1(:,:,nz-1), tyz_half1_big(:,:) )
+        call unpadd( tyz_half2(:,:,nz-1), tyz_half2_big(:,:) )
+#else
+        call unpadd( txz(:,:,nz-1), txz_big(:,:) )
+        call unpadd( tyz(:,:,nz-1), tyz_big(:,:) )
+#endif
+
+    else
+        txx(1:nx,:,nz-1) = -nu_coef(1:nx,:)*dudx(1:nx,:,nz-1) !! uvp-node(nz-1)
+        txy(1:nx,:,nz-1) = -nu_coef(1:nx,:)*(0.5_rprec*(dudy(1:nx,:,nz-1)+dvdx(1:nx,:,nz-1))) !! uvp-node(nz-1)
+        tyy(1:nx,:,nz-1) = -nu_coef(1:nx,:)*dvdy(1:nx,:,nz-1) !! uvp-node(nz-1)
+        tzz(1:nx,:,nz-1) = -nu_coef(1:nx,:)*dwdz(1:nx,:,nz-1) !! uvp-node(nz-1)
+        ! for top wall, include w-grid stress since we touched nz-1
+#ifdef PPCNDIFF
+        txz(1:nx,:,nz-1) = -nu_coef2(1:nx,:)*(0.5_rprec*(dudz(1:nx,:,nz-1)+dwdx(1:nx,:,nz-1))) !! w-node(nz-1)
+        txz_half1(1:nx,:,nz-1) = -nu_coef2(1:nx,:)*(0.5_rprec*(dwdx(1:nx,:,nz-1))) !! w-node(nz-1)
+        txz_half2(1:nx,:,nz-1) = -nu_coef2(1:nx,:)*(0.5_rprec*(dudz(1:nx,:,nz-1))) !! w-node(nz-1)
+        tyz(1:nx,:,nz-1) = -nu_coef2(1:nx,:)*(0.5_rprec*(dvdz(1:nx,:,nz-1)+dwdy(1:nx,:,nz-1))) !! w-node(nz-1)
+        tyz_half1(1:nx,:,nz-1) = -nu_coef2(1:nx,:)*(0.5_rprec*(dwdy(1:nx,:,nz-1))) !! w-node(nz-1)
+        tyz_half2(1:nx,:,nz-1) = -nu_coef2(1:nx,:)*(0.5_rprec*(dvdz(1:nx,:,nz-1))) !! w-node(nz-1)
+#else
+        txz(1:nx,:,nz-1) = -nu_coef2(1:nx,:)*(0.5_rprec*(dudz(1:nx,:,nz-1)+dwdx(1:nx,:,nz-1))) !! w-node(nz-1)
+        tyz(1:nx,:,nz-1) = -nu_coef2(1:nx,:)*(0.5_rprec*(dvdz(1:nx,:,nz-1)+dwdy(1:nx,:,nz-1))) !! w-node(nz-1)
+#endif
+    end if
 
     ! since last level already calculated
     jz_max = nz-2
@@ -354,24 +543,89 @@ end if
 !   txx, txy, tyy, tzz (uvp-nodes) and txz, tyz (w-nodes)
 do jz = jz_min, jz_max
     if (sgs) then
-        nu_coef(1:nx,:) = 2.0_rprec*(0.5_rprec*(Nu_t(1:nx,:,jz) + Nu_t(1:nx,:,jz+1)) + nu) !! uvp-node(jz)
-        nu_coef2(1:nx,:) = 2.0_rprec*(Nu_t(1:nx,:,jz) + nu) !! w-node(jz)
+        if (fourier) then
+            nu_coef(:,:) = 2.0_rprec*(0.5_rprec*(Nu_t(:,:,jz) + Nu_t(:,:,jz+1))) !! initialize
+            nu_coef2(:,:) = 2.0_rprec*Nu_t(:,:,jz) !! initialize
+            ! add nu only to the mean --> (kx,ky) = (0,0)
+            nu_coef(1,1) = 2.0_rprec*(0.5_rprec*(Nu_t(1,1,jz) + Nu_t(1,1,jz+1)) + nu) !! uvp-node(jz)
+            nu_coef2(1,1) = 2.0_rprec*(Nu_t(1,1,jz) + nu) !! w-node(jz)
+        else
+            nu_coef(1:nx,:) = 2.0_rprec*(0.5_rprec*(Nu_t(1:nx,:,jz) + Nu_t(1:nx,:,jz+1)) + nu) !! uvp-node(jz)
+            nu_coef2(1:nx,:) = 2.0_rprec*(Nu_t(1:nx,:,jz) + nu) !! w-node(jz)
+        endif
     endif
-    txx(1:nx,:,jz)=-nu_coef(1:nx,:)*dudx(1:nx,:,jz) !! uvp-node(jz)
-    txy(1:nx,:,jz)=-nu_coef(1:nx,:)*(0.5_rprec*(dudy(1:nx,:,jz)+dvdx(1:nx,:,jz))) !! uvp-node(jz)
-    tyy(1:nx,:,jz)=-nu_coef(1:nx,:)*dvdy(1:nx,:,jz) !! uvp-node(jz)
-    tzz(1:nx,:,jz)=-nu_coef(1:nx,:)*dwdz(1:nx,:,jz) !! uvp-node(jz)
+    if ((fourier) .and. (sgs)) then !! only convolve if sgs since nu_coef is a function of kx
+        call padd( nu_coef_big(:,:), nu_coef(:,:) )
+        call padd( nu_coef2_big(:,:), nu_coef2(:,:) )
+        call dft_direct_back_2d_n_yonlyC_big( nu_coef_big(:,:) )
+        call dft_direct_back_2d_n_yonlyC_big( nu_coef2_big(:,:) )
+
+        txx_big(:,:) = convolve_rnl( -nu_coef_big(:,:), dudx_big(:,:,jz) )
+        txy_big(:,:) = convolve_rnl( -nu_coef_big(:,:), 0.5_rprec*(dudy_big(:,:,jz)+dvdx_big(:,:,jz)) )
+        tyy_big(:,:) = convolve_rnl( -nu_coef_big(:,:), dvdy_big(:,:,jz) )
+        tzz_big(:,:) = convolve_rnl( -nu_coef_big(:,:), dwdz_big(:,:,jz) )
+        ! for top wall, include w-grid stress since we touched nz-1
 #ifdef PPCNDIFF
-    txz(1:nx,:,jz)=-nu_coef2(1:nx,:)*(0.5_rprec*(dudz(1:nx,:,jz)+dwdx(1:nx,:,jz))) !! w-node(jz)
-    txz_half1(1:nx,:,jz)=-nu_coef2(1:nx,:)*(0.5_rprec*(dwdx(1:nx,:,jz))) !! w-node(jz)
-    txz_half2(1:nx,:,jz)=-nu_coef2(1:nx,:)*(0.5_rprec*(dudz(1:nx,:,jz))) !! w-node(jz)
-    tyz(1:nx,:,jz)=-nu_coef2(1:nx,:)*(0.5_rprec*(dvdz(1:nx,:,jz)+dwdy(1:nx,:,jz))) !! w-node(jz)
-    tyz_half1(1:nx,:,jz)=-nu_coef2(1:nx,:)*(0.5_rprec*(dwdy(1:nx,:,jz))) !! w-node(jz)
-    tyz_half2(1:nx,:,jz)=-nu_coef2(1:nx,:)*(0.5_rprec*(dvdz(1:nx,:,jz))) !! w-node(jz)
+        txz_big(:,:) = convolve_rnl( -nu_coef2_big(:,:), 0.5_rprec*(dudz_big(:,:,jz)+dwdx_big(:,:,jz)) )
+        txz_half1_big(:,:) = convolve_rnl( -nu_coef2_big(:,:), 0.5_rprec*(dwdx_big(:,:,jz)) )
+        txz_half2_big(:,:) = convolve_rnl( -nu_coef2_big(:,:), 0.5_rprec*(dudz_big(:,:,jz)) )
+        tyz_big(:,:) = convolve_rnl( -nu_coef2_big(:,:), 0.5_rprec*(dvdz_big(:,:,jz)+dwdy_big(:,:,jz)) )
+        tyz_half1_big(:,:) = convolve_rnl( -nu_coef2_big(:,:), 0.5_rprec*(dwdy_big(:,:,jz)) )
+        tyz_half2_big(:,:) = convolve_rnl( -nu_coef2_big(:,:), 0.5_rprec*(dvdz_big(:,:,jz)) )
 #else
-    txz(1:nx,:,jz)=-nu_coef2(1:nx,:)*(0.5_rprec*(dudz(1:nx,:,jz)+dwdx(1:nx,:,jz))) !! w-node(jz)
-    tyz(1:nx,:,jz)=-nu_coef2(1:nx,:)*(0.5_rprec*(dvdz(1:nx,:,jz)+dwdy(1:nx,:,jz))) !! w-node(jz)
+        txz_big(:,:) = convolve_rnl( -nu_coef2_big(:,:), 0.5_rprec*(dudz_big(:,:,jz)+dwdx_big(:,:,jz)) )
+        tyz_big(:,:) = convolve_rnl( -nu_coef2_big(:,:), 0.5_rprec*(dvdz_big(:,:,jz)+dwdy_big(:,:,jz)) )
 #endif
+
+        call dft_direct_forw_2d_n_yonlyC_big( txx_big(:,:) )
+        call dft_direct_forw_2d_n_yonlyC_big( txy_big(:,:) )
+        call dft_direct_forw_2d_n_yonlyC_big( tyy_big(:,:) )
+        call dft_direct_forw_2d_n_yonlyC_big( tzz_big(:,:) )
+#ifdef PPCNDIFF
+        call dft_direct_forw_2d_n_yonlyC_big( txz_big(:,:) )
+        call dft_direct_forw_2d_n_yonlyC_big( txz_half1_big(:,:) )
+        call dft_direct_forw_2d_n_yonlyC_big( txz_half2_big(:,:) )
+        call dft_direct_forw_2d_n_yonlyC_big( tyz_big(:,:) )
+        call dft_direct_forw_2d_n_yonlyC_big( tyz_half1_big(:,:) )
+        call dft_direct_forw_2d_n_yonlyC_big( tyz_half2_big(:,:) )
+#else
+        call dft_direct_forw_2d_n_yonlyC_big( txz_big(:,:) )
+        call dft_direct_forw_2d_n_yonlyC_big( tyz_big(:,:) )
+#endif
+
+        call unpadd( txx(:,:,jz), txx_big(:,:) )
+        call unpadd( txy(:,:,jz), txy_big(:,:) )
+        call unpadd( tyy(:,:,jz), tyy_big(:,:) )
+        call unpadd( tzz(:,:,jz), tzz_big(:,:) )
+#ifdef PPCNDIFF
+        call unpadd( txz(:,:,jz), txz_big(:,:) )
+        call unpadd( txz_half1(:,:,jz), txz_half1_big(:,:) )
+        call unpadd( txz_half2(:,:,jz), txz_half2_big(:,:) )
+        call unpadd( tyz(:,:,jz), tyz_big(:,:) )
+        call unpadd( tyz_half1(:,:,jz), tyz_half1_big(:,:) )
+        call unpadd( tyz_half2(:,:,jz), tyz_half2_big(:,:) )
+#else
+        call unpadd( txz(:,:,jz), txz_big(:,:) )
+        call unpadd( tyz(:,:,jz), tyz_big(:,:) )
+#endif
+
+    else
+        txx(1:nx,:,jz)=-nu_coef(1:nx,:)*dudx(1:nx,:,jz) !! uvp-node(jz)
+        txy(1:nx,:,jz)=-nu_coef(1:nx,:)*(0.5_rprec*(dudy(1:nx,:,jz)+dvdx(1:nx,:,jz))) !! uvp-node(jz)
+        tyy(1:nx,:,jz)=-nu_coef(1:nx,:)*dvdy(1:nx,:,jz) !! uvp-node(jz)
+        tzz(1:nx,:,jz)=-nu_coef(1:nx,:)*dwdz(1:nx,:,jz) !! uvp-node(jz)
+#ifdef PPCNDIFF
+        txz(1:nx,:,jz)=-nu_coef2(1:nx,:)*(0.5_rprec*(dudz(1:nx,:,jz)+dwdx(1:nx,:,jz))) !! w-node(jz)
+        txz_half1(1:nx,:,jz)=-nu_coef2(1:nx,:)*(0.5_rprec*(dwdx(1:nx,:,jz))) !! w-node(jz)
+        txz_half2(1:nx,:,jz)=-nu_coef2(1:nx,:)*(0.5_rprec*(dudz(1:nx,:,jz))) !! w-node(jz)
+        tyz(1:nx,:,jz)=-nu_coef2(1:nx,:)*(0.5_rprec*(dvdz(1:nx,:,jz)+dwdy(1:nx,:,jz))) !! w-node(jz)
+        tyz_half1(1:nx,:,jz)=-nu_coef2(1:nx,:)*(0.5_rprec*(dwdy(1:nx,:,jz))) !! w-node(jz)
+        tyz_half2(1:nx,:,jz)=-nu_coef2(1:nx,:)*(0.5_rprec*(dvdz(1:nx,:,jz))) !! w-node(jz)
+#else
+        txz(1:nx,:,jz)=-nu_coef2(1:nx,:)*(0.5_rprec*(dudz(1:nx,:,jz)+dwdx(1:nx,:,jz))) !! w-node(jz)
+        tyz(1:nx,:,jz)=-nu_coef2(1:nx,:)*(0.5_rprec*(dvdz(1:nx,:,jz)+dwdy(1:nx,:,jz))) !! w-node(jz)
+#endif
+    endif
 enddo
 
 #ifdef PPLVLSET
@@ -441,6 +695,7 @@ use types, only : rprec
 use param
 use sim_param, only : dudx, dudy, dudz, dvdx, dvdy, dvdz, dwdx, dwdy, dwdz
 use sgs_param
+use derivatives, only : dft_direct_back_2d_n_yonlyC
 #ifdef PPMPI
 use mpi_defs, only : mpi_sync_real_array, MPI_SYNC_DOWN
 #endif
@@ -563,6 +818,18 @@ do jz = jz_min, jz_max
     S23(1:nx,:,jz) = 0.5_rprec*(dvdz(1:nx,:,jz) + dwdy(1:nx,:,jz))   !! w-node(jz)
     S33(1:nx,:,jz) = 0.5_rprec*(dwdz(1:nx,:,jz) + dwdz(1:nx,:,jz-1)) !! w-node(jz)
 end do
+
+if (fourier) then
+    do jz = 1, nz
+        ! Transform ky --> y
+        call dft_direct_back_2d_n_yonlyC( S11(:,:,jz) )
+        call dft_direct_back_2d_n_yonlyC( S22(:,:,jz) )
+        call dft_direct_back_2d_n_yonlyC( S33(:,:,jz) )
+        call dft_direct_back_2d_n_yonlyC( S12(:,:,jz) )
+        call dft_direct_back_2d_n_yonlyC( S13(:,:,jz) )
+        call dft_direct_back_2d_n_yonlyC( S23(:,:,jz) )
+    end do
+endif
 
 end subroutine calc_Sij
 
