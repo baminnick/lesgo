@@ -33,6 +33,8 @@ use fft
 #ifdef PPMAPPING
 use sim_param, only : JACO1, JACO2, mesh_stretch
 #endif
+use derivatives, only : dft_direct_forw_2d_n_yonlyC, &
+    dft_direct_back_2d_n_yonlyC
 
 implicit none
 
@@ -77,6 +79,14 @@ if (coord == 0) then
 endif
 #endif
 
+! Transform eddy viscosity, kx, ky, z --> kx, y, z
+! however only going to use the kx=0 mode, assuming Nu_t(y,z) only
+if ((fourier) .and. (sgs)) then
+    do jz = 1, nz
+        call dft_direct_back_2d_n_yonlyC( Nu_t(:,:,jz) )
+    enddo
+endif
+
 ! Get bottom row, at jz = 2 instead of jz = 1
 if (coord == 0) then
 #ifdef PPSAFETYMODE
@@ -88,13 +98,23 @@ if (coord == 0) then
             do jy = 1, ny
             do jx = 1, nx
                 if (sgs) then
-                    nu_c = 0.5_rprec*(Nu_t(jx,jy,3)+Nu_t(jx,jy,2)) + nu
-                    ! Nu_t(jx,jy,1) on w, need to interpolate
+                    if (fourier) then
+                        nu_c = 0.5_rprec*(Nu_t(1,jy,3)+Nu_t(1,jy,2)) + nu
+                        ! Nu_t(jx,jy,1) on w, need to interpolate
 #ifdef PPMAPPING
-                    nu_b = (nu_c/JACO2(2)) + ((0.5_rprec*(Nu_t(jx,jy,2)+Nu_t(jx,jy,1)) + nu)/JACO2(1))
+                        nu_b = (nu_c/JACO2(2)) + ((0.5_rprec*(Nu_t(1,jy,2)+Nu_t(jx,jy,1)) + nu)/JACO2(1))
 #else
-                    nu_b = nu_c + 0.5_rprec*(Nu_t(jx,jy,2)+Nu_t(jx,jy,1)) + nu
+                        nu_b = nu_c + 0.5_rprec*(Nu_t(1,jy,2)+Nu_t(1,jy,1)) + nu
 #endif
+                    else
+                        nu_c = 0.5_rprec*(Nu_t(jx,jy,3)+Nu_t(jx,jy,2)) + nu
+                        ! Nu_t(jx,jy,1) on w, need to interpolate
+#ifdef PPMAPPING
+                        nu_b = (nu_c/JACO2(2)) + ((0.5_rprec*(Nu_t(jx,jy,2)+Nu_t(jx,jy,1)) + nu)/JACO2(1))
+#else
+                        nu_b = nu_c + 0.5_rprec*(Nu_t(jx,jy,2)+Nu_t(jx,jy,1)) + nu
+#endif
+                    endif
                 else
 #ifdef PPMAPPING
                     nu_b = (nu/JACO2(2)) + (nu/JACO2(1))
@@ -118,13 +138,23 @@ if (coord == 0) then
             do jy = 1, ny
             do jx = 1, nx
                 if (sgs) then
-                    ! Nu_t(jx,jy,1) on uvp, no need to interpolate
+                    if (fourier) then
+                        nu_c = 0.5_rprec*(Nu_t(1,jy,3)+Nu_t(1,jy,2)) + nu
+                        ! Nu_t(jx,jy,1) on uvp, no need to interpolate
 #ifdef PPMAPPING
-                    nu_b = (nu_c/JACO2(2)) + ((Nu_t(jx,jy,1)+nu)/JACO2(1))
+                        nu_b = (nu_c/JACO2(2)) + ((Nu_t(1,jy,1)+nu)/JACO2(1))
 #else
-                    nu_b = nu_c + Nu_t(jx,jy,1) + nu
+                        nu_b = nu_c + Nu_t(1,jy,1) + nu
 #endif
-                    nu_c = 0.5_rprec*(Nu_t(jx,jy,3)+Nu_t(jx,jy,2)) + nu
+                    else
+                        nu_c = 0.5_rprec*(Nu_t(jx,jy,3)+Nu_t(jx,jy,2)) + nu
+                        ! Nu_t(jx,jy,1) on uvp, no need to interpolate
+#ifdef PPMAPPING
+                        nu_b = (nu_c/JACO2(2)) + ((Nu_t(jx,jy,1)+nu)/JACO2(1))
+#else
+                        nu_b = nu_c + Nu_t(jx,jy,1) + nu
+#endif
+                    endif
                 else
 #ifdef PPMAPPING
                     nu_b = (nu/JACO2(2)) + (nu/JACO2(1))
@@ -162,7 +192,11 @@ if (coord == nproc-1) then
             do jx = 1, nx
                 if (sgs) then
                     ! Nu_t(jx,jy,nz) on w, need to interpolate
-                    nu_a = Nu_t(jx,jy,nz-1) + nu
+                    if (fourier) then
+                        nu_a = Nu_t(1,jy,nz-1) + nu
+                    else
+                        nu_a = Nu_t(jx,jy,nz-1) + nu
+                    endif
                 else
                     nu_a = nu
                 end if
@@ -184,23 +218,21 @@ if (coord == nproc-1) then
             do jx = 1, nx
                 if (sgs) then
                     ! Nu_t(jx,jy,1) on uvp, not needed here
-                    nu_a = Nu_t(jx,jy,nz-1) + nu
+                    if (fourier) then
+                        nu_a = Nu_t(1,jy,nz-1) + nu
+                    else
+                        nu_a = Nu_t(jx,jy,nz-1) + nu
+                    endif
                 else
                     nu_a = nu
                 endif
-                ! Discretized txz(jx,jy,nz) as in wallstress,
-                ! Therefore BC treated implicitly
-                ! vtop = 0 so no changes to Ry
 #ifdef PPMAPPING
                 a(jx,jy,nz-1) = -const1*(1._rprec/JACO2(nz-1))*const2*(1._rprec/JACO1(nz-1))*nu_a
                 b(jx,jy,nz-1) = 1._rprec + const1*(1._rprec/JACO2(nz-1))*          &
                     (const2*(1._rprec/JACO1(2))*nu_a + (nu/(L_z-mesh_stretch(nz-1))))
-                Rz(jx,jy,nz-1) = Rz(jx,jy,nz-1) + const1*(1._rprec/JACO2(1))*      &
-                    (nu/(L_z-mesh_stretch(nz-1)))*utop
 #else
                 a(jx,jy,nz-1) = -const1*const2*nu_a
                 b(jx,jy,nz-1) = 1._rprec + const1*(const2*nu_a + const3*nu)
-                Rz(jx,jy,nz-1) = Rz(jx,jy,nz-1) + const1*const3*nu*utop
 #endif
             end do
             end do
@@ -228,8 +260,13 @@ if (coord > 0) then
     do jx = 1, nx
         if (sgs) then
             ! Interpolate eddy viscosity onto uv-grid
-            nu_a = 0.5_rprec*(Nu_t(jx,jy,1) + Nu_up(jx,jy)) + nu
-            nu_c = 0.5_rprec*(Nu_t(jx,jy,2) + Nu_t(jx,jy,1)) + nu
+            if (fourier) then
+                nu_a = 0.5_rprec*(Nu_t(1,jy,1) + Nu_up(1,jy)) + nu
+                nu_c = 0.5_rprec*(Nu_t(1,jy,2) + Nu_t(1,jy,1)) + nu
+            else
+                nu_a = 0.5_rprec*(Nu_t(jx,jy,1) + Nu_up(jx,jy)) + nu
+                nu_c = 0.5_rprec*(Nu_t(jx,jy,2) + Nu_t(jx,jy,1)) + nu
+            endif
 #ifdef PPMAPPING
             nu_b = (nu_c/JACO2(1)) + (nu_a/JACO2(0))
 #else
@@ -266,8 +303,13 @@ do jy = 1, ny
 do jx = 1, nx
     if (sgs) then
         ! Interpolate eddy viscosity onto uv-grid
-        nu_a = 0.5_rprec*(Nu_t(jx,jy,jz) + Nu_t(jx,jy,jz-1)) + nu
-        nu_c = 0.5_rprec*(Nu_t(jx,jy,jz+1) + Nu_t(jx,jy,jz)) + nu
+        if (fourier) then
+            nu_a = 0.5_rprec*(Nu_t(1,jy,jz) + Nu_t(1,jy,jz-1)) + nu
+            nu_c = 0.5_rprec*(Nu_t(1,jy,jz+1) + Nu_t(1,jy,jz)) + nu
+        else
+            nu_a = 0.5_rprec*(Nu_t(jx,jy,jz) + Nu_t(jx,jy,jz-1)) + nu
+            nu_c = 0.5_rprec*(Nu_t(jx,jy,jz+1) + Nu_t(jx,jy,jz)) + nu
+        endif
 #ifdef PPMAPPING
         nu_b = (nu_c/JACO2(jz)) + (nu_a/JACO2(jz-1))
 #else
@@ -296,8 +338,25 @@ end do
 end do
 end do
 
+! Done using eddy viscosity, transform kx, y, z --> kx, ky, z
+! Now transform Rz, kx, ky, z --> kx, y, z
+if ((fourier) .and. (sgs)) then
+    do jz = 1, nz
+        call dft_direct_forw_2d_n_yonlyC( Nu_t(:,:,jz) )
+        call dft_direct_back_2d_n_yonlyC( Rz(:,:,jz) )
+    enddo
+endif
+
 ! Find intermediate velocity in TDMA
 call tridag_array_diff_w (a, b, c, Rz, wsol)
+
+! Since a,b,c(y,z) and Rz(kx,y,z) we have wsol(kx,y,z) therefore transform
+! No need to change Rz back, will be overwritten in next time-step
+if ((fourier) .and. (sgs)) then
+    do jz = 1, nz-1
+        call dft_direct_forw_2d_n_yonlyC( wsol(:,:,jz) )
+    enddo
+endif
 
 ! Fill velocity solution
 if (coord == 0) then

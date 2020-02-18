@@ -34,6 +34,8 @@ use fft
 #ifdef PPMAPPING
 use sim_param, only : JACO1, JACO2, mesh_stretch
 #endif
+use derivatives, only : dft_direct_forw_2d_n_yonlyC, &
+    dft_direct_back_2d_n_yonlyC
 
 implicit none
 
@@ -72,6 +74,14 @@ dtyzdz_rhs(:,:,nz) = BOGUS
 Rx(:,:,1:nz-1) = Rx(:,:,1:nz-1) - dt * 0.5_rprec * dtxzdz_rhs(:,:,1:nz-1)
 Ry(:,:,1:nz-1) = Ry(:,:,1:nz-1) - dt * 0.5_rprec * dtyzdz_rhs(:,:,1:nz-1)
 
+! Transform eddy viscosity kx, ky, z --> kx, y, z
+! however only going to use the kx=0 mode, assuming Nu_t(y,z) only
+if ((fourier) .and. (sgs)) then
+    do jz = 1, nz
+        call dft_direct_back_2d_n_yonlyC( Nu_t(:,:,jz) )
+    end do
+endif
+
 ! Get bottom row 
 if (coord == 0) then
 #ifdef PPSAFETYMODE
@@ -84,7 +94,11 @@ if (coord == 0) then
             do jx = 1, nx
                 if (sgs) then
                     ! Nu_t(jx,jy,1) on w, not needed here
-                    nu_c = Nu_t(jx,jy,2) + nu
+                    if (fourier) then
+                        nu_c = Nu_t(1,jy,2) + nu
+                    else
+                        nu_c = Nu_t(jx,jy,2) + nu
+                    endif
                 else
                     nu_c = nu
                 end if
@@ -106,7 +120,11 @@ if (coord == 0) then
             do jx = 1, nx
                 if (sgs) then
                     ! Nu_t(jx,jy,1) on uvp, not needed here
-                    nu_c = Nu_t(jx,jy,2) + nu
+                    if (fourier) then
+                        nu_c = Nu_t(1,jy,2) + nu
+                    else
+                        nu_c = Nu_t(jx,jy,2) + nu
+                    endif
                 else
                     nu_c = nu
                 end if
@@ -117,12 +135,21 @@ if (coord == 0) then
                 b(jx,jy,1) = 1._rprec + const1*(1._rprec/JACO2(1))*        &
                     (const2*(1._rprec/JACO1(2))*nu_c + (nu/mesh_stretch(1)))
                 c(jx,jy,1) = -const1*(1._rprec/JACO2(1))*const2*(1._rprec/JACO1(2))*nu_c
-                Rx(jx,jy,1) = Rx(jx,jy,1) + const1*(1._rprec/JACO2(1))*    &
-                    (nu/mesh_stretch(1))*ubot
+                if (fourier) then
+                    Rx(1,1,1) = Rx(1,1,1) + const1*(1._rprec/JACO2(1))* &
+                        (nu/mesh_stretch(1))*ubot
+                else
+                    Rx(jx,jy,1) = Rx(jx,jy,1) + const1*(1._rprec/JACO2(1))* &
+                        (nu/mesh_stretch(1))*ubot
+                endif
 #else
                 b(jx,jy,1) = 1._rprec + const1*(const2*nu_c + const3*nu)
                 c(jx,jy,1) = -const1*const2*nu_c
-                Rx(jx,jy,1) = Rx(jx,jy,1) + const1*const3*nu*ubot
+                if (fourier) then
+                    Rx(1,1,1) = Rx(1,1,1) + const1*const3*nu*ubot
+                else
+                    Rx(jx,jy,1) = Rx(jx,jy,1) + const1*const3*nu*ubot
+                endif
 #endif
             end do
             end do
@@ -133,7 +160,11 @@ if (coord == 0) then
             do jx = 1, nx
                 if (sgs) then
                     ! Nu_t(jx,jy,1) on uvp, not needed here
-                    nu_c = Nu_t(jx,jy,2) + nu
+                    if (fourier) then
+                        nu_c = Nu_t(1,jy,2) + nu
+                    else
+                        nu_c = Nu_t(jx,jy,2) + nu
+                    endif
                 else
                     nu_c = nu
                 end if
@@ -173,7 +204,11 @@ if (coord == nproc-1) then
             do jx = 1, nx
                 if (sgs) then
                     ! Nu_t(jx,jy,nz) on w, not needed here
-                    nu_a = Nu_t(jx,jy,nz-1) + nu
+                    if (fourier) then
+                        nu_a = Nu_t(1,jy,nz-1) + nu
+                    else
+                        nu_a = Nu_t(jx,jy,nz-1) + nu
+                    endif
                 else
                     nu_a = nu
                 end if
@@ -195,7 +230,11 @@ if (coord == nproc-1) then
             do jx = 1, nx
                 if (sgs) then
                     ! Nu_t(jx,jy,1) on uvp, not needed here
-                    nu_a = Nu_t(jx,jy,nz-1) + nu
+                    if (fourier) then
+                        nu_a = Nu_t(1,jy,nz-1) + nu
+                    else
+                        nu_a = Nu_t(jx,jy,nz-1) + nu
+                    endif
                 else
                     nu_a = nu
                 endif
@@ -206,12 +245,21 @@ if (coord == nproc-1) then
                 a(jx,jy,nz-1) = -const1*(1._rprec/JACO2(nz-1))*const2*(1._rprec/JACO1(nz-1))*nu_a
                 b(jx,jy,nz-1) = 1._rprec + const1*(1._rprec/JACO2(nz-1))*          &
                     (const2*(1._rprec/JACO1(2))*nu_a + (nu/(L_z-mesh_stretch(nz-1))))
-                Rx(jx,jy,nz-1) = Rx(jx,jy,nz-1) + const1*(1._rprec/JACO2(1))*      &
-                    (nu/(L_z-mesh_stretch(nz-1)))*utop
+                if (fourier) then
+                    Rx(1,1,nz-1) = Rx(1,1,nz-1) + const1*(1._rprec/JACO2(1))* &
+                        (nu/(L_z-mesh_stretch(nz-1)))*utop
+                else
+                    Rx(jx,jy,nz-1) = Rx(jx,jy,nz-1) + const1*(1._rprec/JACO2(1))* &
+                        (nu/(L_z-mesh_stretch(nz-1)))*utop
+                endif
 #else
                 a(jx,jy,nz-1) = -const1*const2*nu_a
                 b(jx,jy,nz-1) = 1._rprec + const1*(const2*nu_a + const3*nu)
-                Rx(jx,jy,nz-1) = Rx(jx,jy,nz-1) + const1*const3*nu*utop
+                if (fourier) then
+                    Rx(1,1,nz-1) = Rx(1,1,nz-1) + const1*const3*nu*utop
+                else
+                    Rx(jx,jy,nz-1) = Rx(jx,jy,nz-1) + const1*const3*nu*utop
+                endif
 #endif
             end do
             end do
@@ -222,7 +270,11 @@ if (coord == nproc-1) then
             do jx = 1, nx
                 if (sgs) then
                     ! Nu_t(jx,jy,nz) on uvp, not needed here
-                    nu_a = Nu_t(jx,jy,nz-1) + nu
+                    if (fourier) then
+                        nu_a = Nu_t(1,jy,nz-1) + nu
+                    else
+                        nu_a = Nu_t(jx,jy,nz-1) + nu
+                    endif
                 else
                     nu_a = nu
                 end if
@@ -256,13 +308,23 @@ do jz = jz_min, jz_max
 do jy = 1, ny
 do jx = 1, nx
     if (sgs) then
-        nu_a = Nu_t(jx,jy,jz) + nu
+        if (fourier) then
+            nu_a = Nu_t(1,jy,jz) + nu
 #ifdef PPMAPPING
-        nu_b = ((Nu_t(jx,jy,jz+1)+nu)/JACO1(jz+1)) + ((Nu_t(jx,jy,jz)+nu)/JACO1(jz))
+            nu_b = ((Nu_t(1,jy,jz+1)+nu)/JACO1(jz+1)) + ((Nu_t(1,jy,jz)+nu)/JACO1(jz))
 #else
-        nu_b = Nu_t(jx,jy,jz+1) + Nu_t(jx,jy,jz) + 2._rprec*nu
+            nu_b = Nu_t(1,jy,jz+1) + Nu_t(1,jy,jz) + 2._rprec*nu
 #endif
-        nu_c = Nu_t(jx,jy,jz+1) + nu
+            nu_c = Nu_t(1,jy,jz+1) + nu
+        else
+            nu_a = Nu_t(jx,jy,jz) + nu
+#ifdef PPMAPPING
+            nu_b = ((Nu_t(jx,jy,jz+1)+nu)/JACO1(jz+1)) + ((Nu_t(jx,jy,jz)+nu)/JACO1(jz))
+#else
+            nu_b = Nu_t(jx,jy,jz+1) + Nu_t(jx,jy,jz) + 2._rprec*nu
+#endif
+            nu_c = Nu_t(jx,jy,jz+1) + nu
+        endif
     else
         nu_a = nu
 #ifdef PPMAPPING
@@ -286,9 +348,28 @@ end do
 end do
 end do
 
+! Done using eddy viscosity, transform kx, y, z --> kx, ky, z
+! Now transform Rx and Ry, kx, ky, z --> kx, y, z
+if ((fourier) .and. (sgs)) then
+    do jz = 1, nz
+        call dft_direct_forw_2d_n_yonlyC( Nu_t(:,:,jz) )
+        call dft_direct_back_2d_n_yonlyC( Rx(:,:,jz) )
+        call dft_direct_back_2d_n_yonlyC( Ry(:,:,jz) )
+    end do
+endif
+
 ! Find intermediate velocity in TDMA
 call tridag_array_diff_uv (a, b, c, Rx, usol)
 call tridag_array_diff_uv (a, b, c, Ry, vsol)
+
+! Since a,b,c(y,z) and Rx,Ry(kx,y,z) we have usol,vsol(kx,y,z)
+! No need to change Rx, Ry back, will be overwritten in next time-step
+if ((fourier) .and. (sgs)) then
+    do jz = 1, nz-1
+        call dft_direct_forw_2d_n_yonlyC( usol(:,:,jz) )
+        call dft_direct_forw_2d_n_yonlyC( vsol(:,:,jz) )
+    enddo
+endif
 
 ! Fill velocity solution
 u(:nx,:ny,1:nz-1) = usol(:nx,:ny,1:nz-1)

@@ -196,6 +196,14 @@ if ((.not. initu) .and. fourier) then
     call phys2wave( u, lbz )
     call phys2wave( v, lbz )
     call phys2wave( w, lbz )
+! debug - comment out "else" portion to read in data in kx space
+!else
+!    call phys2wave( u, lbz )
+!    call phys2wave( v, lbz )
+!    call phys2wave( w, lbz )
+!    call phys2wave( RHSx, lbz )
+!    call phys2wave( RHSy, lbz )
+!    call phys2wave( RHSz, lbz )
 endif
 
 contains

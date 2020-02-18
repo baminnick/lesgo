@@ -46,6 +46,10 @@ real(rprec), dimension(:,:),   allocatable :: nu_coef_big, nu_coef2_big
 real(rprec), dimension(:,:,:), allocatable :: dudx_big, dudy_big, dudz_big
 real(rprec), dimension(:,:,:), allocatable :: dvdx_big, dvdy_big, dvdz_big
 real(rprec), dimension(:,:,:), allocatable :: dwdx_big, dwdy_big, dwdz_big
+#ifdef PPCNDIFF
+real(rprec), dimension(:,:),   allocatable :: txz_half1_big, txz_half2_big
+real(rprec), dimension(:,:),   allocatable :: tyz_half1_big, tyz_half2_big
+#endif
 
 ! For all dynamic models (2-5)
 real(rprec), dimension(:,:,:),allocatable :: ee_now
@@ -134,6 +138,12 @@ if (fourier) then
     allocate ( dwdx_big(ld_big,ny2,nz) ); dwdx_big = 0.0_rprec
     allocate ( dwdy_big(ld_big,ny2,nz) ); dwdy_big = 0.0_rprec
     allocate ( dwdz_big(ld_big,ny2,nz) ); dwdz_big = 0.0_rprec
+#ifdef PPCNDIFF
+    allocate ( txz_half1_big(ld_big,ny2) ); txz_half1_big = 0.0_rprec
+    allocate ( txz_half2_big(ld_big,ny2) ); txz_half2_big = 0.0_rprec
+    allocate ( tyz_half1_big(ld_big,ny2) ); tyz_half1_big = 0.0_rprec
+    allocate ( tyz_half2_big(ld_big,ny2) ); tyz_half2_big = 0.0_rprec
+#endif
 endif
 
 ! For dynamic models:

@@ -55,7 +55,6 @@ use sgs_param
 use messages
 #ifdef PPCNDIFF
 use sim_param, only : txz_half1, txz_half2, tyz_half1, tyz_half2
-use sim_param, only : txz_half1_big, txz_half2_big, tyz_half1_big, tyz_half2_big
 #endif
 use derivatives, only : convolve_rnl, dft_direct_back_2d_n_yonlyC_big
 use derivatives, only : dft_direct_forw_2d_n_yonlyC_big
