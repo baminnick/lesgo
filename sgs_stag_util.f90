@@ -77,7 +77,8 @@ character (*), parameter :: sub_name = 'sgs_stag'
 real(rprec), dimension(nz) :: l, ziko, zz
 integer :: jz, jz_min, jz_max
 
-if (sgs) then
+! sgs models of the form nu_t = cs_opt2*(l**2)*S
+if ((sgs) .and. (sgs_model < 6)) then
     ! Cs is Smagorinsky's constant. l is a filter size (non-dim.)
     call calc_Sij ()
 
@@ -342,7 +343,13 @@ if (sgs) then
         end do
     endif
 
-else
+! sgs models of the form, nu_t = c*OP(duidxj) for some operator OP
+! Vreman (2004) sgs model
+elseif ((sgs) .and. (sgs_model == 6)) then
+
+    call vreman()
+
+else !! not sgs, molec only
 
     ! define nu_coefs here since it does not change case-by-case for DNS
     ! if sgs, nu_coefs defined case-by-case since it is dependent on Nu_t

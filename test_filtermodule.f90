@@ -66,10 +66,10 @@ delta_test_fourier = alpha_test_fourier * dy
 ! Calculate the kernel
 ! spectral cutoff filter
 if(ifilter==1) then
-    if (sgs_model==6.OR.sgs_model==7) then
-        print *, 'Use Gaussian or Top-hat filter for mixed models'
-        stop
-    endif
+    !if (sgs_model==6.OR.sgs_model==7) then
+    !    print *, 'Use Gaussian or Top-hat filter for mixed models'
+    !    stop
+    !endif
     kc2_test = (pi/(delta_test))**2
     where (real(k2, rprec) >= kc2_test) G_test = 0._rprec
 
@@ -106,10 +106,10 @@ if ((sgs_model == 3) .or. (sgs_model == 5)) then
     ! Calculate the kernel
     ! spectral cutoff filter
     if (ifilter==1) then 
-        if (sgs_model==6.OR.sgs_model==7) then
-            print *, 'Use Gaussian or Top-hat filter for mixed models'
-            stop
-        endif
+        !if (sgs_model==6.OR.sgs_model==7) then
+        !    print *, 'Use Gaussian or Top-hat filter for mixed models'
+        !    stop
+        !endif
         
         kc2_test_test = (pi/(delta_test_test))**2
         where (real(k2, rprec) >= kc2_test_test) G_test_test = 0._rprec

@@ -49,7 +49,7 @@ if (coord == 0) then
         do jx = 1, nx
 #ifdef PPSAFETYMODE
             if (b(jx, jy, 1) == 0._rprec) then
-                write (*, *) 'tridag_array_diff: rewrite eqs, jx, jy= ', jx, jy
+                write (*, *) 'tridag_array_diff_uv: rewrite eqs, jx, jy= ', jx, jy
                 stop
             end if
 #endif
@@ -94,7 +94,7 @@ do q = 1, nchunks
 
 #ifdef PPSAFETYMODE
                 if (bet(jx, jy) == 0._rprec) then
-                    write (*, *) 'tridag_array_diff failed at jx,jy,j=', jx, jy, j
+                    write (*, *) 'tridag_array_diff_uv failed at jx,jy,j=', jx, jy, j
                     write (*, *) 'a,b,c,gam,bet=', a(jx, jy, j), b(jx, jy, j), &
                         c(jx, jy, j), gam(jx, jy, j), bet(jx, jy)
                     stop
