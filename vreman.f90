@@ -47,10 +47,12 @@ integer :: jz, jz_min, jz_max
 ! Set constants
 cvre = 0.07_rprec !! to be tuned
 eps = 1e-12 !! some small number in case denominator is zero
+dz_p = dz !! to be overwritten in mapping to stretched grid
 
 ! Calculate Nu_t for jz = 1 (coord==0 only)
 !   stored on uvp-nodes (this level only) for 'wall'
 !   stored on w-nodes (all) for 'stress free'
+! See sgs_stag_util/calc_Sij for why derivatives are interpolated this way
 if (coord == 0) then
     select case (lbc_mom)
 
@@ -69,12 +71,27 @@ if (coord == 0) then
 
 #ifdef PPMAPPING
             dz_p = JACO1(1)*dz
-#else
-            dz_p = dz
 #endif
 
         ! Wall
         case(1:)
+            ! Interpolate derivatives onto uvp-node
+            dudx_p(:,:) = dudx(:,:,1)
+            dudy_p(:,:) = dudy(:,:,1)
+            dudz_p(:,:) = 0.5_rprec*(dudz(:,:,1) + dudz(:,:,2))
+            dvdx_p(:,:) = dvdx(:,:,1)
+            dvdy_p(:,:) = dvdy(:,:,1)
+            dvdz_p(:,:) = 0.5_rprec*(dvdz(:,:,1) + dvdz(:,:,2))
+            dwdx_p(:,:) = 0.5_rprec*(dwdx(:,:,1) + dwdx(:,:,2))
+            dwdy_p(:,:) = 0.5_rprec*(dwdy(:,:,1) + dwdy(:,:,2))
+            dwdz_p(:,:) = dwdz(:,:,1)
+
+#ifdef PPMAPPING
+            dz_p = JACO2(1)*dz
+#endif
+
+        ! Wall-Model
+        case(2:)
             ! Interpolate derivatives onto uvp-node
             dudx_p(:,:) = dudx(:,:,1)
             dudy_p(:,:) = dudy(:,:,1)
@@ -90,8 +107,6 @@ if (coord == 0) then
 
 #ifdef PPMAPPING
             dz_p = JACO2(1)*dz
-#else
-            dz_p = dz
 #endif
 
     end select
@@ -150,12 +165,27 @@ if (coord == nproc-1) then
 
 #ifdef PPMAPPING
             dz_p = JACO1(nz)*dz
-#else
-            dz_p = dz
 #endif
 
         ! Wall
         case(1:)
+            ! Interpolate derivatives onto uvp-node
+            dudx_p(:,:) = dudx(:,:,nz-1)
+            dudy_p(:,:) = dudy(:,:,nz-1)
+            dudz_p(:,:) = 0.5_rprec*(dudz(:,:,nz-1) + dudz(:,:,nz))
+            dvdx_p(:,:) = dvdx(:,:,nz-1)
+            dvdy_p(:,:) = dvdy(:,:,nz-1)
+            dvdz_p(:,:) = 0.5_rprec*(dvdz(:,:,nz-1) + dvdz(:,:,nz))
+            dwdx_p(:,:) = 0.5_rprec*(dwdx(:,:,nz-1) + dwdx(:,:,nz))
+            dwdy_p(:,:) = 0.5_rprec*(dwdy(:,:,nz-1) + dwdy(:,:,nz))
+            dwdz_p(:,:) = dwdz(:,:,nz-1)
+
+#ifdef PPMAPPING
+            dz_p = JACO2(nz-1)*dz
+#endif
+
+        ! Wall-Model
+        case(2:)
             ! Interpolate derivatives onto uvp-node
             dudx_p(:,:) = dudx(:,:,nz-1)
             dudy_p(:,:) = dudy(:,:,nz-1)
@@ -171,8 +201,6 @@ if (coord == nproc-1) then
 
 #ifdef PPMAPPING
             dz_p = JACO2(nz-1)*dz
-#else
-            dz_p = dz
 #endif
 
     end select
@@ -240,8 +268,6 @@ do jz = jz_min, jz_max
     ! Compute outer velocity gradient product with grid size
 #ifdef PPMAPPING
     dz_p = JACO1(jz)*dz
-#else
-    dz_p = dz
 #endif
     b11 = (dx**2)*(dudx_p**2) + (dy**2)*(dudy_p**2) +     &
         (dz_p**2)*(dudz_p**2)

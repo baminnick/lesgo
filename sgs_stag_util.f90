@@ -718,21 +718,34 @@ if (coord == 0) then
         ! Stress free
         case (0)
             ! Sij values are supposed to be on w-nodes for this case
-            !   does that mean they (Sij) should all be zero?
-            ! these values are stored on w-nodes
-            S11(1:nx,:,1) = dudx(1:nx,:,1) ! was 0.5_rprec*(dudx(1:nx,:,1) + dudx(1:nx,:,1))
+            ! dudx, dudy, dvdx, dvdy at boundary (w) are the same as
+            !   on closest uvp because of slip
+            ! dwdz should be 0 beyond boundary due to no-penetration
+            S11(1:nx,:,1) = dudx(1:nx,:,1)
             S12(1:nx,:,1) = 0.5_rprec*(dudy(1:nx,:,1)+dvdx(1:nx,:,1))
             S13(1:nx,:,1) = 0.5_rprec*(dudz(1:nx,:,1)+dwdx(1:nx,:,1))
             S22(1:nx,:,1) = dvdy(1:nx,:,1)
             S23(1:nx,:,1) = 0.5_rprec*(dvdy(1:nx,:,1)+dwdy(1:nx,:,1))
-            S33(1:nx,:,1) = 0.5_rprec*(dwdz(1:nx,:,1) + 0.0_rprec)
+            S33(1:nx,:,1) = 0.5_rprec*(dwdz(1:nx,:,1) + 0.0_rprec) ! interpolating here
 
         ! Wall
-        ! recall dudz and dvdz are stored on uvp-nodes for first level only,
-        !   'wall' only
-        ! recall dwdx and dwdy are stored on w-nodes (always)
-        ! All Sij near wall are put on uv1 node
-        case (1:)
+        ! dudz, dvdz, dwdx, and dwdy on w-nodes... need to be interpolated
+        case (1)
+            ! these values stored on uvp-nodes
+            S11(1:nx,:,1) = dudx(1:nx,:,1) !! uvp_node(1)
+            S12(1:nx,:,1) = 0.5_rprec*(dudy(1:nx,:,1)+dvdx(1:nx,:,1)) !! uvp_node(1)
+            S13(1:nx,:,1) = 0.5_rprec*( (0.5_rprec*(dudz(1:nx,:,1)+dudz(1:nx,:,2))) + & 
+                (0.5_rprec*(dwdx(1:nx,:,1)+dwdx(1:nx,:,2))) ) !! uvp_node(1)
+            S22(1:nx,:,1) = dvdy(1:nx,:,1) !! uvp_node(1)
+            S23(1:nx,:,1) = 0.5_rprec*( (0.5_rprec*(dvdz(1:nx,:,1)+dvdz(1:nx,:,2))) + &
+                (0.5_rprec*(dwdy(1:nx,:,1)+dwdy(1:nx,:,2))) ) !! uvp_node(1)
+            S33(1:nx,:,1) = dwdz(1:nx,:,1) !! uvp_node(1)
+
+        ! Wall-Model
+        ! Only differs from case (1) by definition of dudz and dvdz
+        ! before these had to be interpolated, however if wall-modeling,
+        ! dudz and dvdz are defined on the first grid point (uvp) from the wall
+        case (2:)
             ! these values stored on uvp-nodes
             S11(1:nx,:,1) = dudx(1:nx,:,1) !! uvp_node(1)
             S12(1:nx,:,1) = 0.5_rprec*(dudy(1:nx,:,1)+dvdx(1:nx,:,1)) !! uvp_node(1)
@@ -761,30 +774,34 @@ if (coord == nproc-1) then
         ! Stress free
         case (0)
             ! Sij values are supposed to be on w-nodes for this case
-            !   does that mean they (Sij) should all be zero?
-            ! these values are stored on w-nodes
-
-            ! dudx(1:nx,:,nz-1) on uvp_node(nz-1)
-            S11(1:nx,:,nz) = dudx(1:nx,:,nz-1)                               ! w_node(nz)
-            ! dudy(1:nx,:,nz-1) on uvp_node(nz-1)
-            ! dvdx(1:nx,:,nz-1) on uvp_node(nz-1)
-            S12(1:nx,:,nz) = 0.5_rprec*(dudy(1:nx,:,nz-1)+dvdx(1:nx,:,nz-1)) ! w_node(nz)
-            ! dudz(1:nx,:,nz) comes from wallstress() i.e. zero, on w_node(nz)
-            ! dwdx(1:nx,:,nz) on uvp_node(nz-1)
-            S13(1:nx,:,nz) = 0.5_rprec*(dudz(1:nx,:,nz)+dwdx(1:nx,:,nz))     ! w_node(nz)
-            ! dvdy(1:nx,:,nz-1) on uvp_node(nz-1)
-            S22(1:nx,:,nz) = dvdy(1:nx,:,nz-1)                               ! w_node(nz)
-            ! dvdz(1:nx,:,nz) comes from wallstress() i.e. zero, on w_node(nz)
-            ! dwdy(1:nx,:,nz) on uvp_node(nz-1)
-            S23(1:nx,:,nz) = 0.5_rprec*(dvdz(1:nx,:,nz)+dwdy(1:nx,:,nz))     ! w_node(nz)
-            ! dwdz(1:nx,:,nz-1) + 0._rprec ! w_node(nz)
-            S33(1:nx,:,nz) = 0.5_rprec*(dwdz(1:nx,:,nz-1) + 0.0_rprec)       ! w_node(nz)           
+            ! dudx, dudy, dvdx, dvdy at boundary (w) are the same as
+            !   on closest uvp because of slip
+            ! dwdz should be 0 beyond boundary due to no-penetration
+            S11(1:nx,:,nz) = dudx(1:nx,:,nz-1)
+            S12(1:nx,:,nz) = 0.5_rprec*(dudy(1:nx,:,nz-1)+dvdx(1:nx,:,nz-1))
+            S13(1:nx,:,nz) = 0.5_rprec*(dudz(1:nx,:,nz)+dwdx(1:nx,:,nz))
+            S22(1:nx,:,nz) = dvdy(1:nx,:,nz-1)
+            S23(1:nx,:,nz) = 0.5_rprec*(dvdz(1:nx,:,nz)+dwdy(1:nx,:,nz))
+            S33(1:nx,:,nz) = 0.5_rprec*(dwdz(1:nx,:,nz-1) + 0.0_rprec)
 
         ! Wall
-        ! recall dudz and dvdz are stored on uvp-nodes for first level only,
-        !   'wall' only
-        ! recall dwdx and dwdy are stored on w-nodes (always)
-        case (1:)
+        ! dudz, dvdz, dwdx, and dwdy on w-nodes... need to be interpolated
+        case (1)
+            ! these values stored on uvp-nodes
+            S11(1:nx,:,nz) = dudx(1:nx,:,nz-1) !! uvp_node(nz-1)
+            S12(1:nx,:,nz) = 0.5_rprec*(dudy(1:nx,:,nz-1)+dvdx(1:nx,:,nz-1)) !! uvp_node(nz-1)
+            S13(1:nx,:,nz) = 0.5_rprec*( (0.5_rprec*(dudz(1:nx,:,nz-1)+dudz(1:nx,:,nz))) +   &
+                (0.5_rprec*(dwdx(1:nx,:,nz-1)+dwdx(1:nx,:,nz))) ) !! uvp_node(nz-1)
+            S22(1:nx,:,nz) = dvdy(1:nx,:,nz-1) !! uvp_node(nz-1)
+            S23(1:nx,:,nz) = 0.5_rprec*( (0.5_rprec*(dvdz(1:nx,:,nz-1)+dvdz(1:nx,:,nz))) +   &
+                (0.5_rprec*(dwdy(1:nx,:,nz-1)+dwdy(1:nx,:,nz))) ) !! uvp_node(nz-1)
+            S33(1:nx,:,nz) = dwdz(1:nx,:,nz-1) !! uvp_node(nz-1)
+
+        ! Wall-Model
+        ! Only differs from case (1) by definition of dudz and dvdz
+        ! before these had to be interpolated, however if wall-modeling,
+        ! dudz and dvdz are defined on the first grid point (uvp) from the wall
+        case (2:)
             ! these values stored on uvp-nodes
             S11(1:nx,:,nz) = dudx(1:nx,:,nz-1) !! uvp_node(nz-1)
             S12(1:nx,:,nz) = 0.5_rprec*(dudy(1:nx,:,nz-1)+dvdx(1:nx,:,nz-1)) !! uvp_node(nz-1)
