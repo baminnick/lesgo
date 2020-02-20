@@ -74,7 +74,7 @@ if (coord == 0) then
 #endif
 
         ! Wall
-        case(1:)
+        case(1)
             ! Interpolate derivatives onto uvp-node
             dudx_p(:,:) = dudx(:,:,1)
             dudy_p(:,:) = dudy(:,:,1)
@@ -168,7 +168,7 @@ if (coord == nproc-1) then
 #endif
 
         ! Wall
-        case(1:)
+        case(1)
             ! Interpolate derivatives onto uvp-node
             dudx_p(:,:) = dudx(:,:,nz-1)
             dudy_p(:,:) = dudy(:,:,nz-1)
