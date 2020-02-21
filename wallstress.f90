@@ -225,7 +225,9 @@ use sim_param, only : u, v
 #ifdef PPMAPPING
 use sim_param, only : JACO2
 #endif
+#ifdef PPLVLSET_STRETCH
 use sim_param, only : hij
+#endif
 use test_filtermodule
 implicit none
 integer :: i, j
@@ -242,7 +244,8 @@ call test_filter(v1)
 denom = log(0.5_rprec*JACO2(1)*dz/zo)
 const2 = JACO2(1)
 #else
-!denom = log(0.5_rprec*dz/zo) !! moved into loop
+! denom moved into loop, however initialize here if PPLVLSET_STRETCH is OFF
+denom = log(0.5_rprec*dz/zo)
 const2 = 1._rprec
 #endif
 u_avg = sqrt(u1(1:nx,1:ny)**2+v1(1:nx,1:ny)**2)
@@ -250,7 +253,9 @@ u_avg = sqrt(u1(1:nx,1:ny)**2+v1(1:nx,1:ny)**2)
 
 do j = 1, ny
     do i = 1, nx
+#ifdef PPLVLSET_STRETCH
         denom(i,j) = log(0.5_rprec*dz/(hij(i,j)*zo)) !! hij acts as lambda here
+#endif
         ustar(i,j) = u_avg(i,j)*vonk/denom(i,j)
         const = -(ustar(i,j)**2)/u_avg(i,j)
         txz(i,j,1) = const*u1(i,j)
@@ -360,7 +365,9 @@ use param, only : dz, ld, nx, ny, vonk, zo
 use sim_param, only : u, v
 use derivatives, only : dft_direct_back_2d_n_yonlyC
 use derivatives, only : dft_direct_forw_2d_n_yonlyC
+#ifdef PPLVLSET_STRETCH
 use sim_param, only : hij
+#endif
 !use test_filtermodule, only : test_filter_fourier
 implicit none
 integer :: i, j
@@ -385,14 +392,17 @@ u1_avg(1:ny) = u1(1,:)
 v1_avg(1:ny) = v1(1,:)
 
 ! Compute prefactor
-!denom = log(0.5_rprec*dz/zo) !! moved into loop
+! denom moved into loop, however initialize here if PPLVLSET_STRETCH is OFF
+denom = log(0.5_rprec*dz/zo) !! moved into loop
 u_avg = sqrt(u1_avg(1:ny)**2+v1_avg(1:ny)**2)
 !ustar = u_avg*vonk/denom !! moved into loop
 
 ! remember ustar(y) and u_avg(y), but u1(kx,y) and v1(kx,y)
 do j = 1, ny
+#ifdef PPLVLSET_STRETCH
     ! Assuming hij(i,j) is streamwise constant, therefore i = 1
     denom = log(0.5_rprec*dz/(hij(1,j)*zo))
+#endif
     ustar(j) = u_avg(j)*vonk/denom
     const = -(ustar(j)**2)/u_avg(j)
     const2 = ustar(j)/(0.5_rprec*dz*vonK)/u_avg(j)
