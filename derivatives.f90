@@ -284,10 +284,10 @@ end do
 ! Set to BOGUS just to be safe
 #ifdef PPSAFETYMODE
 if (coord == 0) then
-    dfdz(:,:,1) = BOGUS
+    dfdz(1:nx,:,1) = BOGUS
 end if
 if (coord == nproc-1) then
-    dfdz(:,:,nz) = BOGUS
+    dfdz(1:nx,:,nz) = BOGUS
 end if
 #endif
 
@@ -304,7 +304,7 @@ subroutine ddz_w(f, dfdz, lbz)
 ! bottom processes, which each has has 0:nz, and 1:nz-1, respectively.
 !
 use types, only : rprec
-use param, only : ld, ny, nz, dz, BOGUS
+use param, only : nx, ld, ny, nz, dz, BOGUS
 #ifdef PPSAFETYMODE
 #ifdef PPMPI
 use param, only : coord
@@ -338,11 +338,11 @@ end do
 #ifdef PPMPI
 ! bottom process cannot calculate dfdz(jz=0)
 if (coord == 0) then
-    dfdz(:,:,lbz) = BOGUS
+    dfdz(1:nx,:,lbz) = BOGUS
 endif
 #endif
 ! All processes cannot calculate dfdz(jz=nz)
-dfdz(:,:,nz) = BOGUS
+dfdz(1:nx,:,nz) = BOGUS
 #endif
 
 end subroutine ddz_w
