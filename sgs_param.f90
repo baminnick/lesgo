@@ -79,6 +79,9 @@ real(rprec), dimension(:,:), allocatable :: S_S11_hat, S_S12_hat, S_S13_hat
 real(rprec), dimension(:,:), allocatable :: S_S22_hat, S_S23_hat, S_S33_hat
 real(rprec), dimension(:,:), allocatable :: u_hat, v_hat, w_hat, S_hat
 
+! For Vreman SGS model
+real(rprec) :: cvre
+
 ! The following are for dynamically updating T, the timescale for Lagrangian averaging
 !   F_ee2 is the running average of (eij*eij)^2
 !   F_deedt2 is the running average of [d(eij*eij)/dt]^2
@@ -233,6 +236,10 @@ if (sgs_model .eq. 5) then
     allocate ( N22(ld,ny) ); N22 = 0._rprec
     allocate ( N23(ld,ny) ); N23 = 0._rprec
     allocate ( N33(ld,ny) ); N33 = 0._rprec
+endif
+
+if (sgs_model >= 6) then
+    cvre = 0.07_rprec
 endif
 
 ! Set dimensionless constants

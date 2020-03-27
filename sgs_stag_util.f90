@@ -349,6 +349,15 @@ elseif ((sgs) .and. (sgs_model == 6)) then
 
     call vreman()
 
+elseif ((sgs) .and. (sgs_model == 7)) then
+
+    if ( ((jt.GE.DYN_init).OR.(initu)) .AND. (mod(jt_total,cs_count)==0) ) then
+        call calc_Sij ()
+        call dyn_vreman(cvre)
+    else
+        call vreman()
+    endif
+
 else !! not sgs, molec only
 
     ! define nu_coefs here since it does not change case-by-case for DNS
