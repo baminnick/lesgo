@@ -2150,6 +2150,29 @@ if (fourier) then
 
     deallocate(vortxF, vortyF, vortzF)
 
+#ifdef PPSCALARS
+    ! Common file name portion for all output types
+    call string_splice(fname, path // 'output/theta.x-', xplane_loc(1), '.', jt_total)
+
+#if defined(PPCGNS) && defined(PPMPI)
+        ! Write CGNS Output
+        call string_concat(fname, '.cgns')
+        call write_parallel_cgns (fname,1,ny, nz - nz_end, nz_tot,     &
+                        (/ 1, 1,   (nz-1)*coord + 1 /),                &
+                        (/ 1, ny, (nz-1)*(coord+1) + 1 - nz_end /),    &
+                    xplane_loc(i:i) , y(1:ny) , z(1:(nz-nz_end) ),     &
+              1, (/ 'Theta' /),                                        &
+              (/ thetaF(1,1:ny,1:(nz-nz_end)) /) )
+
+#else
+        ! Write binary output
+        call string_concat(fname, bin_ext)
+        open(unit=13,file=fname,form='unformatted',convert=write_endian, access='direct',recl=ny*nz*rprec)
+        write(13,rec=1) thetaF(1,:ny,1:nz)
+        close(13)
+#endif
+#endif
+
 else !! not fourier
     allocate(ui(1,ny,nz), vi(1,ny,nz), wi(1,ny,nz))
 
