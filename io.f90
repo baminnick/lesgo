@@ -1745,6 +1745,9 @@ character (64) :: fname
 integer :: n, i, j, k
 real(rprec), allocatable, dimension(:,:,:) :: ui, vi, wi, w_uv, wF_uv
 real(rprec), pointer, dimension(:) :: x, y, z, zw
+#ifdef PPSCALARS
+real(rprec), allocatable, dimension(:,:,:) :: thetai
+#endif
 
 #ifndef PPCGNS
 character(64) :: bin_ext
@@ -2400,6 +2403,64 @@ elseif (itype==5) then
 #endif
     end do
     deallocate(ui,vi,wi)
+
+#ifdef PPSCALARS
+    allocate(thetai(nx,ny,1))
+
+    !  Loop over all zplane locations
+    do k = 1, zplane_nloc
+        ! Common file name portion for all output types
+        call string_splice(fname, path // 'output/theta.z-',                     &
+                zplane_loc(k), '.', jt_total)
+
+#ifdef PPCGNS
+        call string_concat(fname, '.cgns')
+#endif
+
+#ifdef PPMPI
+        if(zplane(k) % coord == coord) then
+            do j = 1, Ny
+                do i = 1, Nx
+                    thetai(i,j,1) = linear_interp(theta(i,j,zplane(k) % istart),       &
+                         theta(i,j,zplane(k) % istart+1), dz, zplane(k) % ldiff)
+                end do
+            end do
+
+#ifdef PPCGNS
+            call warn("inst_write","Z plane writting is currently disabled.")
+!            ! Write CGNS Data
+!            ! Only the processor with data writes, the other one is written
+!            ! using null arguments with 'write_null_cgns'
+!            call write_parallel_cgns (fname ,nx, ny, 1, 1,                     &
+!                (/ 1, 1,   1 /),                                               &
+!                (/ nx, ny, 1 /),                                               &
+!                x(1:nx) , y(1:ny) , zplane_loc(k:k), 3,                        &
+!                (/ 'Theta' /),                   &
+!                (/ thetai(1:nx,1:ny,1) /) )
+#else
+            call string_concat(fname, bin_ext)
+            open(unit=13,file=fname,form='unformatted',convert=write_endian,   &
+                            access='direct',recl=nx*ny*1*rprec)
+            write(13,rec=1) thetai(1:nx,1:ny,1)
+            close(13)
+#endif
+!
+! #ifdef PPMPI
+!         else
+! #ifdef PPCGNS
+!            write(*,*) "At write_null_cgns"
+!            call write_null_cgns (fname ,nx, ny, 1, 1,                         &
+!            (/ 1, 1,   1 /),                                                   &
+!            (/ nx, ny, 1 /),                                                   &
+!            x(1:nx) , y(1:ny) , zplane_loc(k:k), 3,                            &
+!            (/ 'Theta' /) )
+!#endif
+        end if
+#endif
+    end do
+    deallocate(thetai)
+#endif
+
 else
     write(*,*) 'Error: itype not specified properly to inst_write!'
     stop
