@@ -311,10 +311,6 @@ do jy = 1, ny
     upert(:,jy) = u(:,jy) - uavg(:)
 enddo
 
-! DEBUG
-!write(*,*) 'F1', u(:,:)
-!write(*,*) 'F2', upert(:,:)
-
 return
 end subroutine ypert_by_z
 
@@ -1067,17 +1063,11 @@ endif
 call ypert_by_z(txz(:,:,1),txzpert)
 call ypert_by_z(tyz(:,:,1),tyzpert)
 
-! DEBUG
-!write(*,*) '0', txzpert
-
 ! Consider each y location
 do jy = 1, ny
     ! Take 1D Fourier Transform
     call dfftw_execute_dft_r2c( forw_x, txzpert(:,jy), txzhat)
     call dfftw_execute_dft_r2c( forw_x, tyzpert(:,jy), tyzhat)
-
-    ! DEBUG
-    !write(*,*) '1',txzhat
 
     ! Normalize transformed variables
     txzhat = txzhat / nx
@@ -1089,8 +1079,6 @@ do jy = 1, ny
         tyz2(jx) = tyz2(jx) + real(tyzhat(jx)*conjg(tyzhat(jx)))
     enddo
 
-    ! DEBUG
-    !write(*,*) '2', txz2
 enddo
 
 ! Normalize by spanwise length - treating as a spanwise average
@@ -2082,6 +2070,87 @@ endif
 !  Write instantaneous x-plane values
 elseif(itype==3) then
 
+if (fourier) then
+
+    ! Not going to interpolate since physical grid is probably coarse
+    ! Instead going to use arbitrary xplane location, ignoring user-input
+    ! Assuming user only wants a single xplane location
+
+    ! Common file name portion for all output types
+    call string_splice(fname, path // 'output/vel.x-', xplane_loc(1), '.', jt_total)
+
+#if defined(PPCGNS) && defined(PPMPI)
+        ! Write CGNS Output
+        call string_concat(fname, '.cgns')
+        call write_parallel_cgns (fname,1,ny, nz - nz_end, nz_tot,     &
+                        (/ 1, 1,   (nz-1)*coord + 1 /),                &
+                        (/ 1, ny, (nz-1)*(coord+1) + 1 - nz_end /),    &
+                    xplane_loc(i:i) , y(1:ny) , z(1:(nz-nz_end) ),     &
+              3, (/ 'VelocityX', 'VelocityY', 'VelocityZ' /),          &
+              (/ uF(1,1:ny,1:(nz-nz_end)), vF(1,1:ny,1:(nz-nz_end)),   &
+                 wF(1,1:ny,1:(nz-nz_end)) /) )
+
+#else
+        ! Write binary output
+        call string_concat(fname, bin_ext)
+        open(unit=13,file=fname,form='unformatted',convert=write_endian, access='direct',recl=ny*nz*rprec)
+        write(13,rec=1) uF(1,:ny,1:nz)
+        write(13,rec=2) vF(1,:ny,1:nz)
+        write(13,rec=3) wF(1,:ny,1:nz)
+        close(13)
+#endif
+
+    ! Now to compute vorticity
+    allocate(vortx(nx,ny,lbz:nz), vorty(nx,ny,lbz:nz), vortz(nx,ny,lbz:nz))
+    allocate(vortxF(nxp,ny,lbz:nz), vortyF(nxp,ny,lbz:nz), vortzF(nxp,ny,lbz:nz))
+
+    ! Use vorticityx as an intermediate step for performing uv-w interpolation
+    ! Vorticity is written in w grid
+    vortxF(1:nxp,1:ny,lbz:nz) = 0._rprec
+    vortyF(1:nxp,1:ny,lbz:nz) = 0._rprec
+    vortzF(1:nxp,1:ny,lbz:nz) = 0._rprec
+
+    vortxF(1:nxp,1:ny,lbz:nz) = dvdxF(1:nxp,1:ny,lbz:nz) -            &
+        dudyF(1:nxp,1:ny,lbz:nz)
+    vortzF(1:nxp,1:ny,lbz:nz) =                                       &
+        interp_to_w_grid( vortxF(1:nxp,1:ny,lbz:nz), lbz)
+    vortxF(1:nxp,1:ny,lbz:nz) = dwdyF(1:nxp,1:ny,lbz:nz) -            &
+        dvdzF(1:nxp,1:ny,lbz:nz)
+    vortyF(1:nxp,1:ny,lbz:nz) = dudzF(1:nxp,1:ny,lbz:nz) -            &
+        dwdxF(1:nxp,1:ny,lbz:nz)
+
+    if (coord == 0) then
+        vortzF(1:nxp,1:ny, 1) = 0._rprec
+    end if
+ 
+    ! Common file name for all output types
+    call string_splice(fname, path // 'output/vort.x-', xplane_loc(1), '.', jt_total)
+
+#if defined(PPCGNS) && defined(PPMPI)
+    ! Write CGNS Output
+    call string_concat(fname, '.cgns')
+    call write_parallel_cgns(fname,1,ny, nz - nz_end, nz_tot,                   &
+        (/ 1, 1,   (nz-1)*coord + 1 /),                                         &
+        (/ nxp, ny, (nz-1)*(coord+1) + 1 - nz_end /),                           &
+        x(1:nxp) , y(1:ny) , zw(1:(nz-nz_end) ),                                &
+        3, (/ 'VorticityX', 'VorticityY', 'VorticityZ' /),                      &
+        (/ vortxF(1,1:ny,1:(nz-nz_end)), vortyF(1,1:ny,1:(nz-nz_end)),  &
+        vortzF(1,1:ny,1:(nz-nz_end)) /) )
+
+#else
+    ! Write binary Output
+    call string_concat(fname, bin_ext)
+    open(unit=13, file=fname, form='unformatted', convert=write_endian,        &
+        access='direct', recl=ny*nz*rprec)
+    write(13,rec=1) vortxF(1,:ny,1:nz)
+    write(13,rec=2) vortyF(1,:ny,1:nz)
+    write(13,rec=3) vortzF(1,:ny,1:nz)
+    close(13)
+#endif
+
+    deallocate(vortxF, vortyF, vortzF)
+
+else !! not fourier
     allocate(ui(1,ny,nz), vi(1,ny,nz), wi(1,ny,nz))
 
     !  Loop over all xplane locations
@@ -2124,6 +2193,7 @@ elseif(itype==3) then
     end do
 
     deallocate(ui,vi,wi)
+endif !! to fourier or not to fourier
 
 !  Write instantaneous y-plane values
 elseif(itype==4) then
@@ -2475,6 +2545,7 @@ use stat_defs, only : tavg_scal
 use stat_defs, only : tavg_scal_turbspecx, tavg_scal_turbspecy
 #endif
 #endif
+use stat_defs, only : tavg_vort
 #ifdef PPOUTPUT_SGS
 use stat_defs, only : tavg_sgs
 #endif
@@ -2521,6 +2592,7 @@ if( tavg_calc ) then
     allocate(tavg_scal_turbspecy(nx,ny/2+1,lbz:nz))
 #endif
 #endif
+    allocate(tavg_vort(nx,ny,lbz:nz))
 #ifdef PPOUTPUT_SGS
     allocate(tavg_sgs(nx,ny,lbz:nz))
 #endif
@@ -2557,15 +2629,13 @@ if( tavg_calc ) then
             tavg(i,j,k) % fx   = 0._rprec
             tavg(i,j,k) % fy   = 0._rprec
             tavg(i,j,k) % fz   = 0._rprec
-            !tavg(i,j,k) % dudx = 0._rprec
-            !tavg(i,j,k) % dudy = 0._rprec
-            !tavg(i,j,k) % dudz = 0._rprec
-            !tavg(i,j,k) % dvdx = 0._rprec
-            !tavg(i,j,k) % dvdy = 0._rprec
-            !tavg(i,j,k) % dvdz = 0._rprec
-            !tavg(i,j,k) % dwdx = 0._rprec
-            !tavg(i,j,k) % dwdy = 0._rprec
-            !tavg(i,j,k) % dwdz = 0._rprec
+
+            tavg_vort(i,j,k) % vortx = 0._rprec
+            tavg_vort(i,j,k) % vorty = 0._rprec
+            tavg_vort(i,j,k) % vortz = 0._rprec
+            tavg_vort(i,j,k) % vortx2 = 0._rprec
+            tavg_vort(i,j,k) % vorty2 = 0._rprec
+            tavg_vort(i,j,k) % vortz2 = 0._rprec
 
         end do
         end do
@@ -2964,6 +3034,7 @@ subroutine tavg_init()
 use messages
 use param, only : read_endian
 use stat_defs, only : tavg, tavg_total_time, tavg_dt, tavg_initialized
+use stat_defs, only : tavg_vort
 #ifdef PPOUTPUT_SGS
 use stat_defs, only : tavg_sgs
 #endif
@@ -2983,6 +3054,7 @@ use stat_defs, only : tavg_scal_turbspecx, tavg_scal_turbspecy
 implicit none
 
 character (*), parameter :: ftavg_in = path // 'tavg.out'
+character (*), parameter :: ftavg_vort_in = path // 'tavg_vort.out'
 #ifdef PPOUTPUT_SGS
 character (*), parameter :: ftavg_sgs_in = path // 'tavg_sgs.out'
 #endif
@@ -3024,6 +3096,16 @@ else
         convert=read_endian)
     read(1) tavg_total_time
     read(1) tavg
+    close(1)
+
+    fname = ftavg_vort_in
+#ifdef PPMPI
+    call string_concat( fname, MPI_suffix, coord )
+#endif
+    open(1, file=fname, action='read', position='rewind', form='unformatted',  &
+        convert=read_endian)
+    read(1) tavg_total_time
+    read(1) tavg_vort
     close(1)
 
 #ifdef PPOUTPUT_SGS
@@ -3106,10 +3188,12 @@ subroutine tavg_compute()
 !  variable quantity
 !
 use stat_defs, only : tavg, tavg_total_time, tavg_dt
+use stat_defs, only : tavg_vort
 use param, only : nx, ny, nz, lbz, jzmax, ubc_mom, lbc_mom
 use sim_param, only : u, v, w, p
 use sim_param, only : txx, txy, tyy, txz, tyz, tzz
-!use sim_param, only : dudx, dudy, dudz, dvdx, dvdy, dvdz, dwdx, dwdy, dwdz
+use sim_param, only : dudy, dudz, dvdx, dvdz, dwdx, dwdy
+!use sim_param, only : dudx, dvdy, dwdz
 
 #ifdef PPOUTPUT_SGS
 use stat_defs, only : tavg_sgs
@@ -3137,11 +3221,20 @@ real(rprec), allocatable, dimension(:,:,:) :: dwdx_uv, dwdy_uv, dudz_uv, dvdz_uv
 #ifdef PPSCALARS
 real(rprec) :: theta_p, pi_zp
 #endif
+real(rprec), allocatable, dimension(:,:,:) :: vortx, vorty, vortz
+real(rprec) :: vortx_p, vorty_p, vortz_p
 
 allocate(w_uv(nx,ny,lbz:nz), u_w(nx,ny,lbz:nz), v_w(nx,ny,lbz:nz))
 allocate(pres_real(nx,ny,lbz:nz))
-allocate( dwdx_uv(nx,ny,lbz:nz), dwdy_uv(nx,ny,lbz:nz),                        &
-    dudz_uv(nx,ny,lbz:nz), dvdz_uv(nx,ny,lbz:nz) )
+allocate(vortx(nx,ny,lbz:nz), vorty(nx,ny,lbz:nz), vortz(nx,ny,lbz:nz))
+
+! Compute vorticity on w-grid from definition
+!vortx(1:nx,1:ny,lbz:nz) = 0._rprec
+!vorty(1:nx,1:ny,lbz:nz) = 0._rprec
+!vortz(1:nx,1:ny,lbz:nz) = 0._rprec
+vortx(1:nx,1:ny,lbz:nz) = dwdy(1:nx,1:ny,lbz:nz) - dvdz(1:nx,1:ny,lbz:nz)
+vorty(1:nx,1:ny,lbz:nz) = dudz(1:nx,1:ny,lbz:nz) - dwdx(1:nx,1:ny,lbz:nz)
+vortz(1:nx,1:ny,lbz:nz) = dvdx(1:nx,1:ny,lbz:nz) - dudy(1:nx,1:ny,lbz:nz) !! on uv-grid, to be interpoalted soon
 
 ! Prepare variables for time-averaging
 w_uv(1:nx,1:ny,lbz:nz) = interp_to_uv_grid(w(1:nx,1:ny,lbz:nz), lbz )
@@ -3153,10 +3246,7 @@ pres_real(1:nx,1:ny,lbz:nz) = p(1:nx,1:ny,lbz:nz)                              &
     - 0.5 * ( u(1:nx,1:ny,lbz:nz)**2 + w_uv(1:nx,1:ny,lbz:nz)**2               &
     + v(1:nx,1:ny,lbz:nz)**2 )
 
-!dwdx_uv(1:nx,1:ny,lbz:nz) = interp_to_uv_grid(dwdx(1:nx,1:ny,lbz:nz), lbz )
-!dwdy_uv(1:nx,1:ny,lbz:nz) = interp_to_uv_grid(dwdy(1:nx,1:ny,lbz:nz), lbz )
-!dudz_uv(1:nx,1:ny,lbz:nz) = interp_to_uv_grid(dudz(1:nx,1:ny,lbz:nz), lbz )
-!dvdz_uv(1:nx,1:ny,lbz:nz) = interp_to_uv_grid(dvdz(1:nx,1:ny,lbz:nz), lbz )
+vortz(1:nx,1:ny,lbz:nz) = interp_to_w_grid( vortz(1:nx,1:ny,lbz:nz), lbz )
 
 ! note: u_w not necessarily zero on walls, but only mult by w=0 vu u'w', so OK
 ! can zero u_w at BC anyway:
@@ -3200,15 +3290,17 @@ do i = 1, nx
 
     tavg(i,j,k) % p = tavg(i,j,k) % p + pres_real(i,j,k) * tavg_dt !! uv grid
 
-    !tavg(i,j,k) % dudx = tavg(i,j,k) % dudx + dudx(i,j,k)    * tavg_dt
-    !tavg(i,j,k) % dudy = tavg(i,j,k) % dudy + dudy(i,j,k)    * tavg_dt
-    !tavg(i,j,k) % dudz = tavg(i,j,k) % dudz + dudz_uv(i,j,k) * tavg_dt
-    !tavg(i,j,k) % dvdx = tavg(i,j,k) % dvdx + dvdx(i,j,k)    * tavg_dt
-    !tavg(i,j,k) % dvdy = tavg(i,j,k) % dvdy + dvdy(i,j,k)    * tavg_dt
-    !tavg(i,j,k) % dvdz = tavg(i,j,k) % dvdz + dvdz_uv(i,j,k) * tavg_dt
-    !tavg(i,j,k) % dwdx = tavg(i,j,k) % dwdx + dwdx_uv(i,j,k) * tavg_dt
-    !tavg(i,j,k) % dwdy = tavg(i,j,k) % dwdy + dwdy_uv(i,j,k) * tavg_dt
-    !tavg(i,j,k) % dwdz = tavg(i,j,k) % dwdz + dwdz(i,j,k)    * tavg_dt
+    ! All vorticity components are on the w grid
+    tavg_vort(i,j,k)%vortx = tavg_vort(i,j,k)%vortx + vortx(i,j,k)*tavg_dt
+    tavg_vort(i,j,k)%vorty = tavg_vort(i,j,k)%vorty + vorty(i,j,k)*tavg_dt
+    tavg_vort(i,j,k)%vortz = tavg_vort(i,j,k)%vortz + vortz(i,j,k)*tavg_dt
+
+    tavg_vort(i,j,k)%vortx2 = tavg_vort(i,j,k)%vortx2 +            &
+        vortx(i,j,k)*vortx(i,j,k)*tavg_dt
+    tavg_vort(i,j,k)%vorty2 = tavg_vort(i,j,k)%vorty2 +            &
+        vorty(i,j,k)*vorty(i,j,k)*tavg_dt
+    tavg_vort(i,j,k)%vortz2 = tavg_vort(i,j,k)%vortz2 +            &
+        vortz(i,j,k)*vortz(i,j,k)*tavg_dt
 
 #ifdef PPSCALARS
     theta_p = theta(i,j,k) !! uv grid
@@ -3852,6 +3944,7 @@ subroutine tavg_finalize()
 use grid_m
 use stat_defs, only : tavg_t, tavg_total_time, tavg
 use stat_defs, only : rs_compute, rs
+use stat_defs, only : tavg_vort, vortrms_compute, vortrms
 use param, only : write_endian
 use param, only : ny,nz
 use param, only : coord
@@ -3890,7 +3983,7 @@ character(64) :: bin_ext
 #endif
 
 character(64) :: fname_vel, fname_velw, fname_tau, fname_pres, fname_rs
-! character(64) :: fname_velgrad
+character(64) :: fname_vort, fname_vortrms
 ! character(64) :: fname_f, fname_vel2
 
 #ifdef PPOUTPUT_SGS
@@ -3931,7 +4024,8 @@ fname_tau = path     // 'output/tau_avg'
 ! fname_f = path       // 'output/force_avg'
 fname_pres = path    // 'output/pres_avg'
 fname_rs = path      // 'output/rs'
-! fname_velgrad = path // 'output/velgrad_avg'
+fname_vort = path // 'output/vort_avg'
+fname_vortrms = path // 'output/vortrms'
 #ifdef PPOUTPUT_SGS
 fname_cs = path // 'output/cs_opt2'
 fname_sgs = path // 'output/sgs'
@@ -3967,7 +4061,8 @@ call string_concat(fname_tau, '.cgns')
 call string_concat(fname_pres, '.cgns')
 ! call string_concat(fname_f, '.cgns')
 call string_concat(fname_rs, '.cgns')
-! call string_concat(fname_velgrad, '.cgns')
+call string_concat(fname_vort, '.cgns')
+call string_concat(fname_vortrms, '.cgns')
 #ifdef PPOUTPUT_SGS
 call string_concat(fname_cs, '.cgns')
 call string_concat(fname_sgs, '.cgns')
@@ -4007,7 +4102,8 @@ call string_concat(fname_tau, bin_ext)
 call string_concat(fname_pres, bin_ext)
 ! call string_concat(fname_f, bin_ext)
 call string_concat(fname_rs, bin_ext)
-! call string_concat(fname_velgrad, bin_ext)
+call string_concat(fname_vort, bin_ext)
+call string_concat(fname_vortrms, bin_ext)
 #ifdef PPOUTPUT_SGS
 call string_concat(fname_cs, bin_ext)
 call string_concat(fname_sgs, bin_ext)
@@ -4067,15 +4163,6 @@ do i = 1, Nx
     tavg(i,j,k) % fx   = tavg(i,j,k) % fx   / tavg_total_time
     tavg(i,j,k) % fy   = tavg(i,j,k) % fy   / tavg_total_time
     tavg(i,j,k) % fz   = tavg(i,j,k) % fz   / tavg_total_time
-    !tavg(i,j,k) % dudx = tavg(i,j,k) % dudx / tavg_total_time
-    !tavg(i,j,k) % dudy = tavg(i,j,k) % dudy / tavg_total_time
-    !tavg(i,j,k) % dudz = tavg(i,j,k) % dudz / tavg_total_time
-    !tavg(i,j,k) % dvdx = tavg(i,j,k) % dvdx / tavg_total_time
-    !tavg(i,j,k) % dvdy = tavg(i,j,k) % dvdy / tavg_total_time
-    !tavg(i,j,k) % dvdz = tavg(i,j,k) % dvdz / tavg_total_time
-    !tavg(i,j,k) % dwdx = tavg(i,j,k) % dwdx / tavg_total_time
-    !tavg(i,j,k) % dwdy = tavg(i,j,k) % dwdy / tavg_total_time
-    !tavg(i,j,k) % dwdz = tavg(i,j,k) % dwdz / tavg_total_time
 
 #ifdef PPSCALARS
     tavg_scal(i,j,k) % theta  = tavg_scal(i,j,k) % theta / tavg_total_time
@@ -4085,6 +4172,14 @@ do i = 1, Nx
     tavg_scal(i,j,k) % wtheta = tavg_scal(i,j,k) % wtheta / tavg_total_time
     tavg_scal(i,j,k) % pi_z = tavg_scal(i,j,k) % pi_z / tavg_total_time
 #endif
+
+    tavg_vort(i,j,k)%vortx = tavg_vort(i,j,k)%vortx / tavg_total_time
+    tavg_vort(i,j,k)%vorty = tavg_vort(i,j,k)%vorty / tavg_total_time
+    tavg_vort(i,j,k)%vortz = tavg_vort(i,j,k)%vortz / tavg_total_time
+    tavg_vort(i,j,k)%vortx2 = tavg_vort(i,j,k)%vortx2 / tavg_total_time
+    tavg_vort(i,j,k)%vorty2 = tavg_vort(i,j,k)%vorty2 / tavg_total_time
+    tavg_vort(i,j,k)%vortz2 = tavg_vort(i,j,k)%vortz2 / tavg_total_time
+
 end do
 end do
 end do
@@ -4606,20 +4701,14 @@ call write_parallel_cgns(fname_pres,nx,ny,nz- nz_end,nz_tot,                   &
 !       tavg(1:nx,1:ny,1:nz- nz_end) % fy,                                      &
 !       tavg(1:nx,1:ny,1:nz- nz_end) % fz /) )
 
-!call write_parallel_cgns(fname_velgrad,nx,ny,nz- nz_end,nz_tot,                &
-!    (/ 1, 1,   (nz-1)*coord + 1 /),                                            &
-!    (/ nx, ny, (nz-1)*(coord+1) + 1 - nz_end /),                               &
-!    x(1:nx) , y(1:ny) , z(1:(nz-nz_end) ), 9,                                  &
-!    (/ 'dudx', 'dudy', 'dudz','dvdx','dvdy','dvdz','dwdx','dwdy','dwdz'/),     &
-!    (/ tavg(1:nx,1:ny,1:nz- nz_end) % dudx,                                    &
-!       tavg(1:nx,1:ny,1:nz- nz_end) % dudy,                                    &
-!       tavg(1:nx,1:ny,1:nz- nz_end) % dudz,                                    &
-!       tavg(1:nx,1:ny,1:nz- nz_end) % dvdx,                                    &
-!       tavg(1:nx,1:ny,1:nz- nz_end) % dvdy,                                    &
-!       tavg(1:nx,1:ny,1:nz- nz_end) % dvdz,                                    &
-!       tavg(1:nx,1:ny,1:nz- nz_end) % dwdx,                                    &
-!       tavg(1:nx,1:ny,1:nz- nz_end) % dwdy,                                    &
-!       tavg(1:nx,1:ny,1:nz- nz_end) % dwdz /) )
+call write_parallel_cgns (fname_vort ,nx, ny, nz - nz_end, nz_tot,              &
+    (/ 1, 1,   (nz-1)*coord + 1 /),                                            &
+    (/ nx, ny, (nz-1)*(coord+1) + 1 - nz_end /),                               &
+    x(1:nx) , y(1:ny) , z(1:(nz-nz_end) ), 3,                                  &
+    (/ 'VorticityX', 'VorticityY', 'VorticityZ' /),                            &
+    (/ tavg(1:nx,1:ny,1:nz - nz_end) % vortx,                                  &
+       tavg(1:nx,1:ny,1:nz - nz_end) % vorty,                                  &
+       tavg(1:nx,1:ny,1:nz- nz_end) % vortz /) )
 
 #else
 ! Write binary data
@@ -4668,18 +4757,12 @@ close(13)
 !write(13,rec=3) tavg(:nx,:ny,1:nz)%fz
 !close(13)
 
-!open(unit=13, file=fname_velgrad, form='unformatted', convert=write_endian,    &
-!    access='direct', recl=nx*ny*nz*rprec)
-!write(13,rec=1) tavg(:nx,:ny,1:nz)%dudx
-!write(13,rec=2) tavg(:nx,:ny,1:nz)%dudy
-!write(13,rec=3) tavg(:nx,:ny,1:nz)%dudz
-!write(13,rec=4) tavg(:nx,:ny,1:nz)%dvdx
-!write(13,rec=5) tavg(:nx,:ny,1:nz)%dvdy
-!write(13,rec=6) tavg(:nx,:ny,1:nz)%dvdz
-!write(13,rec=7) tavg(:nx,:ny,1:nz)%dwdx
-!write(13,rec=8) tavg(:nx,:ny,1:nz)%dwdy
-!write(13,rec=9) tavg(:nx,:ny,1:nz)%dwdz
-!close(13)
+open(unit=13, file=fname_vort, form='unformatted', convert=write_endian,       &
+    access='direct', recl=nx*ny*nz*rprec)
+write(13,rec=1) tavg_vort(:nx,:ny,1:nz)%vortx
+write(13,rec=2) tavg_vort(:nx,:ny,1:nz)%vorty
+write(13,rec=3) tavg_vort(:nx,:ny,1:nz)%vortz
+close(13)
 
 #endif
 
@@ -4754,6 +4837,32 @@ close(13)
 
 deallocate(rs_scal)
 #endif
+
+! Do the same for vorticity rms
+allocate(vortrms(nx,ny,lbz:nz))
+vortrms = vortrms_compute(tavg_vort, lbz)
+
+#ifdef PPCGNS
+! Write CGNS data
+call write_parallel_cgns(fname_vortrms,nx,ny,nz- nz_end,nz_tot,                &
+    (/ 1, 1,   (nz-1)*coord + 1 /),                                            &
+    (/ nx, ny, (nz-1)*(coord+1) + 1 - nz_end /),                               &
+    x(1:nx) , y(1:ny) , z(1:(nz-nz_end) ), 3,                                  &
+    (/ 'Vortxrms', 'Vortyrms', 'Vortzrms'/),                                   &
+    (/ vortrms(1:nx,1:ny,1:nz- nz_end) % vortxrms,                             &
+    vortrms(1:nx,1:ny,1:nz- nz_end) % vortyrms,                                &
+    vortrms(1:nx,1:ny,1:nz- nz_end) % vortzrms /) )
+#else
+! Write binary data
+open(unit=13, file=fname_vortrms, form='unformatted', convert=write_endian,         &
+    access='direct',recl=nx*ny*nz*rprec)
+write(13,rec=1) vortrms(:nx,:ny,1:nz)%vortxrms
+write(13,rec=2) vortrms(:nx,:ny,1:nz)%vortyrms
+write(13,rec=3) vortrms(:nx,:ny,1:nz)%vortzrms
+close(13)
+#endif
+
+deallocate(vortrms)
 
 #ifdef PPOUTPUT_SGS
 #ifdef PPCGNS
@@ -5126,7 +5235,9 @@ subroutine tavg_checkpoint()
 ! simulation.
 !
 use param, only : checkpoint_tavg_file, write_endian
+use param, only : checkpoint_tavg_vort_file
 use stat_defs, only : tavg_total_time, tavg
+use stat_defs, only : tavg_vort
 #ifdef PPOUTPUT_SGS
 use param, only : checkpoint_tavg_sgs_file
 use stat_defs, only : tavg_sgs
@@ -5162,6 +5273,17 @@ open(1, file=fname, action='write', position='rewind',form='unformatted',      &
     convert=write_endian)
 write(1) tavg_total_time
 write(1) tavg
+close(1)
+
+fname = checkpoint_tavg_vort_file
+#ifdef PPMPI
+call string_concat( fname, '.c', coord)
+#endif
+! Write data to tavg_vort.out
+open(1, file=fname, action='write', position='rewind',form='unformatted',      &
+    convert=write_endian)
+write(1) tavg_total_time
+write(1) tavg_vort
 close(1)
 
 #ifdef PPOUTPUT_SGS

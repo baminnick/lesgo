@@ -285,16 +285,15 @@ implicit none
 integer :: i, j
 real(rprec) :: denom
 
-#ifdef PPMAPPING
-denom = L_z - mesh_stretch(nz-1)
-#else
-denom = 0.5_rprec*dz
-#endif
-
 do j = 1, ny
     do i = 1, nx
-        dudz(i,j,nz) = ( utop - u(i,j,nz-1) ) / denom
-        dvdz(i,j,nz) = -v(i,j,nz-1) / denom
+#ifdef PPMAPPING
+        dudz(i,j,nz) = ( utop - u(i,j,nz-1) ) / (L_z - mesh_stretch(nz-1))
+        dvdz(i,j,nz) = -v(i,j,nz-1) / (L_z - mesh_stretch(nz-1))
+#else
+        dudz(i,j,nz) = ( utop - u(i,j,nz-1) ) / (0.5_rprec*dz)
+        dvdz(i,j,nz) = -v(i,j,nz-1) / (0.5_rprec*dz)
+#endif
         txz(i,j,nz) = -nu_molec/(z_i*u_star)*dudz(i,j,nz)
         tyz(i,j,nz) = -nu_molec/(z_i*u_star)*dvdz(i,j,nz)
     end do

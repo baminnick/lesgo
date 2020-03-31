@@ -92,6 +92,15 @@ end type scal_turbspec_t
 #endif
 #endif
 
+type tavg_vort_t
+    real(rprec) :: vortx, vorty, vortz
+    real(rprec) :: vortx2, vorty2, vortz2
+end type tavg_vort_t
+
+type vortrms_t
+    real(rprec) :: vortxrms, vortyrms, vortzrms
+end type vortrms_t
+
 #ifdef PPOUTPUT_SGS
 type tavg_sgs_t
     real(rprec) :: cs_opt2, Nu_t
@@ -216,6 +225,9 @@ type(scal_turbspec_t), allocatable, dimension(:,:,:) :: scal_turbspecx
 type(scal_turbspec_t), allocatable, dimension(:,:,:) :: scal_turbspecy
 #endif
 #endif
+
+type(tavg_vort_t), allocatable, dimension(:,:,:) :: tavg_vort
+type(vortrms_t), allocatable, dimension(:,:,:) :: vortrms
 
 #ifdef PPOUTPUT_SGS
 type(tavg_sgs_t), allocatable, dimension(:,:,:) :: tavg_sgs
@@ -401,7 +413,6 @@ integer, intent(in) :: lbz2
 type(tavg_scal_t), dimension(:,:,lbz2:), intent(in) :: a
 type(tavg_t), dimension(:,:,lbz2:), intent(in) :: b
 type(rs_scal_t), allocatable, dimension(:,:,:) :: c
-
 integer :: ubx, uby, ubz
 
 ubx=ubound(a,1)
@@ -443,6 +454,28 @@ c % wpthetap = a % wtheta - real( b % wf * conjg( a % thetaf ) )
 end function scal_turbspec_compute
 #endif
 #endif
+
+!*******************************************************************************
+function vortrms_compute( a , lbz2) result(c)
+!*******************************************************************************
+implicit none
+integer, intent(in) :: lbz2
+type(tavg_vort_t), dimension(:,:,lbz2:), intent(in) :: a
+type(vortrms_t), allocatable, dimension(:,:,:) :: c
+
+integer :: ubx, uby, ubz
+
+ubx=ubound(a,1)
+uby=ubound(a,2)
+ubz=ubound(a,3)
+
+allocate(c(ubx,uby,lbz2:ubz))
+
+c % vortxrms = a % vortx2 - a % vortx * a % vortx
+c % vortyrms = a % vorty2 - a % vorty * a % vorty
+c % vortzrms = a % vortz2 - a % vortz * a % vortz
+
+end function vortrms_compute
 
 #ifdef PPOUTPUT_BUDGET
 !*******************************************************************************

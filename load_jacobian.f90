@@ -62,19 +62,19 @@ else
     if (ubc_mom == 0) then
         ! Map to stretched grid
         ! For the uv-grid
-        FIELD3(:) = L_z*(1.0_rprec+(tanh(str_factor*(z_uv(:)/L_z-1.0_rprec))    &
+        FIELD3(:) = L_z*(1.0_rprec+(tanh(str_factor*(z_uv(:)/L_z-1.0_rprec)) &
             /tanh(str_factor)))
         ! For the w-grid
 #ifdef PPLVLSET_STRETCH
-        FIELD4(:) = L_z*(1.0_rprec+(tanh(str_factor*(z_w(:)/L_z-1.0_rprec))    &
+        FIELD4(:) = L_z*(1.0_rprec+(tanh(str_factor*(z_w(:)/L_z-1.0_rprec))  &
             /tanh(str_factor)))
 #endif
 
         ! Compute Jacobian values for both w- and uv-grids
         ! Using analytical derivative expression
-        FIELD1(:) = L_z*(str_factor/L_z)*                                       &
+        FIELD1(:) = L_z*(str_factor/L_z)*                                 &
             (1-(tanh(str_factor*(z_w(:)/L_z-1)))**2)/tanh(str_factor)
-        FIELD2(:) = L_z*(str_factor/L_z)*                                       &
+        FIELD2(:) = L_z*(str_factor/L_z)*                                 &
             (1-(tanh(str_factor*(z_uv(:)/L_z-1)))**2)/tanh(str_factor)
     else !! full channel
         ! Map to stretched grid
@@ -89,9 +89,9 @@ else
 
         ! Compute Jacobian values for both w- and uv-grids
         ! Using analytical derivative expression
-        FIELD1(:) = L_z*0.5_rprec*(str_factor/L_z)*                                       &
+        FIELD1(:) = L_z*0.5_rprec*(str_factor/L_z)*                    &
             (1-(tanh(str_factor*(z_w(:)/L_z-0.5_rprec)))**2)/tanh(0.5_rprec*str_factor)
-        FIELD2(:) = L_z*0.5_rprec*(str_factor/L_z)*                                       &
+        FIELD2(:) = L_z*0.5_rprec*(str_factor/L_z)*                    &
             (1-(tanh(str_factor*(z_uv(:)/L_z-0.5_rprec)))**2)/tanh(0.5_rprec*str_factor)
 
     endif !! half/full channel
