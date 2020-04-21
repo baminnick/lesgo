@@ -47,6 +47,9 @@ subroutine build(this)
 !  This subroutine creates the uv grid for the domain.
 
 use param, only : nx, ny, nz, jzmin, jzmax, dx, dy, dz, lbz
+#ifdef PPHYBRID
+use param, only : nxp, nproc_rnl
+#endif
 #ifdef PPMPI
 use param,only:nproc,coord
 #endif
@@ -62,9 +65,18 @@ nullify(autowrap_i,autowrap_j)
 
 !  x and y go to nx+1, ny+1 respectively for adding
 !  the buffered points for periodicity
+#ifdef PPHYBRID
+if (coord .le. (nproc_rnl - 1)) then
+    allocate(this%x(nxp+1), this%autowrap_i(0:nxp+1))
+else
+    allocate(this%x(nx+1), this%autowrap_i(0:nx+1))
+endif
+allocate(this%y(ny+1), this%autowrap_j(0:ny+1))
+#else
 allocate(this%x(nx+1),this%y(ny+1))
-allocate(this%z(lbz:nz), this%zw(lbz:nz))
 allocate(this%autowrap_i(0:nx+1), this%autowrap_j(0:ny+1))
+#endif
+allocate(this%z(lbz:nz), this%zw(lbz:nz))
 
 ! Initialize built
 this%built = .false.
@@ -92,14 +104,36 @@ do j = 1, ny+1
     y(j) = (j-1)*dy
 enddo
 
+#ifdef PPHYBRID
+if (coord .le. (nproc_rnl - 1)) then
+    do i = 1, nxp+1
+        x(i) = (i-1)*dx
+    enddo
+else
+    do i = 1, nx+1
+        x(i) = (i-1)*dx
+    enddo
+endif
+#else
 do i = 1, nx+1
     x(i) = (i-1)*dx
 enddo
+#endif
 
 ! Set index autowrapping arrays
+#ifdef PPHYBRID
+if (coord .le. (nproc_rnl - 1)) then
+    autowrap_i(0) = nxp
+    autowrap_i(nxp+1) = 1
+else
+    autowrap_i(0) = nx
+    autowrap_i(nx+1) = 1
+endif
+#else
 autowrap_i(0) = nx
-autowrap_j(0) = ny
 autowrap_i(nx+1) = 1
+#endif
+autowrap_j(0) = ny
 autowrap_j(ny+1) = 1
 do i=1,nx; autowrap_i(i) = i; enddo
 do j=1,ny; autowrap_j(j) = j; enddo

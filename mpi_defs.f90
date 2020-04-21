@@ -28,6 +28,9 @@ private
 
 public :: initialize_mpi, mpi_sync_real_array
 public :: MPI_SYNC_DOWN, MPI_SYNC_UP, MPI_SYNC_DOWNUP
+#ifdef PPHYBRID
+public :: mpi_sync_hybrid
+#endif
 
 character (*), parameter :: mod_name = 'mpi_defs'
 
@@ -213,5 +216,99 @@ call mpi_sendrecv (var(:,:,ubz-1), mpi_datasize, MPI_RPREC, up, 2,             &
 end subroutine sync_up
 
 end subroutine mpi_sync_real_array
+
+#ifdef PPHYBRID
+!*******************************************************************************
+subroutine mpi_sync_hybrid( var, lbz, isync )
+!*******************************************************************************
+!
+! This subroutine is similar to mpi_sync_real_array, however makes an 
+! assumption about the size of var. This input/output must be of size 
+! 1:ld, 1:ny, lbz:nz
+!
+use types, only : rprec
+use mpi
+use param, only : MPI_RPREC, down, up, comm, status, ierr, nz
+use param, only : ld, ny
+use messages
+
+implicit none
+
+character (*), parameter :: sub_name = mod_name // '.mpi_sync_hybrid'
+
+real(rprec), dimension(1:ld,1:ny,lbz:nz), intent(INOUT) :: var
+integer, intent(in) :: lbz
+integer, intent(in) :: isync
+
+if (isync == MPI_SYNC_DOWN) then
+    call sync_down()
+else if( isync == MPI_SYNC_UP) then
+    call sync_up()
+else if( isync == MPI_SYNC_DOWNUP) then
+    call sync_down()
+    call sync_up()
+end if
+
+if(ierr .ne. 0) call error( sub_name,                                          &
+    'Error occured during mpi sync; recieved mpi error code :', ierr)
+
+! Enforce globally synchronous MPI behavior. Most likely safe to comment
+! out, but can be enabled to ensure absolute safety.
+!call mpi_barrier( comm, ierr )
+
+contains
+
+!*******************************************************************************
+subroutine sync_down()
+!*******************************************************************************
+use param, only : coord, nproc_rnl, nxf
+use derivatives, only : phys2waveZ
+implicit none
+real(rprec), dimension(nxf+2,ny) :: varF
+
+if (coord .ne. nproc_rnl) then
+    call mpi_sendrecv (var(:,:,1), ld*ny, MPI_RPREC, down, 1,                  &
+        var(:,:,nz), ld*ny, MPI_RPREC, up, 1, comm, status, ierr)
+else !! non-RNL coord near interface
+
+    ! Transform to fourier space and omit non kxs_in wavenumbers
+    ! Here ld = nxp+2
+    call phys2waveZ( var(1:ld,1:ny,1), varF )
+
+    ! Send to coord below interface
+    call mpi_sendrecv (varF, (nxf+2)*ny, MPI_RPREC, down, 1,                   &
+        var(:,:,nz), ld*ny, MPI_RPREC, up, 1, comm, status, ierr)
+
+endif
+
+end subroutine sync_down
+
+!*******************************************************************************
+subroutine sync_up()
+!*******************************************************************************
+use param, only : coord, nproc_rnl, nxp
+use derivatives, only : wave2physZ
+implicit none
+real(rprec), dimension(nxp+2,ny) :: varP
+
+if (coord .ne. (nproc_rnl - 1)) then
+    call mpi_sendrecv (var(:,:,nz-1), ld*ny, MPI_RPREC, up, 2,                &
+        var(:,:,0), ld*ny, MPI_RPREC, down, 2, comm, status, ierr)
+else !! RNL coord near interface
+
+    ! Transform to physical space
+    ! Here ld = nxf+2
+    call wave2physZ( var(1:ld,1:ny,nz-1), varP )
+
+    ! Send to coord above interface
+    call mpi_sendrecv (varP, (nxp+2)*ny, MPI_RPREC, up, 2,                    &
+        var(:,:,0), ld*ny, MPI_RPREC, down, 2, comm, status, ierr)
+
+endif
+
+end subroutine sync_up
+
+end subroutine mpi_sync_hybrid
+#endif
 
 end module mpi_defs

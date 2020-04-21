@@ -65,6 +65,9 @@ use fft, only : padd, unpadd
 #ifdef PPMPI
 use mpi_defs, only : mpi_sync_real_array, MPI_SYNC_DOWN
 #endif
+#ifdef PPHYBRID
+use mpi_defs, only : mpi_sync_hybrid
+#endif
 
 #ifdef PPLVLSET
 use level_set, only : level_set_BC, level_set_Cs
@@ -663,8 +666,13 @@ call mpi_sync_real_array( tyz, 0, MPI_SYNC_DOWN )
 call mpi_sync_real_array( tyz_half1, 0, MPI_SYNC_DOWN )
 call mpi_sync_real_array( tyz_half2, 0, MPI_SYNC_DOWN )
 #else
+#ifdef PPHYBRID
+call mpi_sync_hybrid( txz, 0, MPI_SYNC_DOWN )
+call mpi_sync_hybrid( tyz, 0, MPI_SYNC_DOWN )
+#else
 call mpi_sync_real_array( txz, 0, MPI_SYNC_DOWN )
 call mpi_sync_real_array( tyz, 0, MPI_SYNC_DOWN )
+#endif
 #endif
 #ifdef PPSAFETYMODE
 ! Set bogus values (easier to catch if there's an error)

@@ -43,6 +43,9 @@ use string_util, only : string_concat
 #ifdef PPMPI
 use mpi_defs, only : mpi_sync_real_array, MPI_SYNC_DOWNUP
 #endif
+#ifdef PPHYBRID
+use mpi_defs, only : mpi_sync_hybrid
+#endif
 use derivatives, only: phys2wave
 
 implicit none
@@ -175,10 +178,17 @@ end if
 !7780 format('jz, ubar, vbar, wbar:',(1x,I3,1x,F9.4,1x,F9.4,1x,F9.4))
 
 #ifdef PPMPI
+#ifdef PPHYBRID
+! Exchange ghost node information for u, v, and w
+call mpi_sync_hybrid( u, 0, MPI_SYNC_DOWNUP )
+call mpi_sync_hybrid( v, 0, MPI_SYNC_DOWNUP )
+call mpi_sync_hybrid( w, 0, MPI_SYNC_DOWNUP )
+#else
 ! Exchange ghost node information for u, v, and w
 call mpi_sync_real_array( u, 0, MPI_SYNC_DOWNUP )
 call mpi_sync_real_array( v, 0, MPI_SYNC_DOWNUP )
 call mpi_sync_real_array( w, 0, MPI_SYNC_DOWNUP )
+#endif
 
 !--set 0-level velocities to BOGUS
 if (coord == 0) then
@@ -189,6 +199,14 @@ end if
 #endif
 
 ! Transform velocities if starting a new simulation
+#ifdef PPHYBRID
+if ((.not. initu) .and. (coord .le. (nproc_rnl - 1))) then
+    call phys2wave( u, lbz )
+    call phys2wave( v, lbz )
+    call phys2wave( w, lbz )
+endif !! only transform RNL coords, leave others as is
+#endif
+
 if ((.not. initu) .and. fourier) then
     if ( coord == 0 ) then 
         write(*,*) '--> Transforming initial velocity to kx space'

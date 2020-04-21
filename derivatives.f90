@@ -31,6 +31,7 @@ private
 
 public ddx, ddy, ddxy, filt_da, ddz_uv, ddz_w,                          &
     phys2wave, wave2phys, phys2waveF, wave2physF,                       &
+    phys2waveZ, wave2physZ,                                             &
     dft_direct_forw_2d_n_yonlyC_big, dft_direct_back_2d_n_yonlyC_big,   &
     dft_direct_forw_2d_n_yonlyC, dft_direct_back_2d_n_yonlyC, convolve_rnl
 
@@ -487,6 +488,89 @@ do jz = lbz, nz
 enddo
 
 end subroutine wave2physF
+
+#ifdef PPHYBRID
+!*******************************************************************************
+subroutine phys2waveZ( u, uhat )
+!*******************************************************************************
+!
+! Transform field from physical space to wavenumber space at one z-level.
+! (x,y) --> (kx,ky)
+! This function is intended for hybrid mode
+!
+use types, only : rprec
+use param, only : nxp, nxf, ny, nz, lbz, kx_num, kxs_in
+use fft
+implicit none
+
+integer :: jx, jz, ii, ir, iih, irh
+real(rprec) :: const
+real(rprec), dimension(nxp+2, ny), intent(in) :: u
+real(rprec), dimension(nxp+2, ny) :: up
+real(rprec), dimension(nxf+2, ny), intent(out) :: uhat
+
+const = 1._rprec / (nxp*ny)
+
+! Initialize uhat
+uhat = 0.0_rprec
+
+! Transform at single z-level
+up(:,:) = const * u(:,:) !! normalization
+call dfftw_execute_dft_r2c(forw_fourier, up(:,:), up(:,:) )
+
+! Only interested in u values at kxs_in wavenumbers
+do jx = 1, kx_num
+    ! uhat indices
+    iih = 2*jx
+    irh = iih - 1
+
+    ! u indices
+    ii = 2 * int( kxs_in(jx) ) + 2
+    ir = ii - 1
+
+    uhat(irh:iih, :) = up(ir:ii, :)
+end do
+
+end subroutine phys2waveZ
+
+!*******************************************************************************
+subroutine wave2physZ( uhat, u )
+!*******************************************************************************
+!
+! Transform field from wavenumber space to physical space at one z-level.
+! (kx,ky) --> (x,y)
+! This function is intended to be used for hybrid mode
+!
+use types, only : rprec
+use param, only : nxf, nxp, ny, nz, lbz, kx_num, kxs_in
+use fft
+implicit none
+
+integer :: jx, jz, ii, ir, iih, irh
+real(rprec), dimension(nxf+2, ny), intent(in) :: uhat
+real(rprec), dimension(nxp+2, ny), intent(out) :: u
+
+! Fill physical u with zeroes everywhere
+u(:,:) = 0.0_rprec
+
+! Place uhat values in appropriate u index before inverse fourier transform
+do jx = 1, kx_num
+    ! uhat indices
+    iih = 2*jx
+    irh = iih - 1
+
+    ! u indices
+    ii = 2 * int( kxs_in(jx) ) + 2
+    ir = ii - 1
+
+    u(ir:ii, :) = uhat( irh:iih, :)
+end do
+
+! Transform at single z-level
+call dfftw_execute_dft_c2r(back_fourier, u(1:nxp+2,1:ny), u(1:nxp+2,1:ny))
+
+end subroutine wave2physZ
+#endif
 
 !*******************************************************************************
 subroutine dft_direct_forw_2d_n_yonlyC_big(f)

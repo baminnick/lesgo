@@ -45,7 +45,10 @@ use functions, only: get_tau_wall_bot, get_tau_wall_top
 
 #ifdef PPMPI
 use mpi
-use mpi_defs, only : mpi_sync_real_array, MPI_SYNC_DOWN
+#endif
+
+#ifdef PPHYBRID
+use mpi_defs, only : mpi_sync_hybrid, MPI_SYNC_UP
 #endif
 
 #ifdef PPLVLSET
@@ -233,10 +236,14 @@ time_loop: do jt_step = nstart, nsteps
 
     ! Exchange ghost node information (since coords overlap) for tau_zz
     !   send info up (from nz-1 below to 0 above)
+#ifdef PPHYBRID
+    call mpi_sync_hybrid( tzz, 0, MPI_SYNC_UP )
+#else
 #ifdef PPMPI
     call mpi_sendrecv (tzz(:,:,nz-1), ld*ny, MPI_RPREC, up, 6,                 &
                        tzz(:,:,0), ld*ny, MPI_RPREC, down, 6,                  &
                        comm, status, ierr)
+#endif
 #endif
 
     ! Compute divergence of SGS shear stresses
@@ -447,6 +454,9 @@ time_loop: do jt_step = nstart, nsteps
     if(coord < nproc-1) w(:,:,nz) = BOGUS
 #endif
 
+!debug
+write(*,*) coord, 'here-1'
+
     !//////////////////////////////////////////////////////
     !/// PRESSURE SOLUTION                              ///
     !//////////////////////////////////////////////////////
@@ -455,6 +465,9 @@ time_loop: do jt_step = nstart, nsteps
     !   do not need to store p --> only need gradient
     !   provides p, dpdx, dpdy at 0:nz-1 and dpdz at 1:nz-1
     call press_stag_array()
+
+!debug
+write(*,*) coord, 'here-2'
 
     ! SIMPLIFIED LEVEL SET METHOD WITH MAPPING CAPABILITY
 #ifdef PPLVLSET_STRETCH

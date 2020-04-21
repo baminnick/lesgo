@@ -123,6 +123,12 @@ real(rprec) :: dx, dy, dz
 logical :: stretch = .false., load_stretch = .false.
 real(rprec) :: str_factor = 1.25
 
+#ifdef PPHYBRID
+! domain parameters when HYBRID mode is on
+integer :: nz_rnl=64, nz_tot_rnl=64
+integer :: nproc_rnl=1
+#endif
+
 !---------------------------------------------------
 ! MODEL PARAMETERS
 !---------------------------------------------------
@@ -170,6 +176,9 @@ logical :: fourier = .false.
 real(rprec), allocatable, dimension(:) :: kxs_in
 integer :: kx_num = 3
 integer :: nxp = 32
+#ifdef PPHYBRID
+integer :: nxf = 32
+#endif
 
 ! mode limiting options for GQL
 integer :: thrx = 0

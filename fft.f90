@@ -201,15 +201,30 @@ subroutine init_wavenumber()
 !*******************************************************************************
 use param, only : lh, ny, L_x, L_y, pi
 use param, only : kxs_in, fourier, kx_num, coord
+#ifdef PPHYBRID
+use param, only : nproc_rnl
+#endif
 implicit none
 integer :: jx, jy
 
 ! Allocate wavenumbers
 allocate( kx(lh,ny), ky(lh,ny), k2(lh,ny) )
 
+#ifdef PPHYBRID
+if (coord .le. (nproc_rnl - 1)) then
+    do jx = 1, kx_num
+        kx(jx,:) = kxs_in(jx)
+    end do
+else
+    do jx = 1, lh-1
+        kx(jx,:) = real(jx-1,kind=rprec)
+    end do
+endif
+#else
 do jx = 1, lh-1
     kx(jx,:) = real(jx-1,kind=rprec)
 end do
+#endif
 
 if (fourier) then
     do jx = 1, kx_num

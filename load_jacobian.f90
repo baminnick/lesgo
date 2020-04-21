@@ -134,5 +134,11 @@ else
 #endif
 end if
 
+#ifdef PPHYBRID
+if (coord == (nproc_rnl-1)) then
+    write(*,*) 'HYBRID: Interface located at z =', FIELD3(coord*(nz-1) + nz)
+endif
+#endif
+
 end subroutine load_jacobian
 

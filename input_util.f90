@@ -137,6 +137,9 @@ character(*), parameter :: block_name = 'DOMAIN'
 integer :: ival_read
 integer :: np
 real(rprec) :: val_read
+#ifdef PPHYBRID
+integer :: ival_read2, ival_read3
+#endif
 
 do
     call readline( lun, line, buff, block_entry_pos, block_exit_pos,           &
@@ -172,6 +175,12 @@ do
             case ('LOAD_STRETCH')
                 read (buff(equal_pos+1:), *) load_stretch
 #endif
+#ifdef PPHYBRID
+            case ('NPROC_RNL')
+                read (buff(equal_pos+1:), *) nproc_rnl
+            case ('NZ_RNL')
+                read (buff(equal_pos+1:), *) Nz_tot_rnl
+#endif
             case default
                 ! if (coord == 0) write(*,*) 'Found unused data value in '       &
                 !     // block_name // ' block: ' // buff(1:equal_pos-1)
@@ -192,6 +201,24 @@ do
         endif
 #endif
 
+#ifdef PPHYBRID
+        ! Set the processor owned vertical grid spacing
+        ! Recompute nz_tot to be compliant with computed nz
+        ! Using nz, ival_read, and nz_tot as temp variables for all coords
+        ival_read = floor( real( nz_tot_rnl, rprec ) / nproc_rnl ) + 1
+        ival_read2 = floor( real( nz_tot - nz_tot_rnl, rprec ) / (nproc - nproc_rnl) ) + 1
+        ival_read3 = nz_tot !! original nz_tot
+        nz_tot = ((ival_read-1)*nproc_rnl + 1) + ((ival_read2-1)*(nproc - nproc_rnl) + 1)
+        if (coord == 0 .AND. ival_read3 /= nz_tot )                            &
+            write(*,*) 'Reseting Nz (total) to: ', nz_tot
+
+        ! Now reset nz to each particular coord, now varying among RNL and other coords
+        if (coord .le. (nproc_rnl-1)) then !! RNL coords
+            nz = ival_read
+        else !! other coords
+            nz = ival_read2
+        endif
+#else
         ! Set the processor owned vertical grid spacing
         nz = floor ( real( nz_tot, rprec ) / nproc ) + 1
 
@@ -200,6 +227,7 @@ do
         nz_tot = ( nz - 1 ) * nproc + 1
         if (coord == 0 .AND. ival_read /= nz_tot )                             &
            write(*,*) 'Reseting Nz (total) to: ', nz_tot
+#endif
 
         ! All grid size variables involving nx are changed later if:
         !     fourier .and. ( nx .ne. 2*(kx_num - 1) )
@@ -324,8 +352,6 @@ do
 
         ! Interpret user input for fourier setting
         if (fourier) then
-            dx = L_x / nxp
-
             if ( nxp .le. 2*maxval(kxs_in) ) then
                 nxp = int( 2*(kxs_in(kx_num) + 1) )
                 if (coord == 0) then 
@@ -333,6 +359,7 @@ do
                     write(*,*) '>>> Changing Nxp to ', nxp
                 endif
             endif
+            dx = L_x / nxp
 
             if (nx .ne. 2*(kx_num - 1) ) then
                 nx = 2*(kx_num - 1)
@@ -350,6 +377,22 @@ do
             endif
 
         endif !! end of fourier setting check
+
+#ifdef PPHYBRID
+    nxp = nx !! reseting nxp to nx on ALL coords
+    nxf = 2*(kx_num - 1) !! set nxf on ALL coords
+    if (coord .le. (nproc_rnl - 1)) then
+        dx = L_x / nxp
+        nx = 2*(kx_num - 1) !! changing nx on RNL coords here
+        ! grid size for dealiasing
+        nx2 = 3 * nx / 2
+        ! grid size for FFT's
+        lh = nx / 2 + 1
+        ld = 2 * lh
+        lh_big = nx2 / 2 + 1
+        ld_big = 2 * lh_big
+    endif !! leave other coords with original nx
+#endif
 
 #ifdef PPGQL
         if ((gql_v2) .and. (.not. fourier)) write(*,*) 'GQLv2: Fourier setting must be on!'
