@@ -189,6 +189,7 @@ subroutine filt_da(f,dfdx,dfdy, lbz)
 ! This subroutine kills the oddball components in f and computes the partial
 ! derivative of f with respect to x and y using spectral decomposition.
 !
+use param, only : coord !! debug
 use types, only : rprec
 use param, only : ld, nx, ny, nz, fourier
 use fft
@@ -231,6 +232,10 @@ do jz = lbz, nz
         call dfftw_execute_dft_c2r(back, dfdy(:,:,jz), dfdy(:,:,jz))
     endif
 end do
+
+!debug
+!write(*,*) coord, const, kx
+!write(*,*) '-------------------------------------------------------------'
 
 end subroutine filt_da
 

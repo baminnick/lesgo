@@ -843,7 +843,11 @@ end if
 ! dudz calculated for 0:nz-1 (on w-nodes) except bottom process
 ! (only 1:nz-1) exchange information between processors to set
 ! values at nz from jz=1 above to jz=nz below
+#ifdef PPHYBRID
+call mpi_sync_hybrid( dwdz(:,:,1:), 1, MPI_SYNC_DOWN )
+#else
 call mpi_sync_real_array( dwdz(:,:,1:), 1, MPI_SYNC_DOWN )
+#endif
 #endif
 
 ! Calculate Sij for the rest of the domain

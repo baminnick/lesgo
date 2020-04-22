@@ -135,6 +135,7 @@ else
 end if
 
 #ifdef PPHYBRID
+! Tell user where the interface is located
 if (coord == (nproc_rnl-1)) then
     write(*,*) 'HYBRID: Interface located at z =', FIELD3(coord*(nz-1) + nz)
 endif

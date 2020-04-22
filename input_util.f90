@@ -350,6 +350,8 @@ do
         end select
     elseif( block_exit_pos == 1 ) then
 
+#ifndef PPHYBRID
+! This is only if hybrid is off!
         ! Interpret user input for fourier setting
         if (fourier) then
             if ( nxp .le. 2*maxval(kxs_in) ) then
@@ -375,8 +377,8 @@ do
                 lh_big = nx2 / 2 + 1
                 ld_big = 2 * lh_big
             endif
-
         endif !! end of fourier setting check
+#endif
 
 #ifdef PPHYBRID
     nxp = nx !! reseting nxp to nx on ALL coords
@@ -391,6 +393,11 @@ do
         ld = 2 * lh
         lh_big = nx2 / 2 + 1
         ld_big = 2 * lh_big
+        ! Set fourier to true on these coords for RNL calculations
+        fourier = .true.
+    else !! non RNL coords
+        fourier = .false. 
+        !! leave everything else as is
     endif !! leave other coords with original nx
 #endif
 

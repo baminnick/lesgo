@@ -199,14 +199,6 @@ end if
 #endif
 
 ! Transform velocities if starting a new simulation
-#ifdef PPHYBRID
-if ((.not. initu) .and. (coord .le. (nproc_rnl - 1))) then
-    call phys2wave( u, lbz )
-    call phys2wave( v, lbz )
-    call phys2wave( w, lbz )
-endif !! only transform RNL coords, leave others as is
-#endif
-
 if ((.not. initu) .and. fourier) then
     if ( coord == 0 ) then 
         write(*,*) '--> Transforming initial velocity to kx space'
@@ -746,8 +738,8 @@ do jz = 1, nz
 
 end do
 
-!rms = 0.0_rprec !! Don't add noise for debugging
-rms = 3._rprec
+rms = 0.0_rprec !! Don't add noise for debugging
+!rms = 3._rprec
 sigma_rv = 0.289_rprec
 wall_noise = 10 !! dictates how strong the noise is at the wall
 ! The higher wall_noise is, the stronger the noise is
