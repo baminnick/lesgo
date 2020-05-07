@@ -100,22 +100,22 @@ endif
 
 ! Store variables into what LESGO will use
 do jz=1,nz
-    JACO1(jz) = FIELD1(coord*(nz-1)+jz)
-end do
-
-do jz=1,nz
-    JACO2(jz) = FIELD2(coord*(nz-1)+jz)
-end do
-
-do jz=1,nz
-    mesh_stretch(jz) = FIELD3(coord*(nz-1)+jz)
-end do
-
-#ifdef PPLVLSET_STRETCH
-do jz=1,nz
-    mesh_stretch_w(jz) = FIELD4(coord*(nz-1)+jz)
-end do
+#ifdef PPHYBRID
+    if (fourier) then !! RNL WM coords, nz is larger here
+        i = coord*(nz-1) + jz
+    else !! non RNL coords, need to shift accordingly
+        i = nz_tot_rnl + (coord-nproc_rnl)*(nz-1) + jz
+    endif
+#else
+    i = coord*(nz-1) + jz
 #endif
+    JACO1(jz) = FIELD1(i)
+    JACO2(jz) = FIELD2(i)
+    mesh_stretch(jz) = FIELD3(i)
+#ifdef PPLVLSET_STRETCH
+    mesh_stretch_w(jz) = FIELD4(i)
+#endif
+end do
 
 if (coord == 0) then
     JACO1(lbz)=JACO1(1)
