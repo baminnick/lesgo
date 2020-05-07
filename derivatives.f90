@@ -31,9 +31,11 @@ private
 
 public ddx, ddy, ddxy, filt_da, ddz_uv, ddz_w,                          &
     phys2wave, wave2phys, phys2waveF, wave2physF,                       &
-    phys2waveZ, wave2physZ,                                             &
     dft_direct_forw_2d_n_yonlyC_big, dft_direct_back_2d_n_yonlyC_big,   &
     dft_direct_forw_2d_n_yonlyC, dft_direct_back_2d_n_yonlyC, convolve_rnl
+#ifdef PPHYBRID
+public phys2waveZ, wave2physZ, mpi_sync_hybrid
+#endif
 
 contains
 
@@ -189,7 +191,6 @@ subroutine filt_da(f,dfdx,dfdy, lbz)
 ! This subroutine kills the oddball components in f and computes the partial
 ! derivative of f with respect to x and y using spectral decomposition.
 !
-use param, only : coord !! debug
 use types, only : rprec
 use param, only : ld, nx, ny, nz, fourier
 use fft
@@ -232,10 +233,6 @@ do jz = lbz, nz
         call dfftw_execute_dft_c2r(back, dfdy(:,:,jz), dfdy(:,:,jz))
     endif
 end do
-
-!debug
-!write(*,*) coord, const, kx
-!write(*,*) '-------------------------------------------------------------'
 
 end subroutine filt_da
 
@@ -976,6 +973,101 @@ out(:,:) = interleave_c2r( outc(1:nx,:) )
 return
 
 end function convolve_rnl
+
+#ifdef PPHYBRID
+!*******************************************************************************
+subroutine mpi_sync_hybrid( var, lbz, isync )
+!*******************************************************************************
+!
+! This subroutine is similar to mpi_sync_real_array in mpi_defs, however makes
+! an assumption about the size of var. This input/output must be of size 
+! 1:ld, 1:ny, lbz:nz
+!
+use types, only : rprec
+use mpi
+use param, only : MPI_RPREC, down, up, comm, status, ierr, nz
+use param, only : ld, ny
+use messages
+
+implicit none
+
+real(rprec), dimension(1:ld,1:ny,lbz:nz), intent(INOUT) :: var
+integer, intent(in) :: lbz
+integer, intent(in) :: isync
+
+integer :: MPI_SYNC_DOWN=1
+integer :: MPI_SYNC_UP=2
+integer :: MPI_SYNC_DOWNUP=3
+
+if (isync == MPI_SYNC_DOWN) then
+    call sync_down()
+else if( isync == MPI_SYNC_UP) then
+    call sync_up()
+else if( isync == MPI_SYNC_DOWNUP) then
+    call sync_down()
+    call sync_up()
+end if
+
+! Enforce globally synchronous MPI behavior. Most likely safe to comment
+! out, but can be enabled to ensure absolute safety.
+!call mpi_barrier( comm, ierr )
+
+contains
+
+!*******************************************************************************
+subroutine sync_down()
+!*******************************************************************************
+use param, only : coord, nproc_rnl, nxf
+implicit none
+real(rprec), dimension(nxf+2,ny) :: varF
+
+if (coord .ne. nproc_rnl) then
+    ! Send info across coords as usual
+    ! Not near interface so no need to transform
+    call mpi_sendrecv (var(:,:,1), ld*ny, MPI_RPREC, down, 1,                  &
+        var(:,:,nz), ld*ny, MPI_RPREC, up, 1, comm, status, ierr)
+else !! non-RNL coord near interface
+
+    ! Transform to fourier space and omit non kxs_in wavenumbers
+    ! Here ld = nxp+2
+    call phys2waveZ( var(1:ld,1:ny,1), varF )
+
+    ! Send to coord below interface
+    call mpi_sendrecv (varF, (nxf+2)*ny, MPI_RPREC, down, 1,                   &
+        var(:,:,nz), ld*ny, MPI_RPREC, up, 1, comm, status, ierr)
+
+endif
+
+end subroutine sync_down
+
+!*******************************************************************************
+subroutine sync_up()
+!*******************************************************************************
+use param, only : coord, nproc_rnl, nxp
+implicit none
+real(rprec), dimension(nxp+2,ny) :: varP
+
+if (coord .ne. (nproc_rnl - 1)) then
+    ! Send info across coords as usual
+    ! Not near interface so no need to transform
+    call mpi_sendrecv (var(:,:,nz-1), ld*ny, MPI_RPREC, up, 2,                &
+        var(:,:,0), ld*ny, MPI_RPREC, down, 2, comm, status, ierr)
+else !! RNL coord near interface
+
+    ! Transform to physical space
+    ! Here ld = nxf+2
+    call wave2physZ( var(1:ld,1:ny,nz-1), varP )
+
+    ! Send to coord above interface
+    call mpi_sendrecv (varP, (nxp+2)*ny, MPI_RPREC, up, 2,                    &
+        var(:,:,0), ld*ny, MPI_RPREC, down, 2, comm, status, ierr)
+
+endif
+
+end subroutine sync_up
+
+end subroutine mpi_sync_hybrid
+#endif
 
 end module derivatives
 

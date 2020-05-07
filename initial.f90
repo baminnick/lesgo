@@ -44,7 +44,7 @@ use string_util, only : string_concat
 use mpi_defs, only : mpi_sync_real_array, MPI_SYNC_DOWNUP
 #endif
 #ifdef PPHYBRID
-use mpi_defs, only : mpi_sync_hybrid
+use derivatives, only : mpi_sync_hybrid
 #endif
 use derivatives, only: phys2wave
 
@@ -179,26 +179,7 @@ end if
 
 #ifdef PPMPI
 #ifdef PPHYBRID
-! Exchange ghost node information for u, v, and w
-call mpi_sync_hybrid( u, 0, MPI_SYNC_DOWNUP )
-call mpi_sync_hybrid( v, 0, MPI_SYNC_DOWNUP )
-call mpi_sync_hybrid( w, 0, MPI_SYNC_DOWNUP )
-#else
-! Exchange ghost node information for u, v, and w
-call mpi_sync_real_array( u, 0, MPI_SYNC_DOWNUP )
-call mpi_sync_real_array( v, 0, MPI_SYNC_DOWNUP )
-call mpi_sync_real_array( w, 0, MPI_SYNC_DOWNUP )
-#endif
-
-!--set 0-level velocities to BOGUS
-if (coord == 0) then
-    u(:, :, lbz) = BOGUS
-    v(:, :, lbz) = BOGUS
-    w(:, :, lbz) = BOGUS
-end if
-#endif
-
-! Transform velocities if starting a new simulation
+! Transform first then sync
 if ((.not. initu) .and. fourier) then
     if ( coord == 0 ) then 
         write(*,*) '--> Transforming initial velocity to kx space'
@@ -215,6 +196,44 @@ if ((.not. initu) .and. fourier) then
 !    call phys2wave( RHSy, lbz )
 !    call phys2wave( RHSz, lbz )
 endif
+
+! Exchange ghost node information for u, v, and w
+call mpi_sync_hybrid( u, 0, MPI_SYNC_DOWNUP )
+call mpi_sync_hybrid( v, 0, MPI_SYNC_DOWNUP )
+call mpi_sync_hybrid( w, 0, MPI_SYNC_DOWNUP )
+#else
+! Sync first then transform
+! Exchange ghost node information for u, v, and w
+call mpi_sync_real_array( u, 0, MPI_SYNC_DOWNUP )
+call mpi_sync_real_array( v, 0, MPI_SYNC_DOWNUP )
+call mpi_sync_real_array( w, 0, MPI_SYNC_DOWNUP )
+
+! Transforming if new simulation
+if ((.not. initu) .and. fourier) then
+    if ( coord == 0 ) then 
+        write(*,*) '--> Transforming initial velocity to kx space'
+    endif
+    call phys2wave( u, lbz )
+    call phys2wave( v, lbz )
+    call phys2wave( w, lbz )
+! debug - comment out "else" portion to read in data in kx space
+!else
+!    call phys2wave( u, lbz )
+!    call phys2wave( v, lbz )
+!    call phys2wave( w, lbz )
+!    call phys2wave( RHSx, lbz )
+!    call phys2wave( RHSy, lbz )
+!    call phys2wave( RHSz, lbz )
+endif
+#endif
+
+!--set 0-level velocities to BOGUS
+if (coord == 0) then
+    u(:, :, lbz) = BOGUS
+    v(:, :, lbz) = BOGUS
+    w(:, :, lbz) = BOGUS
+end if
+#endif
 
 contains
 
