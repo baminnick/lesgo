@@ -208,7 +208,7 @@ do
         ival_read = floor( real( nz_tot_rnl, rprec ) / nproc_rnl ) + 1
         ival_read2 = floor( real( nz_tot - nz_tot_rnl, rprec ) / (nproc - nproc_rnl) ) + 1
         ival_read3 = nz_tot !! original nz_tot
-        nz_tot = ((ival_read-1)*nproc_rnl + 1) + ((ival_read2-1)*(nproc - nproc_rnl) + 1)
+        nz_tot = (ival_read-1)*nproc_rnl + (ival_read2-1)*(nproc - nproc_rnl) + 1
         if (coord == 0 .AND. ival_read3 /= nz_tot )                            &
             write(*,*) 'Reseting Nz (total) to: ', nz_tot
 
