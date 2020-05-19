@@ -149,7 +149,7 @@ else if (lbc_mom==1) then
     !     'field with DNS BCs'
     if (coord == 0) write(*,*) '--> Creating initial boundary layer velocity ',&
         'field with LES BCs... to become DNS'
-    !call ic_dns( ) ! debug
+    !call ic_dns( )
     !call ic_les()
     call ic_blend()
 else
@@ -469,10 +469,10 @@ else
 #else
         z = (real(jz,rprec) - 0.5_rprec) * dz
 #endif
-        !! laminar debug
+        !! laminar velocity profile
         ubar(jz) = (u_star*z_i/nu_molec) * z * (1._rprec - 0.5_rprec*z)
 
-        !! turbulent debug
+        !! turbulent velocity profile
         ! ubar(jz) = 1._rprec/vonk * log( z * z_i * u_star / nu_molec ) + 5.5_rprec
     end do
 endif
@@ -483,8 +483,8 @@ call init_random_seed
 ! Add noise to the velocity field
 ! the "default" rms of a unif variable is 0.289
 
-! rms = 3._rprec ! debug
-rms = 0.2_rprec ! debug
+! rms = 0._rprec !! Don't add noise for debugging
+rms = 0.2_rprec
 ! Using 30 percent of the centerline velocity for rms of noise
 !!rms = (u_star*z_i/nu_molec)*0.5_rprec*0.30_rprec*1.5_rprec/5.0_rprec
 !! rms = (1._rprec/vonk*log(z_i*u_star/nu_molec)+5.5_rprec)*0.289_rprec*1.5_rprec
@@ -715,10 +715,16 @@ use sim_param, only : mesh_stretch
 implicit none
 integer :: jz, jz_abs
 real(rprec), dimension(nz) :: ubar
-real(rprec) :: rms, sigma_rv, ulam, uturb, gam, z, nu_eff
+real(rprec) :: rms, sigma_rv, z_plus, uturb, z, nu_eff
 real(rprec) :: angle
 real(rprec) :: wall_noise, decay
+real(rprec) :: kappa1, kappa2, beta
 character(*), parameter :: sub_name = 'ic'
+
+! Set fitted constants for initial velocity profile
+kappa2 = 8.0_rprec
+kappa1 = (1.0_rprec/vonk)*log(kappa2) + 5.2_rprec
+beta = 2.0_rprec
 
 do jz = 1, nz
 
@@ -732,17 +738,26 @@ do jz = 1, nz
     z = (jz - 0.5_rprec) * dz
 #endif
 
+    ! Change z-value for different boundary conditions
+    ! For channel flow, choose closest wall
+    if(lbc_mom > 0 .and. ubc_mom > 0) z = min(z, L_z - z)
+    ! For half-channel (lbc_mom > 0 .and. ubc_mom .eq 0) leave as is
+
     if (trigger) then
         nu_eff = nu_molec / trig_factor
     else
         nu_eff = nu_molec
     endif
 
-    ulam = z * z_i * u_star / nu_eff !! ~ z^+
-    uturb = (1.0_rprec/vonk)*log(ulam) + 5.0_rprec !! log-law
-    gam = - 0.01_rprec*(ulam**4)/(1.0_rprec + 5.0_rprec*(ulam))
+    ! Old Blended profile 
+    !z_plus = z * z_i * u_star / nu_eff !! ~ z^+
+    !uturb = (1.0_rprec/vonk)*log(z_plus) + 5.0_rprec !! log-law
+    !gam = - 0.01_rprec*(z_plus**4)/(1.0_rprec + 5.0_rprec*(z_plus))
+    !ubar(jz) = exp(gam)*z_plus + exp(1.0_rprec/gam)*uturb
 
-    ubar(jz) = exp(gam)*ulam + exp(1.0_rprec/gam)*uturb
+    z_plus = z * z_i * u_star / nu_eff !! effective z^+
+    uturb = (1.0_rprec/vonk)*log(kappa2 + z_plus) + 5.2_rprec !! log-law
+    ubar(jz) = uturb*((1.0_rprec + ((z_plus/kappa1)**(-beta)))**(-1.0_rprec/beta))
 
 end do
 
@@ -785,10 +800,10 @@ do jz = 1, nz
     jz_abs = jz
     z = (jz-.5_rprec) * dz * z_i
 #endif
+    ! Change z-value for different boundary conditions
     ! For channel flow, choose closest wall
-    if(lbc_mom  > 0 .and. ubc_mom > 0) z = min(z, dz*nproc*(nz-1)*z_i - z)
-    ! For upside-down half-channel, choose upper wall
-    if(lbc_mom == 0 .and. ubc_mom > 0) z = dz*nproc*(nz-1)*z_i - z
+    if(lbc_mom > 0 .and. ubc_mom > 0) z = min(z, L_z - z)
+    ! For half-channel (lbc_mom > 0 .and. ubc_mom .eq 0) leave as is
 
     decay = (1-exp(-wall_noise*z))/(1-exp(-wall_noise))
     u(:,:,jz) = u(:,:,jz) * decay + ubar(jz)*cos(angle)
