@@ -87,6 +87,11 @@ if ((fourier) .and. (sgs)) then
     enddo
 endif
 
+! Imposing no-penetration BC regardless of whether or not
+! it is stress-free or a wall. However still need to select
+! case lbc_mom/ubc_mom because the eddy viscosity is in 
+! different locations otherwise.
+
 ! Get bottom row, at jz = 2 instead of jz = 1
 if (coord == 0) then
 #ifdef PPSAFETYMODE
@@ -193,21 +198,34 @@ if (coord == nproc-1) then
                 if (sgs) then
                     ! Nu_t(jx,jy,nz) on w, need to interpolate
                     if (fourier) then
-                        nu_a = Nu_t(1,jy,nz-1) + nu
+                        nu_a = 0.5_rprec*(Nu_t(1,jy,nz-2) + Nu_t(1,jy,nz-1)) + nu
+#ifdef PPMAPPING
+                        nu_b = (nu_a/JACO2(nz-2)) + (( 0.5_rprec*(Nu_t(1,jy,nz)+Nu_t(1,jy,nz-1)) +nu)/JACO2(nz-1))
+#else
+                        nu_b = nu_a + 0.5_rprec*(Nu_t(1,jy,nz)+Nu_t(1,jy,nz-1)) + nu
+#endif
                     else
-                        nu_a = Nu_t(jx,jy,nz-1) + nu
+                        nu_a = 0.5_rprec*(Nu_t(jx,jy,nz-2) + Nu_t(jx,jy,nz-1)) + nu
+#ifdef PPMAPPING
+                        nu_b = (nu_a/JACO2(nz-2)) + (( 0.5_rprec*(Nu_t(jx,jy,nz)+Nu_t(jx,jy,nz-1)) +nu)/JACO2(nz-1))
+#else
+                        nu_b = nu_a + 0.5_rprec*(Nu_t(jx,jy,nz)+Nu_t(jx,jy,nz-1)) + nu
+#endif
                     endif
                 else
                     nu_a = nu
-                end if
-                ! txz(jx,jy,nz) = 0, so nothing added to RHS
 #ifdef PPMAPPING
-                a(jx,jy,nz-1) = -const1*(1._rprec/JACO2(nz-1))*const2*(1._rprec/JACO1(nz-2))*nu_a
-                b(jx,jy,nz-1) = 1._rprec +                               &
-                    const1*(1._rprec/JACO2(nz-1))*const2*(1._rprec/JACO1(nz-2))*nu_a
+                    nu_b = (nu/JACO2(nz-2)) + (nu/JACO2(nz-1))
+#else
+                    nu_b = 2.0_rprec*nu
+#endif
+                end if
+#ifdef PPMAPPING
+                a(jx,jy,nz-1) = -const1*(1._rprec/JACO1(nz-1))*const2*(1._rprec/JACO2(nz-2))*nu_a
+                b(jx,jy,nz-1) = 1._rprec + const1*(1._rprec/JACO1(nz-1))*const2*nu_b
 #else
                 a(jx,jy,nz-1) = -const1*const2*nu_a
-                b(jx,jy,nz-1) = 1._rprec + const1*const2*nu_a
+                b(jx,jy,nz-1) = 1._rprec + const1*const2*nu_b
 #endif
             end do
             end do
@@ -217,22 +235,36 @@ if (coord == nproc-1) then
             do jy = 1, ny
             do jx = 1, nx
                 if (sgs) then
-                    ! Nu_t(jx,jy,1) on uvp, not needed here
+                    ! Nu_t(jx,jy,nz) on uvp point nz-1, no need to interpolate
                     if (fourier) then
-                        nu_a = Nu_t(1,jy,nz-1) + nu
+                        nu_a = 0.5_rprec*(Nu_t(1,jy,nz-2) + Nu_t(1,jy,nz-1)) + nu
+#ifdef PPMAPPING
+                        nu_b = (nu_a/JACO2(nz-2)) + ((Nu_t(1,jy,nz)+nu)/JACO2(nz-1))
+#else
+                        nu_b = nu_a + Nu_t(1,jy,nz) + nu
+#endif
                     else
-                        nu_a = Nu_t(jx,jy,nz-1) + nu
+                        nu_a = 0.5_rprec*(Nu_t(jx,jy,nz-2) + Nu_t(jx,jy,nz-1)) + nu
+#ifdef PPMAPPING
+                        nu_b = (nu_a/JACO2(nz-2)) + ((Nu_t(jx,jy,nz)+nu)/JACO2(nz-1))
+#else
+                        nu_b = nu_a + Nu_t(jx,jy,nz) + nu
+#endif
                     endif
                 else
                     nu_a = nu
+#ifdef PPMAPPING
+                    nu_b = (nu/JACO2(nz-2)) + (nu/JACO2(nz-1))
+#else
+                    nu_b = 2.0_rprec*nu
+#endif
                 endif
 #ifdef PPMAPPING
-                a(jx,jy,nz-1) = -const1*(1._rprec/JACO2(nz-1))*const2*(1._rprec/JACO1(nz-2))*nu_a
-                b(jx,jy,nz-1) = 1._rprec + const1*(1._rprec/JACO2(nz-1))*          &
-                    (const2*(1._rprec/JACO1(nz-2))*nu_a + (nu/(L_z-mesh_stretch(nz-1))))
+                a(jx,jy,nz-1) = -const1*(1._rprec/JACO1(nz-1))*const2*(1._rprec/JACO2(nz-2))*nu_a
+                b(jx,jy,nz-1) = 1._rprec + const1*(1._rprec/JACO1(nz-1))*const2*nu_b
 #else
                 a(jx,jy,nz-1) = -const1*const2*nu_a
-                b(jx,jy,nz-1) = 1._rprec + const1*(const2*nu_a + const3*nu)
+                b(jx,jy,nz-1) = 1._rprec + const1*const2*nu_b
 #endif
             end do
             end do
