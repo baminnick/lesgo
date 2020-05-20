@@ -229,7 +229,7 @@ if (coord == nproc-1) then
             do jy = 1, ny
             do jx = 1, nx
                 if (sgs) then
-                    ! Nu_t(jx,jy,1) on uvp, not needed here
+                    ! Nu_t(jx,jy,nz) on uvp nz-1, not needed here
                     if (fourier) then
                         nu_a = Nu_t(1,jy,nz-1) + nu
                     else
@@ -244,12 +244,12 @@ if (coord == nproc-1) then
 #ifdef PPMAPPING
                 a(jx,jy,nz-1) = -const1*(1._rprec/JACO2(nz-1))*const2*(1._rprec/JACO1(nz-1))*nu_a
                 b(jx,jy,nz-1) = 1._rprec + const1*(1._rprec/JACO2(nz-1))*          &
-                    (const2*(1._rprec/JACO1(2))*nu_a + (nu/(L_z-mesh_stretch(nz-1))))
+                    (const2*(1._rprec/JACO1(nz-1))*nu_a + (nu/(L_z-mesh_stretch(nz-1))))
                 if (fourier) then
-                    Rx(1,1,nz-1) = Rx(1,1,nz-1) + const1*(1._rprec/JACO2(1))* &
+                    Rx(1,1,nz-1) = Rx(1,1,nz-1) + const1*(1._rprec/JACO2(nz-1))* &
                         (nu/(L_z-mesh_stretch(nz-1)))*utop
                 else
-                    Rx(jx,jy,nz-1) = Rx(jx,jy,nz-1) + const1*(1._rprec/JACO2(1))* &
+                    Rx(jx,jy,nz-1) = Rx(jx,jy,nz-1) + const1*(1._rprec/JACO2(nz-1))* &
                         (nu/(L_z-mesh_stretch(nz-1)))*utop
                 endif
 #else

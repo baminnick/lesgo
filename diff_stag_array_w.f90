@@ -133,7 +133,7 @@ if (coord == 0) then
             end do
             end do
 
-        ! DNS BC of Wall-model
+        ! DNS BC or Wall-model
         case (1:)
             do jy = 1, ny
             do jx = 1, nx
@@ -202,9 +202,9 @@ if (coord == nproc-1) then
                 end if
                 ! txz(jx,jy,nz) = 0, so nothing added to RHS
 #ifdef PPMAPPING
-                a(jx,jy,nz-1) = -const1*(1._rprec/JACO2(nz-1))*const2*(1._rprec/JACO1(nz-1))*nu_a
+                a(jx,jy,nz-1) = -const1*(1._rprec/JACO2(nz-1))*const2*(1._rprec/JACO1(nz-2))*nu_a
                 b(jx,jy,nz-1) = 1._rprec +                               &
-                    const1*(1._rprec/JACO2(nz-1))*const2*(1._rprec/JACO1(nz-1))*nu_a
+                    const1*(1._rprec/JACO2(nz-1))*const2*(1._rprec/JACO1(nz-2))*nu_a
 #else
                 a(jx,jy,nz-1) = -const1*const2*nu_a
                 b(jx,jy,nz-1) = 1._rprec + const1*const2*nu_a
@@ -227,9 +227,9 @@ if (coord == nproc-1) then
                     nu_a = nu
                 endif
 #ifdef PPMAPPING
-                a(jx,jy,nz-1) = -const1*(1._rprec/JACO2(nz-1))*const2*(1._rprec/JACO1(nz-1))*nu_a
+                a(jx,jy,nz-1) = -const1*(1._rprec/JACO2(nz-1))*const2*(1._rprec/JACO1(nz-2))*nu_a
                 b(jx,jy,nz-1) = 1._rprec + const1*(1._rprec/JACO2(nz-1))*          &
-                    (const2*(1._rprec/JACO1(2))*nu_a + (nu/(L_z-mesh_stretch(nz-1))))
+                    (const2*(1._rprec/JACO1(nz-2))*nu_a + (nu/(L_z-mesh_stretch(nz-1))))
 #else
                 a(jx,jy,nz-1) = -const1*const2*nu_a
                 b(jx,jy,nz-1) = 1._rprec + const1*(const2*nu_a + const3*nu)
