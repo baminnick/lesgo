@@ -221,9 +221,20 @@ time_loop: do jt_step = nstart, nsteps
 #else
         call wallstress()
 #endif
+
+#ifdef PPCNDIFF
+        ! Add boundary condition to explicit portion
+        txz_half2(1:nx,:,1) = txz(1:nx,:,1)
+        tyz_half2(1:nx,:,1) = tyz(1:nx,:,1)
+#endif
     endif
     if (coord == nproc-1) then
         call wallstress()
+#ifdef PPCNDIFF
+        ! Add boundary condition to explicit portion
+        txz_half2(1:nx,:,nz) = txz(1:nx,:,nz)
+        tyz_half2(1:nx,:,nz) = tyz(1:nx,:,nz)
+#endif
     endif
 
     ! Calculate turbulent (subgrid) stress for entire domain
