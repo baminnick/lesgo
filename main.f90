@@ -229,9 +229,20 @@ time_loop: do jt_step = nstart, nsteps
 #else
         call wallstress()
 #endif
+
+#ifdef PPCNDIFF
+        ! Add boundary condition to explicit portion
+        txz_half2(1:nx,:,1) = txz(1:nx,:,1)
+        tyz_half2(1:nx,:,1) = tyz(1:nx,:,1)
+#endif
     endif
     if (coord == nproc-1) then
         call wallstress()
+#ifdef PPCNDIFF
+        ! Add boundary condition to explicit portion
+        txz_half2(1:nx,:,nz) = txz(1:nx,:,nz)
+        tyz_half2(1:nx,:,nz) = tyz(1:nx,:,nz)
+#endif
     endif
 
     ! Calculate turbulent (subgrid) stress for entire domain
@@ -250,8 +261,13 @@ time_loop: do jt_step = nstart, nsteps
     ! Compute divergence of SGS shear stresses
     ! the divt's and the diagonal elements of t are not equivalenced
     ! in this version. Provides divtz 1:nz-1, except 1:nz at top process
+#ifdef PPCNDIFF
+    call divstress_uv(divtx, divty, txx, txy, txz_half1, tyy, tyz_half1)
+    call divstress_w_cndiff(divtz, txz, tyz)
+#else
     call divstress_uv(divtx, divty, txx, txy, txz, tyy, tyz)
     call divstress_w(divtz, txz, tyz, tzz)
+#endif
 
     ! Calculates u x (omega) term in physical space. Uses 3/2 rule for
     ! dealiasing. Stores this term in RHS (right hand side) variable
@@ -329,7 +345,6 @@ time_loop: do jt_step = nstart, nsteps
         RHSy = RHSy - RHSy_high + 2.0_rprec*gql_filter( RHSy_high )
         RHSz = RHSz - RHSz_high + 2.0_rprec*gql_filter( RHSz_high )
     endif
-
 
 #endif
 
@@ -428,6 +443,10 @@ time_loop: do jt_step = nstart, nsteps
     !//////////////////////////////////////////////////////
     ! Calculate intermediate velocity field
     !   only 1:nz-1 are valid
+#ifdef PPCNDIFF
+    call diff_stag_array_uv()
+    call diff_stag_array_w()
+#else
     u(:,:,1:nz-1) = u(:,:,1:nz-1) +                            &
         dt * ( tadv1 * RHSx(:,:,1:nz-1) + tadv2 * RHSx_f(:,:,1:nz-1) )
     v(:,:,1:nz-1) = v(:,:,1:nz-1) +                            &
@@ -438,6 +457,7 @@ time_loop: do jt_step = nstart, nsteps
         w(:,:,nz) = w(:,:,nz) +                                &
             dt * ( tadv1 * RHSz(:,:,nz) + tadv2 * RHSz_f(:,:,nz) )
     end if
+#endif
 
     ! Set unused values to BOGUS so unintended uses will be noticable
 #ifdef PPSAFETYMODE
@@ -541,15 +561,17 @@ time_loop: do jt_step = nstart, nsteps
 
         ! Send top wall stress to bottom process
 #ifdef PPMPI
-        if ( (coord == nproc-1) .and. (ubc_mom >0) ) then
-            tau_top = get_tau_wall_top()
-        else
-            tau_top = 0._rprec
-        endif
+        if (ubc_mom >0) then
+            if (coord == nproc-1) then
+                tau_top = get_tau_wall_top()
+            else
+                tau_top = 0._rprec
+            endif
 
-        call mpi_allreduce(tau_top, maxdummy, 1, mpi_rprec,               &
-            MPI_SUM, comm, ierr)
-        tau_top = maxdummy
+            call mpi_allreduce(tau_top, maxdummy, 1, mpi_rprec,               &
+                MPI_SUM, comm, ierr)
+            tau_top = maxdummy
+        endif
 #endif
 
         if (coord == 0) then

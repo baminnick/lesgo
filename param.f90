@@ -135,7 +135,7 @@ real(rprec) :: str_factor = 1.25
 !---------------------------------------------------
 ! Model type: 1->Smagorinsky; 2->Dynamic; 3->Scale dependent
 !             4->Lagrangian scale-sim   5-> Lagragian scale-dep
-integer :: sgs_model=5, wall_damp_exp=2
+integer :: sgs_model=5, damp_model=1, wall_damp_exp=2
 
 ! timesteps between dynamic Cs updates
 integer :: cs_count = 5
@@ -221,6 +221,9 @@ logical :: inilag = .true.
 ! channel branch is complete)
 integer :: lbc_mom = 1
 integer :: ubc_mom = 0
+
+! Inputs for All TLWMLES
+integer :: ihwm = 1
 
 ! Inputs for RNL TLWMLES
 real(rprec), allocatable, dimension(:) :: tlwm_kxin

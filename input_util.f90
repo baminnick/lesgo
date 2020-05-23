@@ -270,6 +270,8 @@ do
         select case (uppercase(buff(1:equal_pos-1)))
             case ('SGS_MODEL')
                 read (buff(equal_pos+1:), *) sgs_model
+            case ('DAMP_MODEL')
+                read (buff(equal_pos+1:), *) damp_model
             case ('WALL_DAMP_EXP')
                 read (buff(equal_pos+1:), *) wall_damp_exp
             case ('CS_COUNT')
@@ -461,6 +463,8 @@ do
                 Read (buff(equal_pos+1:), *) lbc_mom
             case ('UBC_MOM')
                 Read (buff(equal_pos+1:), *) ubc_mom
+            case ('IHWM')
+                Read (buff(equal_pos+1:), *) ihwm
             case ('TLWM_KXIN')
                 call parse_vector( buff(equal_pos+1:), tlwm_kxnum, tlwm_kxin )
             case ('UBOT')

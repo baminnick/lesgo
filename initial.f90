@@ -149,7 +149,7 @@ else if (lbc_mom==1) then
     !     'field with DNS BCs'
     if (coord == 0) write(*,*) '--> Creating initial boundary layer velocity ',&
         'field with LES BCs... to become DNS'
-    !call ic_dns( )
+    !call ic_dns()
     !call ic_les()
     call ic_blend()
 else
@@ -222,6 +222,14 @@ if ((.not. initu) .and. fourier) then
     call phys2wave( u, lbz )
     call phys2wave( v, lbz )
     call phys2wave( w, lbz )
+! debug - comment out "else" portion to read in data in kx space
+!else
+!    call phys2wave( u, lbz )
+!    call phys2wave( v, lbz )
+!    call phys2wave( w, lbz )
+!    call phys2wave( RHSx, lbz )
+!    call phys2wave( RHSy, lbz )
+!    call phys2wave( RHSz, lbz )
 endif
 
 contains
