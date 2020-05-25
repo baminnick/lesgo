@@ -692,13 +692,16 @@ pi_z(:,:,jz_max+1) = -Kappa_t(:,:,jz_max+1)*dTdz(:,:,jz_max+1)
 ! Divergence of heat flux
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-! Store the derivatives in the stress values...can change if we need to output
-! stuff
+! Store derivatives in stress values...can change if we need to output stuff
 call ddx(pi_x, div_pi, lbz)
 call ddy(pi_y, temp_var, lbz)
 div_pi = div_pi + temp_var
+#ifndef PPCNDIFF
+! If purely Adams-Bashforth, also treat ddz(pi_z) explicitly
 call ddz_w(pi_z, temp_var, lbz)
 div_pi = div_pi + temp_var
+! ddz(pi_z) added to AB+CN in diff_stag_array_theta
+#endif
 
 do k = 1, nz-1
     RHS_T(1:nx,:,k) = -RHS_T(1:nx,:,k) - div_pi(1:nx,:,k)
@@ -716,9 +719,18 @@ if ((jt_total == 1) .and. (inits)) then
     RHS_Tf = RHS_T
 end if
 
-! Take a step
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! Time Advancement
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+#ifdef PPCNDIFF
+! Adams-Bashforth Crank-Nicolson
+call diff_stag_array_theta()
+#else
+! Take a Adams-Bashforth time-step
 theta(1:nx,:,1:nz-1) = theta(1:nx,:,1:nz-1)                                    &
     + dt*(tadv1*RHS_T(1:nx,:,1:nz-1) + tadv2*RHS_Tf(1:nx,:,1:nz-1))
+#endif
 
 if (modulo (jt_total, wbase) == 0) then
     if (fourier) then
@@ -1520,5 +1532,244 @@ end if
 #endif
 
 end subroutine total_scal
+
+!*******************************************************************************
+subroutine diff_stag_array_theta
+!*******************************************************************************
+! 
+! Advance scalar theta using Crank-Nicolson for wall-normal diffusion and 
+! Adams-Bashforth for all other terms. Outputs theta at time-step n+1 on exit.
+! 
+! Thermal SGS eddy viscosity not yet incorporated in this subroutine!
+! Currently only to be used for DNS mode (molec = true and sgs = false)
+! 
+use types, only : rprec
+use param
+use sgs_param, only : nu
+use derivatives, only : ddz_w
+#ifdef PPMAPPING
+use sim_param, only : JACO1, JACO2, mesh_stretch
+#endif
+
+implicit none
+
+real(rprec), dimension(ld,ny,0:nz) :: Rtheta, theta_sol
+real(rprec), dimension(nx,ny,0:nz) :: a, b, c
+real(rprec) :: const1, const2, kappa_a, kappa_b, kappa_c
+integer :: jx, jy, jz, jz_min, jz_max
+
+! Set constants
+const1 = dt / (2._rprec*dz)
+const2 = 1._rprec / dz
+
+! Get the RHS ready
+! Initialize with the explicit terms
+Rtheta(:,:,1:nz-1) = theta(:,:,1:nz-1) +                             &
+    dt * ( tadv1 * RHS_T(:,:,1:nz-1) + tadv2 * RHS_Tf(:,:,1:nz-1) )
+
+! Add explicit portion of Crank-Nicolson
+call ddz_w(pi_z, temp_var, lbz)
+temp_var(ld-1:ld, :, 1:nz-1) = 0._rprec
+#ifdef PPSAFETYMODE
+#ifdef PPMPI
+temp_var(:,:,0) = BOGUS
+#endif
+temp_var(:,:,nz) = BOGUS
+#endif
+Rtheta(:,:,1:nz-1) = Rtheta(:,:,1:nz-1) -                           &
+    dt * 0.5_rprec * temp_var(:,:,1:nz-1)
+
+! Remember Kappa_t = Nu_t / Pr_sgs
+! This was computed when computing other stress terms
+! Using Kappa_t here explicitly
+
+! Get bottom row
+if (coord == 0) then
+#ifdef PPSAFETYMODE
+    a(:,:,1) = BOGUS
+#endif
+    select case (lbc_scal)
+        ! Prescribed temperature
+        case (0)
+            do jy = 1, ny
+            do jx = 1, nx
+                ! molec = true and sgs = false only
+                kappa_c = Kappa_t(jx,jy,2)
+
+                ! Discretized dTdz(jx,jy,1) as in wallstress,
+                ! Therefore BC treated implicitly
+#ifdef PPMAPPING
+                b(jx,jy,1) = 1._rprec + const1*(1._rprec/JACO2(1))*        &
+                    (const2*(1._rprec/JACO1(2))*kappa_c + ((nu/Pr_sgs)/mesh_stretch(1)))
+                c(jx,jy,1) = -const1*(1._rprec/JACO2(1))*const2*(1._rprec/JACO1(2))*kappa_c
+                if (fourier) then
+                    Rtheta(1,1,1) = Rtheta(1,1,1) + const1*(1._rprec/JACO2(1))* &
+                        ((nu/Pr_sgs)/mesh_stretch(1))*scal_bot
+                else
+                    Rtheta(jx,jy,1) = Rtheta(jx,jy,1) + const1*(1._rprec/JACO2(1))* &
+                        ((nu/Pr_sgs)/mesh_stretch(1))*scal_bot
+                endif
+#else
+                b(jx,jy,1) = 1._rprec + const1*(const2*kappa_c + const3*(nu/Pr_sgs))
+                c(jx,jy,1) = -const1*const2*kappa_c
+                if (fourier) then
+                    Rtheta(1,1,1) = Rtheta(1,1,1) + const1*const3*(nu/Pr_sgs)*scal_bot
+                else
+                    Rtheta(jx,jy,1) = Rtheta(jx,jy,1) + const1*const3*(nu/Pr_sgs)*scal_bot
+                endif
+#endif
+            end do
+            end do
+
+        ! Prescribed flux
+        case (1)
+            do jy = 1, ny
+            do jx = 1, nx
+                ! molec = true and sgs = false only
+                kappa_c = Kappa_t(jx,jy,2)
+
+                ! Discretized dTdz(jx,jy,1) = prescribed flux, move to RHS
+                ! Therefore BC treated implicitly
+#ifdef PPMAPPING
+                b(jx,jy,1) = 1._rprec + const1*(1._rprec/JACO2(1))*        &
+                    (const2*(1._rprec/JACO1(2))*kappa_c)
+                c(jx,jy,1) = -const1*(1._rprec/JACO2(1))*const2*(1._rprec/JACO1(2))*kappa_c
+                if (fourier) then
+                    Rtheta(1,1,1) = Rtheta(1,1,1) - const1*(1._rprec/JACO2(1))* &
+                        ((nu/Pr_sgs)/mesh_stretch(1))*flux_bot
+                else
+                    Rtheta(jx,jy,1) = Rtheta(jx,jy,1) - const1*(1._rprec/JACO2(1))* &
+                        ((nu/Pr_sgs)/mesh_stretch(1))*flux_bot
+                endif
+#else
+                b(jx,jy,1) = 1._rprec + const1*(const2*kappa_c)
+                c(jx,jy,1) = -const1*const2*kappa_c
+                if (fourier) then
+                    Rtheta(1,1,1) = Rtheta(1,1,1) - const1*const3*(nu/Pr_sgs)*flux_bot
+                else
+                    Rtheta(jx,jy,1) = Rtheta(jx,jy,1) - const1*const3*(nu/Pr_sgs)*flux_bot
+                endif
+#endif
+            end do
+            end do                
+
+    end select
+    jz_min = 2
+else
+    jz_min = 1
+endif
+
+! Get top row
+#ifdef PPMPI
+if (coord == nproc-1) then
+#endif
+#ifdef PPSAFETYMODE
+    c(:,:,nz-1) = BOGUS
+#endif
+    select case (ubc_scal)
+        ! Prescribed Temperature
+        case (0)
+            do jy = 1, ny
+            do jx = 1, nx
+                ! molec = true and sgs = false only
+                kappa_a = Kappa_t(jx,jy,nz-1)
+
+                ! Discretized dTdz(jx,jy,nz) as in wallstress,
+                ! Therefore BC treated implicitly
+#ifdef PPMAPPING
+                a(jx,jy,nz-1) = -const1*(1._rprec/JACO2(nz-1))*const2*(1._rprec/JACO1(nz-1))*kappa_a
+                b(jx,jy,nz-1) = 1._rprec + const1*(1._rprec/JACO2(nz-1))*          &
+                    (const2*(1._rprec/JACO1(nz-1))*kappa_a + ((nu/Pr_sgs)/(L_z-mesh_stretch(nz-1))))
+                if (fourier) then
+                    Rtheta(1,1,nz-1) = Rtheta(1,1,nz-1) + const1*(1._rprec/JACO2(nz-1))* &
+                        ((nu/Pr_sgs)/(L_z-mesh_stretch(nz-1)))*scal_top
+                else
+                    Rtheta(jx,jy,nz-1) = Rtheta(jx,jy,nz-1) + const1*(1._rprec/JACO2(nz-1))* &
+                        ((nu/Pr_sgs)/(L_z-mesh_stretch(nz-1)))*scal_top
+                endif
+#else
+                a(jx,jy,nz-1) = -const1*const2*kappa_a
+                b(jx,jy,nz-1) = 1._rprec + const1*(const2*kappa_a + const3*(nu/Pr_sgs))
+                if (fourier) then
+                    Rtheta(1,1,nz-1) = Rtheta(1,1,nz-1) + const1*const3*nu*scal_top
+                else
+                    Rtheta(jx,jy,nz-1) = Rtheta(jx,jy,nz-1) + const1*const3*nu*scal_top
+                endif
+#endif
+            end do
+            end do
+
+        ! Prescribed Flux
+        case (1)
+            do jy = 1, ny
+            do jx = 1, nx
+                ! molec = true and sgs = false only
+                kappa_a = Kappa_t(jx,jy,nz-1)
+
+                ! Discretized dTdz(jx,jy,nz) as in wallstress,
+                ! Therefore BC treated implicitly
+#ifdef PPMAPPING
+                a(jx,jy,nz-1) = -const1*(1._rprec/JACO2(nz-1))*const2*(1._rprec/JACO1(nz-1))*kappa_a
+                b(jx,jy,nz-1) = 1._rprec + const1*(1._rprec/JACO2(nz-1))*          &
+                    (const2*(1._rprec/JACO1(nz-1))*kappa_a)
+                if (fourier) then
+                    Rtheta(1,1,nz-1) = Rtheta(1,1,nz-1) - const1*(1._rprec/JACO2(nz-1))* &
+                        ((nu/Pr_sgs)/(L_z-mesh_stretch(nz-1)))*flux_top
+                else
+                    Rtheta(jx,jy,nz-1) = Rtheta(jx,jy,nz-1) - const1*(1._rprec/JACO2(nz-1))* &
+                        ((nu/Pr_sgs)/(L_z-mesh_stretch(nz-1)))*flux_top
+                endif
+#else
+                a(jx,jy,nz-1) = -const1*const2*kappa_a
+                b(jx,jy,nz-1) = 1._rprec + const1*(const2*kappa_a)
+                if (fourier) then
+                    Rtheta(1,1,nz-1) = Rtheta(1,1,nz-1) - const1*const3*nu*flux_top
+                else
+                    Rtheta(jx,jy,nz-1) = Rtheta(jx,jy,nz-1) - const1*const3*nu*flux_top
+                endif
+#endif
+            end do
+            end do
+
+    end select
+    jz_max = nz-2
+#ifdef PPMPI
+else
+    jz_max = nz-1
+endif
+#endif
+
+! Compute coefficients in domain
+do jz = jz_min, jz_max
+do jy = 1, ny
+do jx = 1, nx
+    ! molec = true and sgs = false only
+    kappa_a = Kappa_t(jx,jy,jz)
+#ifdef PPMAPPING
+    kappa_b = (Kappa_t(jx,jy,jz+1)/JACO1(jz+1)) + (Kappa_t(jx,jy,jz)/JACO1(jz))
+#else
+    kappa_b = Kappa_t(jx,jy,jz+1) + Kappa_t(jx,jy,jz)
+#endif
+    kappa_c = Kappa_t(jx,jy,jz+1)
+
+#ifdef PPMAPPING
+    a(jx, jy, jz) = -const1*(1._rprec/JACO2(jz))*const2*(1._rprec/JACO1(jz))*kappa_a
+    b(jx, jy, jz) = 1._rprec + const1*(1._rprec/JACO2(jz))*const2*kappa_b
+    c(jx, jy, jz) = -const1*(1._rprec/JACO2(jz))*const2*(1._rprec/JACO1(jz+1))*kappa_c
+#else
+    a(jx, jy, jz) = -const1*const2*kappa_a
+    b(jx, jy, jz) = 1._rprec + const1*const2*kappa_b
+    c(jx, jy, jz) = -const1*const2*kappa_c
+#endif
+end do
+end do
+end do
+
+! Solve TDMA 
+! Using uv tridag routine since theta is on uv, same discretization
+call tridag_array_diff_uv ( a, b, c, Rtheta, theta_sol )
+theta(:nx,:ny,1:nz-1) = theta_sol(:nx,:ny,1:nz-1)
+
+end subroutine diff_stag_array_theta
 
 end module scalars
