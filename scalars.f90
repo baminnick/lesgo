@@ -290,15 +290,24 @@ end subroutine ic_scal_les
 subroutine ic_scal_dns
 !*******************************************************************************
 use types, only : rprec
-use param, only : nx, ny, nz, lbz, L_z, coord, fourier
+use param
 use derivatives, only : phys2wave
 #ifdef PPMAPPING
 use sim_param, only : mesh_stretch
 #endif
 
-integer :: jx, jy, jz
+integer :: jx, jy, jz, jz_abs
 real(rprec) :: z
-real(rprec), dimension(lbz:nz) :: theta_temp
+real(rprec), dimension(lbz:nz) :: theta_bar
+real(rprec) :: wall_noise, decay, rms, sigma_rv
+real(rprec) :: kappa1, kappa2, beta, theta_turb, z_plus, Bint
+
+! Set fitted constants for initial theta profile
+kappa2 = 8.0_rprec
+beta = 2.0_rprec
+! Intercept for theta log-profile from Kader 1981
+Bint = ((3.85_rprec*(Pr_sgs**(1.0_rprec/3.0_rprec))-1.3_rprec)**2.0_rprec) + (1/vonk)*log(Pr_sgs)
+kappa1 = (1.0_rprec/vonk)*log(kappa2)
 
 ! for full channel
 do jz = lbz, nz
@@ -315,26 +324,75 @@ do jz = lbz, nz
     select case (ic_theta_dns)
         ! Parabolic temperature profile
         case (1)
-        theta_temp(jz) = z * (1._rprec - 0.5_rprec*z)
+        theta_bar(jz) = z * (1._rprec - 0.5_rprec*z)
         if((coord == 0) .and. (jz == 0)) then
             write(*,*) '--> Using initial parabolic theta profile'
         endif
 
         ! Linear temperature profile using fixed Temperature BC
         case (2)
-        theta_temp(jz) = (scal_top - scal_bot)*z/L_z + scal_bot
+        theta_bar(jz) = (scal_top - scal_bot)*z/L_z + scal_bot
         if((coord == 0) .and. (jz==0)) then 
             write(*,*) '--> Using initial linear theta profile'
         endif
+
+        ! Blended velocity profile
+        case (3)
+        ! Change z-value for different boundary conditions
+        ! For channel flow, choose closest wall
+        if(lbc_mom > 0 .and. ubc_mom > 0) z = min(z, L_z - z)
+
+        z_plus = z * z_i * u_star / nu_molec
+        theta_turb = (1.0_rprec/vonk)*log(kappa2 + z_plus) + Bint
+        theta_bar(jz) = theta_turb*((1.0_rprec + ((Pr_sgs*z_plus/kappa1)**(-beta)))**(-1.0_rprec/beta))
+
+        ! Scale blended velocity profile by approximate theta_tau
+        ! theta_tau estimate from energy balance
+        ! This assumes full channel with cold walls and constant forcing
+        theta_bar(jz) = theta_bar(jz) * (scal_source * z_i / u_star)
+
     end select
+!debug
+write(*,*) coord, jz, theta_bar(jz)
+
 end do
 
-do jz = lbz, nz
-do jy = 1, ny
-do jx = 1, nx
-    theta(jx,jy,jz) = theta_temp(jz)
-end do
-end do
+!rms = 0._rprec !! debugging
+rms = 3._rprec
+sigma_rv = 0.289_rprec
+wall_noise = 10 !! dictates how strong the noise is at the wall
+! The higher wall_noise is, the stronger the noise is
+
+! Fill theta with uniformly distributed random numbers between 0 and 1
+call init_random_seed
+call random_number(theta)
+
+! Center random number about 0 and rescale
+theta = rms / sigma_rv * (theta - 0.5_rprec)
+
+! Rescale noise depending on distance from wall and mean log profile
+! z is still dimensional
+do jz = 1, nz
+
+#ifdef PPMPI
+    jz_abs = coord * (nz-1) + jz
+#ifdef PPMAPPING
+    z = mesh_stretch(jz)
+#else
+    z = (coord * (nz-1) + jz - 0.5_rprec) * dz * z_i
+#endif
+#else
+    jz_abs = jz
+    z = (jz-.5_rprec) * dz * z_i
+#endif
+    ! Change z-values for different boundary conditions
+    ! For channel flow, choose closest wall
+    if(lbc_mom > 0 .and. ubc_mom > 0) z = min(z, L_z - z)
+    ! For half-channel (lbc_mom > 0 .and. ubc_mom .eq. 0) leave as is
+
+    decay = (1-exp(-wall_noise*z))/(1-exp(-wall_noise))
+    theta(:,:,jz) = theta(:,:,jz) * decay + theta_bar(jz)
+
 end do
 
 ! Transform temperature profile if starting a new simulation
