@@ -352,8 +352,6 @@ do jz = lbz, nz
         theta_bar(jz) = theta_bar(jz) * (scal_source * z_i / u_star)
 
     end select
-!debug
-write(*,*) coord, jz, theta_bar(jz)
 
 end do
 
