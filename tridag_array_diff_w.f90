@@ -40,6 +40,10 @@ real(rprec), dimension(nx,ny,0:nz) :: gam
 
 ! Initialize variables
 nchunks = ny
+if (fourier) then
+    ! Change chunksize in fourier mode because lh is smaller
+    nchunks = 1
+endif
 
 ! make sure nchunks divides ny evenly
 chunksize = ny / nchunks
