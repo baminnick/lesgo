@@ -358,6 +358,10 @@ elseif ((sgs) .and. (sgs_model == 7)) then
         call vreman()
     endif
 
+elseif ((sgs) .and. (sgs_model == 8)) then
+
+    call wale()
+
 else !! not sgs, molec only
 
     ! define nu_coefs here since it does not change case-by-case for DNS
