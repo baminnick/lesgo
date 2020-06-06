@@ -424,4 +424,8 @@ dyn_cvre = 0.5_rprec*(ctop/cbot)
 ! Clip
 dyn_cvre = max(0._rprec,dyn_cvre)
 
+#ifdef PPOUTPUT_SGS
+if (coord == 0) write(*,*) 'Dynamic Vreman Model Constant: ', dyn_cvre
+#endif
+
 end subroutine dyn_vreman
