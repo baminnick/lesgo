@@ -28,6 +28,7 @@ use types, only : rprec
 use param
 use sim_param, only : dudx, dudy, dudz, dvdx, dvdy, dvdz, dwdx, dwdy, dwdz
 use sgs_param, only : Nu_t
+use derivatives, only : dft_direct_back_2d_n_yonlyC, dft_direct_forw_2d_n_yonlyC
 #ifdef PPMPI
 use mpi_defs, only : mpi_sync_real_array, MPI_SYNC_DOWN
 #endif
@@ -59,6 +60,199 @@ eps = 1e-12 !! some small number in case denominator is zero
 ! values at nz from jz=1 above to jz=nz below
 call mpi_sync_real_array( dwdz(:,:,1:), 1, MPI_SYNC_DOWN )
 #endif
+
+if (fourier) then
+
+do jz = 1, nz
+
+    ! Calculate Nu_t for jz = 1 (coord==0 only)
+    !   stored on uvp-nodes (this level only) for 'wall'
+    !   stored on w-nodes (all) for 'stress free'
+    ! See sgs_stag_util/calc_Sij for why derivatives are interpolated this way
+    if ( (coord == 0) .and. (jz == 1) ) then
+        select case (lbc_mom)
+            ! Stress free
+            case(0)
+                ! Interpolate derivatives onto w-node
+                dudx_p(:,:) = dudx(:,:,1)
+                dudy_p(:,:) = dudy(:,:,1)
+                dudz_p(:,:) = dudz(:,:,1)
+                dvdx_p(:,:) = dvdx(:,:,1)
+                dvdy_p(:,:) = dvdy(:,:,1)
+                dvdz_p(:,:) = dvdz(:,:,1)
+                dwdx_p(:,:) = dwdx(:,:,1)
+                dwdy_p(:,:) = dwdy(:,:,1)
+                dwdz_p(:,:) = 0.5_rprec*(dwdz(:,:,1) + 0.0_rprec)
+
+            ! Wall
+            case(1)
+                ! Interpolate derivatives onto uvp-node
+                dudx_p(:,:) = dudx(:,:,1)
+                dudy_p(:,:) = dudy(:,:,1)
+                dudz_p(:,:) = 0.5_rprec*(dudz(:,:,1) + dudz(:,:,2))
+                dvdx_p(:,:) = dvdx(:,:,1)
+                dvdy_p(:,:) = dvdy(:,:,1)
+                dvdz_p(:,:) = 0.5_rprec*(dvdz(:,:,1) + dvdz(:,:,2))
+                dwdx_p(:,:) = 0.5_rprec*(dwdx(:,:,1) + dwdx(:,:,2))
+                dwdy_p(:,:) = 0.5_rprec*(dwdy(:,:,1) + dwdy(:,:,2))
+                dwdz_p(:,:) = dwdz(:,:,1)
+
+            ! Wall-Model
+            case(2:)
+                ! Interpolate derivatives onto uvp-node
+                dudx_p(:,:) = dudx(:,:,1)
+                dudy_p(:,:) = dudy(:,:,1)
+                ! dudz from wallstress, therefore no interpolation
+                dudz_p(:,:) = dudz(:,:,1)
+                dvdx_p(:,:) = dvdx(:,:,1)
+                dvdy_p(:,:) = dvdy(:,:,1)
+                ! dvdz from wallstress, therefore no interpolation
+                dvdz_p(:,:) = dvdz(:,:,1)
+                dwdx_p(:,:) = 0.5_rprec*(dwdx(:,:,1) + dwdx(:,:,2))
+                dwdy_p(:,:) = 0.5_rprec*(dwdy(:,:,1) + dwdy(:,:,2))
+                dwdz_p(:,:) = dwdz(:,:,1)
+
+        end select
+
+    ! Calculate Nu_t for jz = nz (coord==nproc-1 only)
+    !   stored on nz-1 uvp-node (this level only) for 'wall'
+    !   stored on w-nodes (all) for 'stress free'
+    elseif ((coord == nproc-1) .and. (jz == nz)) then
+        select case (ubc_mom)
+
+            ! Stress free
+            case(0)
+                ! Interpolate derivatives onto w-node
+                dudx_p(:,:) = dudx(:,:,nz-1)
+                dudy_p(:,:) = dudy(:,:,nz-1)
+                dudz_p(:,:) = dudz(:,:,nz)
+                dvdx_p(:,:) = dvdx(:,:,nz-1)
+                dvdy_p(:,:) = dvdy(:,:,nz-1)
+                dvdz_p(:,:) = dvdz(:,:,nz)
+                dwdx_p(:,:) = dwdx(:,:,nz)
+                dwdy_p(:,:) = dwdy(:,:,nz)
+                dwdz_p(:,:) = 0.5_rprec*(dwdz(:,:,nz-1) + 0.0_rprec)
+
+            ! Wall
+            case(1)
+                ! Interpolate derivatives onto uvp-node
+                dudx_p(:,:) = dudx(:,:,nz-1)
+                dudy_p(:,:) = dudy(:,:,nz-1)
+                dudz_p(:,:) = 0.5_rprec*(dudz(:,:,nz-1) + dudz(:,:,nz))
+                dvdx_p(:,:) = dvdx(:,:,nz-1)
+                dvdy_p(:,:) = dvdy(:,:,nz-1)
+                dvdz_p(:,:) = 0.5_rprec*(dvdz(:,:,nz-1) + dvdz(:,:,nz))
+                dwdx_p(:,:) = 0.5_rprec*(dwdx(:,:,nz-1) + dwdx(:,:,nz))
+                dwdy_p(:,:) = 0.5_rprec*(dwdy(:,:,nz-1) + dwdy(:,:,nz))
+                dwdz_p(:,:) = dwdz(:,:,nz-1)
+
+            ! Wall-Model
+            case(2:)
+                ! Interpolate derivatives onto uvp-node
+                dudx_p(:,:) = dudx(:,:,nz-1)
+                dudy_p(:,:) = dudy(:,:,nz-1)
+                ! dudz from wallstress, therefore no interpolation
+                dudz_p(:,:) = dudz(:,:,nz)
+                dvdx_p(:,:) = dvdx(:,:,nz-1)
+                dvdy_p(:,:) = dvdy(:,:,nz-1)
+                ! dvdz from wallstress, therefore no interpolation
+                dvdz_p(:,:) = dvdz(:,:,nz)
+                dwdx_p(:,:) = 0.5_rprec*(dwdx(:,:,nz-1) + dwdx(:,:,nz))
+                dwdy_p(:,:) = 0.5_rprec*(dwdy(:,:,nz-1) + dwdy(:,:,nz))
+                dwdz_p(:,:) = dwdz(:,:,nz-1)
+
+        end select
+
+    ! Calculate Nu_t for the rest of the domain
+    !   values are stored on w-nodes
+    else
+        ! Interpolate derivatives onto w-nodes
+        dudx_p(:,:) = 0.5_rprec*(dudx(:,:,jz) + dudx(:,:,jz-1))
+        dudy_p(:,:) = 0.5_rprec*(dudy(:,:,jz) + dudy(:,:,jz-1))
+        dudz_p(:,:) = dudz(:,:,jz)
+        dvdx_p(:,:) = 0.5_rprec*(dvdx(:,:,jz) + dvdx(:,:,jz-1))
+        dvdy_p(:,:) = 0.5_rprec*(dvdy(:,:,jz) + dvdy(:,:,jz-1))
+        dvdz_p(:,:) = dvdz(:,:,jz)
+        dwdx_p(:,:) = dwdx(:,:,jz)
+        dwdy_p(:,:) = dwdy(:,:,jz)
+        dwdz_p(:,:) = 0.5_rprec*(dwdz(:,:,jz) + dwdz(:,:,jz-1))
+
+    end if
+
+    ! Currently duidxj(kx,ky,z), need duidxj(kx,y,z)
+    call dft_direct_back_2d_n_yonlyC( dudx_p(:,:) )
+    call dft_direct_back_2d_n_yonlyC( dudy_p(:,:) )
+    call dft_direct_back_2d_n_yonlyC( dudz_p(:,:) )
+    call dft_direct_back_2d_n_yonlyC( dvdx_p(:,:) )
+    call dft_direct_back_2d_n_yonlyC( dvdy_p(:,:) )
+    call dft_direct_back_2d_n_yonlyC( dvdz_p(:,:) )
+    call dft_direct_back_2d_n_yonlyC( dwdx_p(:,:) )
+    call dft_direct_back_2d_n_yonlyC( dwdy_p(:,:) )
+    call dft_direct_back_2d_n_yonlyC( dwdz_p(:,:) )
+    ! Only use kx=0 mode in calculations to avoid convolution
+
+    ! Compute strain-rate tensor
+    ! Remember calc_Sij is not called for this SGS model
+    S11(1,:) = dudx_p(1,:)
+    S12(1,:) = 0.5_rprec*(dudy_p(1,:) + dvdx_p(1,:))
+    S13(1,:) = 0.5_rprec*(dudz_p(1,:) + dwdx_p(1,:))
+    S22(1,:) = dvdy_p(1,:)
+    S23(1,:) = 0.5_rprec*(dvdz_p(1,:) + dwdy_p(1,:))
+    S33(1,:) = dwdz_p(1,:)
+
+    ! Compute anti-symmetric part of gradient tensor
+    O12(1,:) = 0.5_rprec*(dudy_p(1,:) - dvdx_p(1,:))
+    O13(1,:) = 0.5_rprec*(dudz_p(1,:) - dwdx_p(1,:))
+    O23(1,:) = 0.5_rprec*(dvdz_p(1,:) - dwdy_p(1,:))
+
+    ! Compute inner product of Sij
+    SS(1,:) = S11(1,:)**2 + S22(1,:)**2 + S33(1,:)**2 +       &
+        2.0_rprec*(S12(1,:)**2 + S13(1,:)**2 + S23(1,:)**2)
+
+    ! Compute inner product of Oij
+    OO(1,:) = 2.0_rprec*(O12(1,:)**2 + O13(1,:)**2 + O23(1,:)**2)
+
+    ! Compute outer product of Sij: Sik*Skj
+    SS11(1,:) = S11(1,:)**2 + S12(1,:)**2 + S13(1,:)**2
+    SS12(1,:) = S11(1,:)*S12(1,:) + S12(1,:)*S22(1,:) + S13(1,:)*S23(1,:)
+    SS13(1,:) = S11(1,:)*S13(1,:) + S12(1,:)*S23(1,:) + S13(1,:)*S33(1,:)
+    SS22(1,:) = S12(1,:)**2 + S22(1,:)**2 + S23(1,:)**2
+    SS23(1,:) = S12(1,:)*S13(1,:) + S22(1,:)*S23(1,:) + S23(1,:)*S33(1,:)
+    SS33(1,:) = S13(1,:)**2 + S23(1,:)**2 + S33(1,:)**2
+
+    ! Compute outer product of Oij: Oik*Okj
+    OO11(1,:) = -O12(1,:)**2 - O13(1,:)**2
+    OO12(1,:) = -O13(1,:)*O23(1,:)
+    OO13(1,:) = O12(1,:)*O23(1,:)
+    OO22(1,:) = -O12(1,:)**2 - O23(1,:)**2
+    OO23(1,:) = -O12(1,:)*O13(1,:)
+    OO33(1,:) = -O13(1,:)**2 - O23(1,:)**2
+
+    ! Compute fancy tensor: Sdij = SSij+OOij-(1/3)*kron_ij*(SS-OO)
+    Sd11(1,:) = SS11(1,:) + OO11(1,:) - ((SS(1,:) - OO(1,:))/3._rprec)
+    Sd12(1,:) = SS12(1,:) + OO12(1,:)
+    Sd13(1,:) = SS13(1,:) + OO13(1,:)
+    Sd22(1,:) = SS22(1,:) + OO22(1,:) - ((SS(1,:) - OO(1,:))/3._rprec)
+    Sd23(1,:) = SS23(1,:) + OO23(1,:)
+    Sd33(1,:) = SS33(1,:) + OO33(1,:) - ((SS(1,:) - OO(1,:))/3._rprec)
+
+    ! Compute inner product of Sdij
+    SdSd(1,:) = Sd11(1,:)**2 + Sd22(1,:)**2 + Sd33(1,:)**2 +           &
+        2.0_rprec*(Sd12(1,:)**2 + Sd13(1,:)**2 + Sd23(1,:)**2)
+
+    ! Compute eddy viscosity
+    Nu_t(1,:,jz) = ((cwale*delta_stretch(jz))**2)*                    &
+        ( (SdSd(1,:)**1.5_rprec) / ((SS(1,:)**2.5_rprec) + (SdSd(1,:)**1.25_rprec) + eps) )
+
+    ! Zero-out non-zero kx modes
+    Nu_t(2:ld,:,jz) = 0.0_rprec
+
+    ! Transform eddy viscosity, (kx,y,z) --> (kx,ky,z)
+    call dft_direct_forw_2d_n_yonlyC( Nu_t(:,:,jz) )
+
+end do
+
+else !! .not. fourier
 
 do jz = 1, nz
 
@@ -230,5 +424,7 @@ do jz = 1, nz
         ( (SdSd**1.5_rprec) / ((SS**2.5_rprec) + (SdSd**1.25_rprec) + eps) )
 
 end do
+
+endif
 
 end subroutine wale
