@@ -66,10 +66,16 @@ logical :: iwm_file_flag !xiang: for iwm restart
 
 #ifdef PPMAPPING
 call load_jacobian ()
-! Initialize delta_stretch for SGS, only for sgs = 1
-do jz = 1, nz
-    delta_stretch(jz) = filter_size*(dx*dy*(JACO1(jz))*dz)**(1._rprec/3._rprec)
-enddo
+! Initialize delta_stretch for SGS models
+if (fourier) then
+    do jz = 1, nz
+        delta_stretch(jz) = filter_size*(dy*(JACO1(jz))*dz)**(1._rprec/2._rprec)
+    enddo
+else
+    do jz = 1, nz
+        delta_stretch(jz) = filter_size*(dx*dy*(JACO1(jz))*dz)**(1._rprec/3._rprec)
+    enddo
+endif
 #endif
 
 #ifdef PPLVLSET_STRETCH

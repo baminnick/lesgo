@@ -243,8 +243,12 @@ if (sgs_model >= 6) then
 endif
 
 ! Set dimensionless constants
-delta = filter_size*(dy*dz)**(1._rprec/2._rprec)
-!delta = filter_size*(dx*dy*dz)**(1._rprec/3._rprec)
+if (fourier) then
+    delta = filter_size*(dy*dz)**(1._rprec/2._rprec)
+else
+    delta = filter_size*(dx*dy*dz)**(1._rprec/3._rprec)
+endif
+
 if (molec) then
     nu = (nu_molec/(u_star*z_i))
 else
