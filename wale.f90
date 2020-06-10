@@ -51,7 +51,7 @@ real(rprec) :: cwale, eps
 integer :: jz, jz_min, jz_max
 
 ! Set constants
-cwale = 0.325_rprec !! wale constant
+cwale = 0.325_rprec*Co/0.16_rprec !! wale constant
 eps = 1e-12 !! some small number in case denominator is zero
 
 #ifdef PPMPI
