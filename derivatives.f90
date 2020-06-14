@@ -727,61 +727,62 @@ enddo
 ! GQL has the same interactions as RNL above, only adding more interactions
 ! These interactions involve only nonzero wavenumbers
 
-if (.not. gql_v2) then
+!if (.not. gql_v2) then !! gql_v0
     ! This version considers the set kxs_in = {0,1,2,...,thrx,"small-scales"}
     ! where the wavenumbers 0,1,2,...,thrx are the "large-scales" and they
     ! MUST be successive
 
     ! Kxi+Kxi -> Kx, Add large scales to get large scales (Kxi,Kxi) only
-    do ix = 2, floor((thrx+2.0_rprec)/2.0_rprec)
-        outc(ix+ix-1,:) = outc(ix+ix-1,:) + fc(ix,:) * gc(ix,:)
-    enddo
+!    do ix = 2, floor((thrx+2.0_rprec)/2.0_rprec)
+!        outc(ix+ix-1,:) = outc(ix+ix-1,:) + fc(ix,:) * gc(ix,:)
+!    enddo
 
     ! Kxi+Kxj -> Kx, Add large scales to get large scales (Kxi,Kxj) Kxi ~= Kxj only
-    do ix = 2, thrx
-        do jx = (ix+1), (thrx-ix+2)
-            outc(ix+jx-1,:) = outc(ix+jx-1,:) + fc(ix,:) * gc(jx,:)
-            outc(ix+jx-1,:) = outc(ix+jx-1,:) + fc(jx,:) * gc(ix,:)
-        enddo
-    enddo
+!    do ix = 2, thrx
+!        do jx = (ix+1), (thrx-ix+2)
+!            outc(ix+jx-1,:) = outc(ix+jx-1,:) + fc(ix,:) * gc(jx,:)
+!            outc(ix+jx-1,:) = outc(ix+jx-1,:) + fc(jx,:) * gc(ix,:)
+!        enddo
+!    enddo
 
     ! Kxj-Kxi -> Kx, Subtract large scales to get large scales
-    do ix = 2, (thrx)
-        do jx = (ix+1), thrx+1
-            outc(jx-ix+1,:) = outc(jx-ix+1,:) + conjg( fc(ix,: )) * gc(jx,:)
-            outc(jx-ix+1,:) = outc(jx-ix+1,:) + fc(jx,:) * conjg( gc(ix,:) )
-        enddo
-    enddo
+!    do ix = 2, (thrx)
+!        do jx = (ix+1), thrx+1
+!            outc(jx-ix+1,:) = outc(jx-ix+1,:) + conjg( fc(ix,: )) * gc(jx,:)
+!            outc(jx-ix+1,:) = outc(jx-ix+1,:) + fc(jx,:) * conjg( gc(ix,:) )
+!        enddo
+!    enddo
 
     ! kxj-kxi -> Kx, Subtract small scales to get large scales
-    do ix = (thrx+2), ((nxh/2)-1)
-        jx_end = ix + thrx
-        if ( jx_end > (nxh/2) ) then
-            jx_end = (nxh/2)
-        endif
-        do jx = (ix+1), jx_end
-            outc(jx-ix+1,:) = outc(jx-ix+1,:) + conjg( fc(ix,:) ) * gc(jx,:)
-            outc(jx-ix+1,:) = outc(jx-ix+1,:) + fc(jx,:) * conjg( gc(ix,:) )
-        enddo
-    enddo
+!    do ix = (thrx+2), ((nxh/2)-1)
+!        jx_end = ix + thrx
+!        if ( jx_end > (nxh/2) ) then
+!            jx_end = (nxh/2)
+!        endif
+!        do jx = (ix+1), jx_end
+!            outc(jx-ix+1,:) = outc(jx-ix+1,:) + conjg( fc(ix,:) ) * gc(jx,:)
+!            outc(jx-ix+1,:) = outc(jx-ix+1,:) + fc(jx,:) * conjg( gc(ix,:) )
+!        enddo
+!    enddo
 
     ! kxi+Kxj -> kx, Add large and small scales to get small scales
-    do ix = 2, (thrx+1)
-        do jx = (thrx+2), ( (nxh/2)-ix+1 )
-            outc(ix+jx-1,:) = outc(ix+jx-1,:) + fc(ix,:) * gc(jx,:)
-            outc(ix+jx-1,:) = outc(ix+jx-1,:) + fc(jx,:) * gc(ix,:)
-        enddo
-    enddo
+!    do ix = 2, (thrx+1)
+!        do jx = (thrx+2), ( (nxh/2)-ix+1 )
+!            outc(ix+jx-1,:) = outc(ix+jx-1,:) + fc(ix,:) * gc(jx,:)
+!            outc(ix+jx-1,:) = outc(ix+jx-1,:) + fc(jx,:) * gc(ix,:)
+!        enddo
+!    enddo
 
     ! kxj-Kxi -> kx, Subtract large and small scales to get small scales
-    do ix = 2, (thrx+1)
-        do jx = (thrx+ix+1), (nxh/2)
-            outc(jx-ix+1,:) = outc(jx-ix+1,:) + conjg( fc(ix,:) ) * gc(jx,:)
-            outc(jx-ix+1,:) = outc(jx-ix+1,:) + fc(jx,:) * conjg( gc(ix,:) )
-        enddo
-    enddo
+!    do ix = 2, (thrx+1)
+!        do jx = (thrx+ix+1), (nxh/2)
+!            outc(jx-ix+1,:) = outc(jx-ix+1,:) + conjg( fc(ix,:) ) * gc(jx,:)
+!            outc(jx-ix+1,:) = outc(jx-ix+1,:) + fc(jx,:) * conjg( gc(ix,:) )
+!        enddo
+!    enddo
 
-else !! gql_v2
+!else !! gql_v2
+if (.not. gql_v2) then !! gql_v1
     if (nls == 1) then
         ! This version considers the set kxs_in = {0,Kx,k1,...,kn} where
         ! Kx is the only nonzero large-scale, and k1, k2, ..., kn are all
@@ -874,6 +875,41 @@ else !! gql_v2
         outc(4,:) = outc(4,:) + conjg( fc(3,:) ) * gc(6,:)
 
     endif
+
+else ! gql_v2
+
+    ! This version considers the set kxs_in = {0,Kx,k1,k2,k3,k4} where
+    ! Kx is the only nonzero large-scale, and k1, k2, k3, and k4 are
+    ! small-scales where k2 - k1 = k4 - k3 = Kx however, k3 - k2 ~= Kx
+    ! So the two sets of small scales (k1,k2) and (k3,k4) do not interact!
+    ! 
+
+    ! Kxi+Kxi -> Kx, Add large scales to get large scales (Kxi,Kxi) only
+    ! --> Assuming only one non-zero large-scale Kx
+
+    ! Kxi+Kxj -> Kx, Add large scales to get large scales (Kxi,Kxj) Kxi ~= Kxj only
+    ! --> Assuming only one non-zero large-scale Kx
+
+    ! Kxj-Kxi -> Kx, Subtract large scales to get large scales
+    ! --> Assuming only one non-zero large-scale Kx
+
+    ! kxj-kxi -> Kx, Subtract small scales to get large scales
+    outc(2,:) = outc(2,:) + fc(4,:) * conjg( gc(3,:) )
+    outc(2,:) = outc(2,:) + conjg( fc(3,:) ) * gc(4,:)
+    outc(2,:) = outc(2,:) + fc(6,:) * conjg( gc(5,:) )
+    outc(2,:) = outc(2,:) + conjg( fc(5,:) ) * gc(6,:)
+
+    ! kxi+Kxj -> kx, Add large and small scales to get small scales
+    outc(4,:) = outc(4,:) + fc(2,:) * gc(3,:)
+    outc(4,:) = outc(4,:) + fc(3,:) * gc(2,:)
+    outc(6,:) = outc(6,:) + fc(2,:) * gc(5,:)
+    outc(6,:) = outc(6,:) + fc(5,:) * gc(2,:)
+
+    ! kxj-Kxi -> kx, Subtract large and small scales to get small scales
+    outc(3,:) = outc(3,:) + fc(4,:) * conjg( gc(2,:) )
+    outc(3,:) = outc(3,:) + conjg( fc(2,:) ) * gc(4,:)
+    outc(5,:) = outc(5,:) + fc(6,:) * conjg( gc(2,:) )
+    outc(5,:) = outc(5,:) + conjg( fc(2,:) ) * gc(6,:)
 
 ! NOTE: USING NX INSTEAD OF NXH, BE CAREFUL AND SHOULD FIX THIS!
 
