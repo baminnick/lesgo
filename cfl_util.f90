@@ -106,6 +106,8 @@ function get_cfl_dt() result(dt)
 !
 use types, only : rprec
 use param, only : cfl, dx, dy, dz, nx, ny, nz, fourier, nxp
+use param, only : jt_total, cfl_start_swap, cfl_end_swap
+use param, only : cfl_swap, cfl_swap_factor
 use sim_param, only : u,v,w
 use sim_param, only : uF, vF, wF
 #ifdef PPMAPPING
@@ -158,6 +160,12 @@ endif
 #ifdef PPMAPPING
 dt_inv_w = maxval( dt_inv_w_temp(1:nz-1) )
 #endif
+
+if (cfl_swap) then
+    if (jt_total == cfl_start_swap) cfl = cfl * cfl_swap_factor
+    if (jt_total == cfl_end_swap) cfl = cfl / cfl_swap_factor
+endif
+
 dt = cfl / maxval( (/ dt_inv_u, dt_inv_v, dt_inv_w /) )
 
 #ifdef PPMPI

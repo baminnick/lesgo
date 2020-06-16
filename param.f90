@@ -189,6 +189,9 @@ integer :: runtime = -1
 
 logical :: use_cfl_dt = .false.
 real(rprec) :: cfl = 0.05
+logical :: cfl_swap = .false.
+integer :: cfl_start_swap = 500, cfl_end_swap = 2000
+real(rprec) :: cfl_swap_factor = 3.2
 real(rprec) :: dt_f=2.0e-4, cfl_f=0.05
 
 real(rprec) :: dt = 2.0e-4_rprec

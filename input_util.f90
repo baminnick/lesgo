@@ -400,6 +400,14 @@ do
                 read (buff(equal_pos+1:), *) use_cfl_dt
             case ('CFL')
                 read (buff(equal_pos+1:), *) cfl
+            case ('CFL_SWAP')
+                read (buff(equal_pos+1:), *) cfl_swap
+            case ('CFL_START_SWAP')
+                read (buff(equal_pos+1:), *) cfl_start_swap
+            case ('CFL_END_SWAP')
+                read (buff(equal_pos+1:), *) cfl_end_swap
+            case ('CFL_SWAP_FACTOR')
+                read (buff(equal_pos+1:), *) cfl_swap_factor
             case('DT')
                 read (buff(equal_pos+1:), *) dt
             case('CUMULATIVE_TIME')
