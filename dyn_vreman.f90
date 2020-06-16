@@ -35,7 +35,7 @@ use sim_param, only : dudx, dudy, dudz, dvdx, dvdy, dvdz, dwdx, dwdy, dwdz
 use mpi_defs, only : mpi_sync_real_array, MPI_SYNC_DOWN
 #endif
 #ifdef PPMAPPING
-use sim_param, only : JACO1, JACO2
+use sim_param, only : jaco_w, jaco_uv
 #endif
 use test_filtermodule
 use sgs_param, only : S11, S12, S13, S22, S23, S33,           &
@@ -90,7 +90,7 @@ do jz = 1, nz
                 dwdz_p(:,:) = 0.5_rprec*(dwdz(:,:,1) + 0.0_rprec)
 
 #ifdef PPMAPPING
-                dz_p = JACO1(1)*dz
+                dz_p = jaco_w(1)*dz
 #endif
 
                 u_bar(:,:) = 0.5_rprec*(u(:,:,1) + u(:,:,0))
@@ -117,7 +117,7 @@ do jz = 1, nz
                 dwdz_p(:,:) = dwdz(:,:,1)
 
 #ifdef PPMAPPING
-                dz_p = JACO2(1)*dz
+                dz_p = jaco_uv(1)*dz
 #endif
 
                 L11(:,:) = u(:,:,1)*u(:,:,1)
@@ -146,7 +146,7 @@ do jz = 1, nz
                 dwdz_p(:,:) = dwdz(:,:,1)
 
 #ifdef PPMAPPING
-                dz_p = JACO2(1)*dz
+                dz_p = jaco_uv(1)*dz
 #endif
 
                 L11(:,:) = u(:,:,1)*u(:,:,1)
@@ -181,7 +181,7 @@ do jz = 1, nz
                 dwdz_p(:,:) = 0.5_rprec*(dwdz(:,:,nz-1) + 0.0_rprec)
 
 #ifdef PPMAPPING
-                dz_p = JACO1(nz)*dz
+                dz_p = jaco_w(nz)*dz
 #endif
 
                 u_bar(:,:) = 0.5_rprec*(u(:,:,nz) + u(:,:,nz-1))
@@ -208,7 +208,7 @@ do jz = 1, nz
                 dwdz_p(:,:) = dwdz(:,:,nz-1)
 
 #ifdef PPMAPPING
-                dz_p = JACO2(nz-1)*dz
+                dz_p = jaco_uv(nz-1)*dz
 #endif
 
                 L11(:,:) = u(:,:,nz)*u(:,:,nz)
@@ -237,7 +237,7 @@ do jz = 1, nz
                 dwdz_p(:,:) = dwdz(:,:,nz-1)
 
 #ifdef PPMAPPING
-                dz_p = JACO2(nz-1)*dz
+                dz_p = jaco_uv(nz-1)*dz
 #endif
 
                 L11(:,:) = u(:,:,nz)*u(:,:,nz)
@@ -267,7 +267,7 @@ do jz = 1, nz
         dwdz_p(:,:) = 0.5_rprec*(dwdz(:,:,jz) + dwdz(:,:,jz-1))
 
 #ifdef PPMAPPING
-        dz_p = JACO1(jz)*dz
+        dz_p = jaco_w(jz)*dz
 #endif
 
         u_bar(:,:) = 0.5_rprec*(u(:,:,jz) + u(:,:,jz-1))

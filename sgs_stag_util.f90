@@ -49,7 +49,7 @@ use param
 use sim_param, only : txx, txy, txz, tyy, tyz, tzz
 use sim_param, only : dudx, dudy, dudz, dvdx, dvdy, dvdz, dwdx, dwdy, dwdz
 #ifdef PPMAPPING
-use sim_param, only : JACO2, mesh_stretch, delta_stretch
+use sim_param, only : jaco_uv, mesh_stretch, delta_stretch
 #endif
 use sgs_param
 use messages
@@ -142,11 +142,11 @@ if ((sgs) .and. (sgs_model < 6)) then
                 ! z's nondimensional, l here is on w-nodes
 #ifdef PPMAPPING
                 if (damp_model == 1) then
-                    zz(jz) = mesh_stretch(jz)-0.5*JACO2(jz)*dz
+                    zz(jz) = mesh_stretch(jz)-0.5*jaco_uv(jz)*dz
                     l(jz) = ( Co**(wall_damp_exp)*(vonk*zz(jz))**(-wall_damp_exp)  &
                         + (delta_stretch(jz))**(-wall_damp_exp) )**(-1._rprec/wall_damp_exp)
                 else
-                    zz(jz) = (mesh_stretch(jz)-0.5*JACO2(jz)*dz) * u_star / nu_molec !! plus units
+                    zz(jz) = (mesh_stretch(jz)-0.5*jaco_uv(jz)*dz) * u_star / nu_molec !! plus units
                     l(jz) = delta_stretch(jz)*(1.0_rprec - exp(-zz(jz)/25.0_rprec)) !! A= = 25.0
                 endif
 #else

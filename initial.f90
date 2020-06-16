@@ -25,7 +25,7 @@ use types,only:rprec
 use param
 use sim_param, only : u, v, w, RHSx, RHSy, RHSz
 #ifdef PPMAPPING
-use sim_param, only : delta_stretch, JACO1
+use sim_param, only : delta_stretch, jaco_w
 use test_filtermodule, only : filter_size
 #endif
 use sgs_param, only : Cs_opt2, F_LM, F_MM, F_QN, F_NN
@@ -69,11 +69,11 @@ call load_jacobian ()
 ! Initialize delta_stretch for SGS models
 if (fourier) then
     do jz = 1, nz
-        delta_stretch(jz) = filter_size*(dy*(JACO1(jz))*dz)**(1._rprec/2._rprec)
+        delta_stretch(jz) = filter_size*(dy*(jaco_w(jz))*dz)**(1._rprec/2._rprec)
     enddo
 else
     do jz = 1, nz
-        delta_stretch(jz) = filter_size*(dx*dy*(JACO1(jz))*dz)**(1._rprec/3._rprec)
+        delta_stretch(jz) = filter_size*(dx*dy*(jaco_w(jz))*dz)**(1._rprec/3._rprec)
     enddo
 endif
 #endif

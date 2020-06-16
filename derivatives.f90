@@ -249,7 +249,7 @@ use param, only : nx, ny, nz, dz, BOGUS
 use param, only : nproc, coord
 #endif
 #ifdef PPMAPPING
-use sim_param, only : JACO1
+use sim_param, only : jaco_w
 #endif
 implicit none
 
@@ -272,7 +272,7 @@ do jz = lbz+1, nz
 do jy = 1, ny
 do jx = 1, nx !! jb has ld instead of nx fourier
 #ifdef PPMAPPING
-    dfdz(jx,jy,jz) = (1/JACO1(jz))*const*(f(jx,jy,jz)-f(jx,jy,jz-1))
+    dfdz(jx,jy,jz) = (1/jaco_w(jz))*const*(f(jx,jy,jz)-f(jx,jy,jz-1))
 #else
     dfdz(jx,jy,jz) = const*(f(jx,jy,jz)-f(jx,jy,jz-1))
 #endif
@@ -311,7 +311,7 @@ use param, only : coord
 #endif
 #endif
 #ifdef PPMAPPING
-use sim_param, only : JACO2
+use sim_param, only : jaco_uv
 #endif
 implicit none
 
@@ -326,7 +326,7 @@ do jz = lbz, nz-1
 do jy = 1, ny
 do jx = 1, ld !! nx fourier
 #ifdef PPMAPPING
-    dfdz(jx,jy,jz) = (1/JACO2(jz))*const*(f(jx,jy,jz+1)-f(jx,jy,jz))
+    dfdz(jx,jy,jz) = (1/jaco_uv(jz))*const*(f(jx,jy,jz+1)-f(jx,jy,jz))
 #else
     dfdz(jx,jy,jz) = const*(f(jx,jy,jz+1)-f(jx,jy,jz))
 #endif

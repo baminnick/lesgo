@@ -43,7 +43,7 @@ use param, only : dt, dx, dy, dz, nx, ny, nz, fourier, nxp
 use sim_param, only : u, v, w
 use sim_param, only : uF, vF, wF
 #ifdef PPMAPPING
-use sim_param, only : JACO1
+use sim_param, only : jaco_w
 #endif
 
 #ifdef PPMPI
@@ -68,7 +68,7 @@ if (fourier) then !! remember dx = L_x / nxp (if fourier=true)
     cfl_v = maxval( abs(vF(1:nxp,1:ny,1:nz-1)) ) / dy
 #ifdef PPMAPPING
     do jz = 1, (nz-1)
-        cfl_w_temp(jz) = maxval( abs(wF(1:nxp,1:ny,1:nz-1)) ) / (JACO1(jz)*dz)
+        cfl_w_temp(jz) = maxval( abs(wF(1:nxp,1:ny,1:nz-1)) ) / (jaco_w(jz)*dz)
     enddo
 #else
     cfl_w = maxval( abs(wF(1:nxp,1:ny,1:nz-1)) ) / dz
@@ -78,7 +78,7 @@ else
     cfl_v = maxval( abs(v(1:nx,1:ny,1:nz-1)) ) / dy
 #ifdef PPMAPPING
     do jz = 1, (nz-1)
-        cfl_w_temp(jz) = maxval( abs(w(1:nx,1:ny,1:nz-1)) ) / (JACO1(jz)*dz)
+        cfl_w_temp(jz) = maxval( abs(w(1:nx,1:ny,1:nz-1)) ) / (jaco_w(jz)*dz)
     enddo
 #else
     cfl_w = maxval( abs(w(1:nx,1:ny,1:nz-1)) ) / dz
@@ -109,7 +109,7 @@ use param, only : cfl, dx, dy, dz, nx, ny, nz, fourier, nxp
 use sim_param, only : u,v,w
 use sim_param, only : uF, vF, wF
 #ifdef PPMAPPING
-use sim_param, only : JACO1
+use sim_param, only : jaco_w
 #endif
 
 #ifdef PPMPI
@@ -138,7 +138,7 @@ if (fourier) then
     dt_inv_v = maxval( abs(vF(1:nxp,1:ny,1:nz-1)) ) / dy
 #ifdef PPMAPPING
     do jz = 1, (nz-1)
-        dt_inv_w_temp = maxval( abs(wF(1:nxp,1:ny,1:nz-1)) ) / (JACO1(jz)*dz)
+        dt_inv_w_temp = maxval( abs(wF(1:nxp,1:ny,1:nz-1)) ) / (jaco_w(jz)*dz)
     enddo
 #else
     dt_inv_w = maxval( abs(wF(1:nxp,1:ny,1:nz-1)) ) / dz
@@ -148,7 +148,7 @@ else
     dt_inv_v = maxval( abs(v(1:nx,1:ny,1:nz-1)) ) / dy
 #ifdef PPMAPPING
     do jz = 1, (nz-1)
-        dt_inv_w_temp = maxval( abs(w(1:nx,1:ny,1:nz-1)) ) / (JACO1(jz)*dz)
+        dt_inv_w_temp = maxval( abs(w(1:nx,1:ny,1:nz-1)) ) / (jaco_w(jz)*dz)
     enddo
 #else
     dt_inv_w = maxval( abs(w(1:nx,1:ny,1:nz-1)) ) / dz
@@ -181,7 +181,7 @@ use param, only : coord, lbc_mom, sgs, molec
 use sgs_param, only : Nu_t
 ! use sgs_param, only : Nu_tF
 #ifdef PPMAPPING
-use sim_param, only : JACO1, JACO2
+use sim_param, only : jaco_w, jaco_uv
 #endif
 
 #ifdef PPMPI
@@ -216,10 +216,10 @@ visc_x = nu_eff / (dx**2)
 visc_y = nu_eff / (dy**2)
 #ifdef PPMAPPING
 do jz = 1, (nz-1)
-    visc_z_temp(jz) = nu_eff / ((JACO1(jz)*dz)**2)
+    visc_z_temp(jz) = nu_eff / ((jaco_w(jz)*dz)**2)
 enddo
 if ((coord == 0) .and. (lbc_mom > 0)) then !! Nu_t on uv-grid at wall
-    visc_z_temp(1) = nu_eff / ((JACO2(jz)*dz)**2)
+    visc_z_temp(1) = nu_eff / ((jaco_uv(jz)*dz)**2)
 endif
 !! not considering upper wall since at nz
 #else
