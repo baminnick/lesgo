@@ -138,7 +138,7 @@ if (fourier) then
     dt_inv_v = maxval( abs(vF(1:nxp,1:ny,1:nz-1)) ) / dy
 #ifdef PPMAPPING
     do jz = 1, (nz-1)
-        dt_inv_w_temp = maxval( abs(wF(1:nxp,1:ny,1:nz-1)) ) / (jaco_w(jz)*dz)
+        dt_inv_w_temp(jz) = maxval(abs(wF(1:nxp,1:ny,1:nz-1)))/(jaco_w(jz)*dz)
     enddo
 #else
     dt_inv_w = maxval( abs(wF(1:nxp,1:ny,1:nz-1)) ) / dz
@@ -148,7 +148,7 @@ else
     dt_inv_v = maxval( abs(v(1:nx,1:ny,1:nz-1)) ) / dy
 #ifdef PPMAPPING
     do jz = 1, (nz-1)
-        dt_inv_w_temp = maxval( abs(w(1:nx,1:ny,1:nz-1)) ) / (jaco_w(jz)*dz)
+        dt_inv_w_temp(jz) = maxval(abs(w(1:nx,1:ny,1:nz-1)))/(jaco_w(jz)*dz)
     enddo
 #else
     dt_inv_w = maxval( abs(w(1:nx,1:ny,1:nz-1)) ) / dz
