@@ -36,6 +36,7 @@ use io, only : write_tau_wall_bot, write_tau_wall_top, kx_energy, kx_energy_four
 use fft
 use derivatives, only : filt_da, ddz_uv, ddz_w
 use derivatives, only : wave2physF
+use derivatives, only : wave2phys, phys2wave
 use test_filtermodule
 use cfl_util
 use sgs_param, only : nu
@@ -194,6 +195,21 @@ time_loop: do jt_step = nstart, nsteps
             nu = nu*trig_factor
         endif       
     end if
+
+    ! Fourier check
+    if (fourier .and. fourier_check) then
+        if ( (mod(jt_total,fourier_nskip)==0) .and.             &
+            (jt_total < tavg_nstart) ) then
+            ! Transform to physical space
+            call wave2phys( u, lbz )
+            call wave2phys( v, lbz )
+            call wave2phys( w, lbz )
+            ! Transform back
+            call phys2wave( u, lbz )
+            call phys2wave( v, lbz )
+            call phys2wave( w, lbz )
+        endif
+    endif
 
     ! Calculate velocity derivatives
     ! Calculate dudx, dudy, dvdx, dvdy, dwdx, dwdy (in Fourier space)

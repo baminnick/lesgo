@@ -312,6 +312,10 @@ do
                 call parse_vector( buff(equal_pos+1:), kx_num, kxs_in )
             case ('NXP')
                 read (buff(equal_pos+1:), *) nxp
+            case ( 'FOURIER_CHECK')
+                read (buff(equal_pos+1:), *) fourier_check
+            case ( 'FOURIER_NSKIP')
+                read (buff(equal_pos+1:), *) fourier_nskip
             case ('THRX')
                 read (buff(equal_pos+1:), *) thrx
             case ('GQL_V2')

@@ -171,6 +171,8 @@ logical :: fourier = .false.
 real(rprec), allocatable, dimension(:) :: kxs_in
 integer :: kx_num = 3
 integer :: nxp = 32
+logical :: fourier_check = .false.
+integer :: fourier_nskip = 10000
 
 ! mode limiting options for GQL
 integer :: thrx = 0
