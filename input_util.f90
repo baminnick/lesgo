@@ -304,6 +304,8 @@ do
                 read (buff(equal_pos+1:), *) trig_off
             case ('TRIG_FACTOR')
                 read (buff(equal_pos+1:), *) trig_factor
+            case ('INITIAL_NOISE')
+                read (buff(equal_pos+1:), *) initial_noise
             case ('FOURIER')
                 read (buff(equal_pos+1:), *) fourier
             case ('KXS_IN')

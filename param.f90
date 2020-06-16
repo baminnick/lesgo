@@ -162,6 +162,7 @@ real(rprec) :: nu_molec = 1.14e-5_rprec
 logical :: trigger = .false.
 integer :: trig_on = 500, trig_off = 2000
 real(rprec) :: trig_factor = 5.0_rprec
+real(rprec) :: initial_noise = 3.0_rprec
 
 logical :: molec=.false., sgs=.true.
 
