@@ -318,12 +318,10 @@ do
                 read (buff(equal_pos+1:), *) fourier_nskip
             case ('THRX')
                 read (buff(equal_pos+1:), *) thrx
-            case ('GQL_V2')
-                read (buff(equal_pos+1:), *) gql_v2
-            case ('NLS')
-                read (buff(equal_pos+1:), *) nls
+            case ('GQL_FOURIER')
+                read (buff(equal_pos+1:), *) gql_fourier
             case default
-                ! if (coord == 0) write(*,*) 'Found unused data value in '       &
+                ! if (coord == 0) write(*,*) 'Found unused data value in ' &
                 !     // block_name // ' block: ' // buff(1:equal_pos-1)
         end select
     elseif( block_exit_pos == 1 ) then
@@ -356,10 +354,6 @@ do
             endif
 
         endif !! end of fourier setting check
-
-#ifdef PPGQL
-        if ((gql_v2) .and. (.not. fourier)) write(*,*) 'GQLv2: Fourier setting must be on!'
-#endif
 
         return
     else
