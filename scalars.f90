@@ -355,8 +355,8 @@ do jz = lbz, nz
 
 end do
 
-!rms = 0._rprec !! debugging
-rms = 3._rprec
+rms = 0._rprec !! debugging
+!rms = 0.1_rprec
 sigma_rv = 0.289_rprec
 wall_noise = 10 !! dictates how strong the noise is at the wall
 ! The higher wall_noise is, the stronger the noise is
@@ -1589,6 +1589,7 @@ end if
 
 end subroutine total_scal
 
+#ifdef PPCNDIFF
 !*******************************************************************************
 subroutine diff_stag_array_theta
 !*******************************************************************************
@@ -1658,24 +1659,29 @@ if (coord == 0) then
                 b(jx,jy,1) = 1._rprec + const1*(1._rprec/JACO2(1))*        &
                     (const2*(1._rprec/JACO1(2))*kappa_c + ((nu/Pr_sgs)/mesh_stretch(1)))
                 c(jx,jy,1) = -const1*(1._rprec/JACO2(1))*const2*(1._rprec/JACO1(2))*kappa_c
-                if (fourier) then
-                    Rtheta(1,1,1) = Rtheta(1,1,1) + const1*(1._rprec/JACO2(1))* &
-                        ((nu/Pr_sgs)/mesh_stretch(1))*scal_bot
-                else
+                if (.not. fourier) then
                     Rtheta(jx,jy,1) = Rtheta(jx,jy,1) + const1*(1._rprec/JACO2(1))* &
                         ((nu/Pr_sgs)/mesh_stretch(1))*scal_bot
                 endif
 #else
                 b(jx,jy,1) = 1._rprec + const1*(const2*kappa_c + const3*(nu/Pr_sgs))
                 c(jx,jy,1) = -const1*const2*kappa_c
-                if (fourier) then
-                    Rtheta(1,1,1) = Rtheta(1,1,1) + const1*const3*(nu/Pr_sgs)*scal_bot
-                else
+                if (.not. fourier) then
                     Rtheta(jx,jy,1) = Rtheta(jx,jy,1) + const1*const3*(nu/Pr_sgs)*scal_bot
                 endif
 #endif
             end do
             end do
+
+            !! Only add scal_bot to kx = ky = 0 mode
+            if (fourier) then
+#ifdef PPMAPPING
+                Rtheta(1,1,1) = Rtheta(1,1,1) + const1*(1._rprec/JACO2(1))* &
+                    ((nu/Pr_sgs)/mesh_stretch(1))*scal_bot
+#else
+                Rtheta(1,1,1) = Rtheta(1,1,1) + const1*const3*(nu/Pr_sgs)*scal_bot
+#endif
+            endif
 
         ! Prescribed flux
         case (1)
@@ -1690,24 +1696,29 @@ if (coord == 0) then
                 b(jx,jy,1) = 1._rprec + const1*(1._rprec/JACO2(1))*        &
                     (const2*(1._rprec/JACO1(2))*kappa_c)
                 c(jx,jy,1) = -const1*(1._rprec/JACO2(1))*const2*(1._rprec/JACO1(2))*kappa_c
-                if (fourier) then
-                    Rtheta(1,1,1) = Rtheta(1,1,1) - const1*(1._rprec/JACO2(1))* &
-                        ((nu/Pr_sgs)/mesh_stretch(1))*flux_bot
-                else
+                if (.not. fourier) then
                     Rtheta(jx,jy,1) = Rtheta(jx,jy,1) - const1*(1._rprec/JACO2(1))* &
                         ((nu/Pr_sgs)/mesh_stretch(1))*flux_bot
                 endif
 #else
                 b(jx,jy,1) = 1._rprec + const1*(const2*kappa_c)
                 c(jx,jy,1) = -const1*const2*kappa_c
-                if (fourier) then
-                    Rtheta(1,1,1) = Rtheta(1,1,1) - const1*const3*(nu/Pr_sgs)*flux_bot
-                else
+                if (.not. fourier) then
                     Rtheta(jx,jy,1) = Rtheta(jx,jy,1) - const1*const3*(nu/Pr_sgs)*flux_bot
                 endif
 #endif
             end do
             end do                
+
+            !! Only add flux_bot to kx = ky = 0 mode
+            if (fourier) then
+#ifdef PPMAPPING
+                Rtheta(1,1,1) = Rtheta(1,1,1) - const1*(1._rprec/JACO2(1))* &
+                    ((nu/Pr_sgs)/mesh_stretch(1))*flux_bot
+#else
+                Rtheta(1,1,1) = Rtheta(1,1,1) - const1*const3*(nu/Pr_sgs)*flux_bot
+#endif
+            endif
 
     end select
     jz_min = 2
@@ -1736,24 +1747,29 @@ if (coord == nproc-1) then
                 a(jx,jy,nz-1) = -const1*(1._rprec/JACO2(nz-1))*const2*(1._rprec/JACO1(nz-1))*kappa_a
                 b(jx,jy,nz-1) = 1._rprec + const1*(1._rprec/JACO2(nz-1))*          &
                     (const2*(1._rprec/JACO1(nz-1))*kappa_a + ((nu/Pr_sgs)/(L_z-mesh_stretch(nz-1))))
-                if (fourier) then
-                    Rtheta(1,1,nz-1) = Rtheta(1,1,nz-1) + const1*(1._rprec/JACO2(nz-1))* &
-                        ((nu/Pr_sgs)/(L_z-mesh_stretch(nz-1)))*scal_top
-                else
+                if (.not. fourier) then
                     Rtheta(jx,jy,nz-1) = Rtheta(jx,jy,nz-1) + const1*(1._rprec/JACO2(nz-1))* &
                         ((nu/Pr_sgs)/(L_z-mesh_stretch(nz-1)))*scal_top
                 endif
 #else
                 a(jx,jy,nz-1) = -const1*const2*kappa_a
                 b(jx,jy,nz-1) = 1._rprec + const1*(const2*kappa_a + const3*(nu/Pr_sgs))
-                if (fourier) then
-                    Rtheta(1,1,nz-1) = Rtheta(1,1,nz-1) + const1*const3*nu*scal_top
-                else
+                if (.not. fourier) then
                     Rtheta(jx,jy,nz-1) = Rtheta(jx,jy,nz-1) + const1*const3*nu*scal_top
                 endif
 #endif
             end do
             end do
+
+            !! Only add scal_top to kx = ky = 0 mode
+            if (fourier) then
+#ifdef PPMAPPING
+                Rtheta(1,1,nz-1) = Rtheta(1,1,nz-1) + const1*(1._rprec/JACO2(nz-1))* &
+                    ((nu/Pr_sgs)/(L_z-mesh_stretch(nz-1)))*scal_top
+#else
+                Rtheta(1,1,nz-1) = Rtheta(1,1,nz-1) + const1*const3*nu*scal_top
+#endif
+            endif
 
         ! Prescribed Flux
         case (1)
@@ -1768,24 +1784,30 @@ if (coord == nproc-1) then
                 a(jx,jy,nz-1) = -const1*(1._rprec/JACO2(nz-1))*const2*(1._rprec/JACO1(nz-1))*kappa_a
                 b(jx,jy,nz-1) = 1._rprec + const1*(1._rprec/JACO2(nz-1))*          &
                     (const2*(1._rprec/JACO1(nz-1))*kappa_a)
-                if (fourier) then
-                    Rtheta(1,1,nz-1) = Rtheta(1,1,nz-1) - const1*(1._rprec/JACO2(nz-1))* &
-                        ((nu/Pr_sgs)/(L_z-mesh_stretch(nz-1)))*flux_top
-                else
+                if (.not. fourier) then
                     Rtheta(jx,jy,nz-1) = Rtheta(jx,jy,nz-1) - const1*(1._rprec/JACO2(nz-1))* &
                         ((nu/Pr_sgs)/(L_z-mesh_stretch(nz-1)))*flux_top
                 endif
 #else
                 a(jx,jy,nz-1) = -const1*const2*kappa_a
                 b(jx,jy,nz-1) = 1._rprec + const1*(const2*kappa_a)
-                if (fourier) then
-                    Rtheta(1,1,nz-1) = Rtheta(1,1,nz-1) - const1*const3*nu*flux_top
-                else
+                if (.not. fourier) then
                     Rtheta(jx,jy,nz-1) = Rtheta(jx,jy,nz-1) - const1*const3*nu*flux_top
                 endif
 #endif
             end do
             end do
+
+            !! Only add flux_top to kx = ky = 0 mode
+            if (fourier) then
+#if PPMAPPING
+                Rtheta(1,1,nz-1) = Rtheta(1,1,nz-1) - const1*(1._rprec/JACO2(nz-1))* &
+                    ((nu/Pr_sgs)/(L_z-mesh_stretch(nz-1)))*flux_top
+#else
+                Rtheta(1,1,nz-1) = Rtheta(1,1,nz-1) - const1*const3*nu*flux_top
+#endif
+            endif
+
 
     end select
     jz_max = nz-2
@@ -1827,5 +1849,6 @@ call tridag_array_diff_uv ( a, b, c, Rtheta, theta_sol )
 theta(:nx,:ny,1:nz-1) = theta_sol(:nx,:ny,1:nz-1)
 
 end subroutine diff_stag_array_theta
+#endif
 
 end module scalars
