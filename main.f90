@@ -48,7 +48,8 @@ use mpi
 #endif
 
 #ifdef PPHYBRID
-use mpi_defs, only : mpi_sync_hybrid, MPI_SYNC_UP
+use derivatives, only : mpi_sync_hybrid
+use mpi_defs, only : MPI_SYNC_UP
 #endif
 
 #ifdef PPLVLSET
@@ -454,9 +455,6 @@ time_loop: do jt_step = nstart, nsteps
     if(coord < nproc-1) w(:,:,nz) = BOGUS
 #endif
 
-!debug
-write(*,*) coord, 'here-1'
-
     !//////////////////////////////////////////////////////
     !/// PRESSURE SOLUTION                              ///
     !//////////////////////////////////////////////////////
@@ -464,10 +462,11 @@ write(*,*) coord, 'here-1'
     !   div of momentum eqn + continuity (div-vel=0) yields Poisson eqn
     !   do not need to store p --> only need gradient
     !   provides p, dpdx, dpdy at 0:nz-1 and dpdz at 1:nz-1
+#ifdef PPHYBRID
+    call press_stag_array_hybrid()
+#else
     call press_stag_array()
-
-!debug
-write(*,*) coord, 'here-2'
+#endif
 
     ! SIMPLIFIED LEVEL SET METHOD WITH MAPPING CAPABILITY
 #ifdef PPLVLSET_STRETCH

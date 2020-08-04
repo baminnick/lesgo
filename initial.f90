@@ -46,7 +46,7 @@ use mpi_defs, only : mpi_sync_real_array, MPI_SYNC_DOWNUP
 #ifdef PPHYBRID
 use derivatives, only : mpi_sync_hybrid
 #endif
-use derivatives, only: phys2wave
+use derivatives, only: phys2wave, phys2waveZ
 
 implicit none
 
@@ -180,6 +180,8 @@ end if
 #ifdef PPMPI
 #ifdef PPHYBRID
 ! Transform first then sync
+! --> This is because the mpi_sync_hybrid routines assume fourier
+!     coords are in fourier space when syncing
 if ((.not. initu) .and. fourier) then
     if ( coord == 0 ) then 
         write(*,*) '--> Transforming initial velocity to kx space'
@@ -189,12 +191,17 @@ if ((.not. initu) .and. fourier) then
     call phys2wave( w, lbz )
 ! debug - comment out "else" portion to read in data in kx space
 !else
-!    call phys2wave( u, lbz )
-!    call phys2wave( v, lbz )
-!    call phys2wave( w, lbz )
-!    call phys2wave( RHSx, lbz )
-!    call phys2wave( RHSy, lbz )
-!    call phys2wave( RHSz, lbz )
+!    if (fourier) then !! only transform fourier coords in hybrid mode
+!        ! Using phys2waveZ here because input data is size nxp, not nxf
+!        do jz = 0, nz
+!            call phys2waveZ( u(:,:,jz), u(:,:,jz) )
+!            call phys2waveZ( v(:,:,jz), v(:,:,jz) )
+!            call phys2waveZ( w(:,:,jz), w(:,:,jz) )
+!            call phys2waveZ( RHSx(:,:,jz), RHSx(:,:,jz) )
+!            call phys2waveZ( RHSy(:,:,jz), RHSy(:,:,jz) )
+!            call phys2waveZ( RHSz(:,:,jz), RHSz(:,:,jz) )
+!        enddo
+!    endif
 endif
 
 ! Exchange ghost node information for u, v, and w
@@ -495,7 +502,7 @@ call init_random_seed
 ! the "default" rms of a unif variable is 0.289
 
 ! rms = 3._rprec ! debug
-rms = 0.2_rprec ! debug
+rms = 0.2_rprec
 ! Using 30 percent of the centerline velocity for rms of noise
 !!rms = (u_star*z_i/nu_molec)*0.5_rprec*0.30_rprec*1.5_rprec/5.0_rprec
 !! rms = (1._rprec/vonk*log(z_i*u_star/nu_molec)+5.5_rprec)*0.289_rprec*1.5_rprec
@@ -757,8 +764,8 @@ do jz = 1, nz
 
 end do
 
-rms = 0.0_rprec !! Don't add noise for debugging
-!rms = 3._rprec
+!rms = 0.0_rprec !! Don't add noise for debugging
+rms = 3._rprec
 sigma_rv = 0.289_rprec
 wall_noise = 10 !! dictates how strong the noise is at the wall
 ! The higher wall_noise is, the stronger the noise is

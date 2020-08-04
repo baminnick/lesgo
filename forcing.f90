@@ -211,6 +211,9 @@ use mpi_defs, only : mpi_sync_real_array, MPI_SYNC_DOWNUP
 use concurrent_precursor, only : synchronize_cps, inflow_cond_cps
 #endif
 #endif
+#ifdef PPHYBRID
+use derivatives, only : mpi_sync_hybrid
+#endif
 implicit none
 
 integer :: jx, jy, jz
@@ -282,11 +285,18 @@ if ( inflow ) call inflow_cond ()
 !--left this stuff last, so BCs are still enforced, no matter what
 !  inflow_cond does
 
+#ifdef PPHYBRID
+! Exchange ghost node information (since coords overlap)
+call mpi_sync_hybrid( u, 0, MPI_SYNC_DOWNUP )
+call mpi_sync_hybrid( v, 0, MPI_SYNC_DOWNUP )
+call mpi_sync_hybrid( w, 0, MPI_SYNC_DOWNUP )
+#else
 #ifdef PPMPI
 ! Exchange ghost node information (since coords overlap)
 call mpi_sync_real_array( u, 0, MPI_SYNC_DOWNUP )
 call mpi_sync_real_array( v, 0, MPI_SYNC_DOWNUP )
 call mpi_sync_real_array( w, 0, MPI_SYNC_DOWNUP )
+#endif
 #endif
 
 !--enfore bc at top

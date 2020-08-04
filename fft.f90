@@ -36,8 +36,17 @@ public :: forw_x, back_x, forw_y, forw_x_fourier
 public :: forw_fourier, back_fourier
 public :: ycomp_forw_big, ycomp_back_big
 public :: ycomp_forw, ycomp_back
+#ifdef PPHYBRID
+public :: kxi, kxpi
+public :: kxrnl, kyrnl
+#endif
 
 real(rprec), allocatable, dimension(:,:) :: kx, ky, k2
+#ifdef PPHYBRID
+integer, allocatable, dimension(:) :: kxi, kxpi
+real(rprec), allocatable, dimension(:) :: kxs_phys
+real(rprec), allocatable, dimension(:,:) :: kxrnl, kyrnl
+#endif
 
 integer*8 :: forw, back, forw_big, back_big
 integer*8 :: forw_x, back_x, forw_y, forw_x_fourier
@@ -143,37 +152,37 @@ allocate( ycomp_data(ny) ) !! complex stored as real
 ! Create the forward and backward plans for the unpadded and padded
 ! domains. Notice we are using FFTW_UNALIGNED since the arrays used will not be
 ! guaranteed to be memory aligned.
-call dfftw_plan_dft_r2c_2d(forw, nx, ny, data,                                 &
+call dfftw_plan_dft_r2c_2d(forw, nx, ny, data,                         &
     data, FFTW_PATIENT, FFTW_UNALIGNED)
-call dfftw_plan_dft_c2r_2d(back, nx, ny, data,                                 &
+call dfftw_plan_dft_c2r_2d(back, nx, ny, data,                         &
     data, FFTW_PATIENT, FFTW_UNALIGNED)
-call dfftw_plan_dft_r2c_2d(forw_big, nx2, ny2, data_big,                       &
+call dfftw_plan_dft_r2c_2d(forw_big, nx2, ny2, data_big,               &
     data_big, FFTW_PATIENT, FFTW_UNALIGNED)
-call dfftw_plan_dft_c2r_2d(back_big, nx2, ny2, data_big,                       &
+call dfftw_plan_dft_c2r_2d(back_big, nx2, ny2, data_big,               &
     data_big, FFTW_PATIENT, FFTW_UNALIGNED)
 
-call dfftw_plan_dft_r2c_1d(forw_x, nx, data_x_in,                              &
+call dfftw_plan_dft_r2c_1d(forw_x, nx, data_x_in,                      &
     data_x_out, FFTW_PATIENT, FFTW_UNALIGNED)
-call dfftw_plan_dft_c2r_1d(back_x, nx, data_x_out,                             &
+call dfftw_plan_dft_c2r_1d(back_x, nx, data_x_out,                     &
     data_x_in, FFTW_PATIENT, FFTW_UNALIGNED)
-call dfftw_plan_dft_r2c_1d(forw_y, ny, data_y_in,                              &
+call dfftw_plan_dft_r2c_1d(forw_y, ny, data_y_in,                      &
     data_y_out, FFTW_PATIENT, FFTW_UNALIGNED)
-call dfftw_plan_dft_r2c_1d(forw_x_fourier, nxp, data_x_fourier_in,             &
+call dfftw_plan_dft_r2c_1d(forw_x_fourier, nxp, data_x_fourier_in,     &
     data_x_fourier_out, FFTW_PATIENT, FFTW_UNALIGNED)
 
-call dfftw_plan_dft_r2c_2d(forw_fourier, nxp, ny, data_fourier,                &
+call dfftw_plan_dft_r2c_2d(forw_fourier, nxp, ny, data_fourier,        &
     data_fourier, FFTW_PATIENT, FFTW_UNALIGNED)
-call dfftw_plan_dft_c2r_2d(back_fourier, nxp, ny, data_fourier,                &
+call dfftw_plan_dft_c2r_2d(back_fourier, nxp, ny, data_fourier,        &
     data_fourier, FFTW_PATIENT, FFTW_UNALIGNED)
 
-call dfftw_plan_dft_1d(ycomp_forw_big, ny2, ycomp_data_big,                    &
+call dfftw_plan_dft_1d(ycomp_forw_big, ny2, ycomp_data_big,            &
     ycomp_data_big, FFTW_FORWARD, FFTW_PATIENT, FFTW_UNALIGNED)
-call dfftw_plan_dft_1d(ycomp_back_big, ny2, ycomp_data_big,                    &
+call dfftw_plan_dft_1d(ycomp_back_big, ny2, ycomp_data_big,            &
     ycomp_data_big, FFTW_BACKWARD, FFTW_PATIENT, FFTW_UNALIGNED)
 
-call dfftw_plan_dft_1d(ycomp_forw, ny, ycomp_data,                             &
+call dfftw_plan_dft_1d(ycomp_forw, ny, ycomp_data,                     &
     ycomp_data, FFTW_FORWARD, FFTW_PATIENT, FFTW_UNALIGNED)
-call dfftw_plan_dft_1d(ycomp_back, ny, ycomp_data,                             &
+call dfftw_plan_dft_1d(ycomp_back, ny, ycomp_data,                     &
     ycomp_data, FFTW_BACKWARD, FFTW_PATIENT, FFTW_UNALIGNED)
 
 deallocate(data)
@@ -201,12 +210,25 @@ subroutine init_wavenumber()
 !*******************************************************************************
 use param, only : lh, ny, L_x, L_y, pi
 use param, only : kxs_in, fourier, kx_num, coord
-use param, only : nproc_rnl
+#ifdef PPHYBRID
+use param, only : nxp, nxf
+#endif
 implicit none
 integer :: jx, jy
+#ifdef PPHYBRID
+integer :: ii, ir, kcnt, k2cnt, k3cnt
+#endif
 
 ! Allocate wavenumbers
 allocate( kx(lh,ny), ky(lh,ny), k2(lh,ny) )
+#ifdef PPHYBRID
+allocate( kxi(2*(kx_num-1)) )
+!kxi size is only relevant fourier wavenumbers (excludes fourier Nyquist)
+allocate( kxpi(nxp-nxf) )
+!kxpi size is ld_phys without ld_fourier (and excluding fourier Nyquist)
+allocate( kxs_phys((nxp+2-nxf)/2) )
+allocate( kxrnl(kx_num,ny), kyrnl(kx_num,ny) )
+#endif
 
 do jx = 1, lh-1
     kx(jx,:) = real(jx-1,kind=rprec)
@@ -218,8 +240,58 @@ if (fourier) then
     end do
 endif
 
+#ifdef PPHYBRID
+kcnt = 1
+do jx = 1, (kx_num-1)
+    ! Make index array to access desired kx from Fourier coef
+    ii = 2 * int(kxs_in(jx)) + 2
+    ir = ii - 1
+    kxi(kcnt) = ir
+    kxi(kcnt+1) = ii
+    kcnt = kcnt + 2
+
+    ! Create kx wavenumber array for rnl
+    kxrnl(jx,:) = kxs_in(jx)
+end do
+
+! Make index array to access kx NOT in RNL
+kcnt = 1
+k2cnt = 1
+k3cnt = 1
+do jx = 1, (nxp/2)
+    ! Not considering Nyquist kxs_in
+    if (kcnt .le. (kx_num-1)) then
+        if (jx == (kxs_in(kcnt)+1)) then
+            ! kx in RNL, skip
+            kcnt = kcnt + 1
+        else
+            kxs_phys(k3cnt) = jx - 1
+            ii = 2 * jx
+            ir = ii - 1
+            kxpi(k2cnt) = ir
+            kxpi(k2cnt+1) = ii
+            k3cnt = k3cnt + 1
+            k2cnt = k2cnt + 2
+        endif
+    else
+        ! Done searching number of wavenumbers in RNL
+        ! Remaining kx must be in kxpi
+        kxs_phys(k3cnt) = jx - 1
+        ii = 2 * jx
+        ir = ii - 1
+        kxpi(k2cnt) = ir
+        kxpi(k2cnt+1) = ii
+        k3cnt = k3cnt + 1
+        k2cnt = k2cnt + 2
+    endif
+end do
+#endif
+
 do jy = 1, ny
     ky(:,jy) = real(modulo(jy - 1 + ny/2,ny) - ny/2,kind=rprec)
+#ifdef PPHYBRID
+    kyrnl(:,jy) = real(modulo(jy - 1 + ny/2,ny) - ny/2,kind=rprec)
+#endif
 end do
 
 ! Nyquist: makes doing derivatives easier
@@ -227,10 +299,20 @@ kx(lh,:) = 0._rprec
 ky(lh,:) = 0._rprec
 kx(:,ny/2+1) = 0._rprec
 ky(:,ny/2+1) = 0._rprec
+#ifdef PPHYBRID
+kxrnl(kx_num,:) = 0._rprec
+kyrnl(kx_num,:) = 0._rprec
+kxrnl(:,ny/2+1) = 0._rprec
+kyrnl(:,ny/2+1) = 0._rprec
+#endif
 
 ! for the aspect ratio change
 kx = 2._rprec*pi/L_x*kx
 ky = 2._rprec*pi/L_y*ky
+#ifdef PPHYBRID
+kxrnl = 2._rprec*pi/L_x*kxrnl
+kyrnl = 2._rprec*pi/L_y*kyrnl
+#endif
 
 ! magnitude squared: will have 0's around the edge
 k2 = kx*kx + ky*ky

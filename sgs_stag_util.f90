@@ -66,7 +66,7 @@ use fft, only : padd, unpadd
 use mpi_defs, only : mpi_sync_real_array, MPI_SYNC_DOWN
 #endif
 #ifdef PPHYBRID
-use mpi_defs, only : mpi_sync_hybrid
+use derivatives, only : mpi_sync_hybrid
 #endif
 
 #ifdef PPLVLSET
@@ -721,6 +721,9 @@ use sgs_param
 use derivatives, only : dft_direct_back_2d_n_yonlyC
 #ifdef PPMPI
 use mpi_defs, only : mpi_sync_real_array, MPI_SYNC_DOWN
+#endif
+#ifdef PPHYBRID
+use derivatives, only : mpi_sync_hybrid
 #endif
 implicit none
 
