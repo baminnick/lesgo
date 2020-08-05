@@ -32,7 +32,7 @@ use fft
 use derivatives, only : mpi_sync_hybrid
 use mpi_defs, only : MPI_SYNC_UP
 #ifdef PPMAPPING
-use sim_param, only : JACO1, JACO2
+use sim_param, only : jaco_w, jaco_uv
 #endif
 
 implicit none
@@ -181,7 +181,7 @@ if (coord == 0) then
     b(:,:,1) = -1._rprec
     c(:,:,1) = 1._rprec
 #ifdef PPMAPPING
-    RHS_col(:,:,1) = - JACO1(1)*dz* rbottomw(:,:)
+    RHS_col(:,:,1) = - jaco_w(1)*dz* rbottomw(:,:)
 #else
     RHS_col(:,:,1) = -dz * rbottomw(:,:)
 #endif
@@ -200,7 +200,7 @@ if (coord == nproc-1) then
     c(:,:,nz+1) = BOGUS
 #endif
 #ifdef PPMAPPING
-    RHS_col(:,:,nz+1) = -JACO1(nz)*dz * rtopw(:,:)
+    RHS_col(:,:,nz+1) = -jaco_w(nz)*dz * rtopw(:,:)
 #else
     RHS_col(:,:,nz+1) = -dz * rtopw(:,:)
 #endif
@@ -250,11 +250,11 @@ do jy = 1, ny
 
         ! JDA dissertation, eqn(2.85) a,b,c=coefficients and RHS_col=r_m
 #ifdef PPMAPPING
-        a(jj, jy, jz) = const3*(1._rprec/(JACO2(jz-1)))*(1._rprec/(JACO1(jz-1)))
+        a(jj, jy, jz) = const3*(1._rprec/(jaco_uv(jz-1)))*(1._rprec/(jaco_w(jz-1)))
         b(jj, jy, jz) = -(kx(kk,jy)**2 + ky(kk,jy)**2                      &
-            + const3*(1._rprec/(JACO2(jz-1)))*                             &
-            (1._rprec/(JACO1(jz-1))+1._rprec/(JACO1(jz))))
-        c(jj, jy, jz) = const3*(1._rprec/(JACO2(jz-1)))*(1._rprec/(JACO1(jz)))
+            + const3*(1._rprec/(jaco_uv(jz-1)))*                           &
+            (1._rprec/(jaco_w(jz-1))+1._rprec/(jaco_w(jz))))
+        c(jj, jy, jz) = const3*(1._rprec/(jaco_uv(jz-1)))*(1._rprec/(jaco_w(jz)))
 #else
         a(jj, jy, jz) = const3
         b(jj, jy, jz) = -(kx(kk, jy)**2 + ky(kk, jy)**2 + 2._rprec*const3)
@@ -269,7 +269,7 @@ do jy = 1, ny
 
 #ifdef PPMAPPING
         RHS_col(ir:ii,jy,jz) = aH_x + aH_y + (rH_z(ir:ii, jy, jz) -        &
-            rH_z(ir:ii, jy, jz-1))*const4/JACO2(jz-1)
+            rH_z(ir:ii, jy, jz-1))*const4/jaco_uv(jz-1)
 #else
         RHS_col(ir:ii,jy,jz) =  aH_x + aH_y + (rH_z(ir:ii, jy, jz) -       &
             rH_z(ir:ii, jy, jz-1))*const4
@@ -331,7 +331,7 @@ call mpi_recv (p(1:2, 1, 1), 2, MPI_RPREC, down, 8, comm, status, ierr)
 if (coord == 0) then
     p(1:2, 1, 0) = 0._rprec !! BC, arbitrary pressure
 #ifdef PPMAPPING
-    p(1:2, 1, 1) = p(1:2,1,0) - JACO1(1)*dz * rbottomw(1:2,1)
+    p(1:2, 1, 1) = p(1:2,1,0) - jaco_w(1)*dz * rbottomw(1:2,1)
 #else
     p(1:2, 1, 1) = p(1:2,1,0) - dz * rbottomw(1:2,1)
 #endif
@@ -340,7 +340,7 @@ end if
 do jz = 2, nz
     ! JDA dissertation, eqn(2.88)
 #ifdef PPMAPPING
-    p(1:2, 1, jz) = p(1:2, 1, jz-1) + rH_z(1:2, 1, jz) * dz * JACO1(jz)
+    p(1:2, 1, jz) = p(1:2, 1, jz-1) + rH_z(1:2, 1, jz) * dz * jaco_w(jz)
 #else
     p(1:2, 1, jz) = p(1:2, 1, jz-1) + rH_z(1:2, 1, jz) * dz
 #endif
@@ -412,7 +412,7 @@ if(coord<nproc-1) p(:,:,nz) = BOGUS
 do jz = 1, nz-1
 #ifdef PPMAPPING
     dpdz(1:nx,1:ny,jz) = (p(1:nx,1:ny,jz) - p(1:nx,1:ny,jz-1))      &
-        / dz / JACO1(jz)
+        / dz / jaco_w(jz)
 #else
     dpdz(1:nx,1:ny,jz) = (p(1:nx,1:ny,jz) - p(1:nx,1:ny,jz-1)) / dz
 #endif
@@ -423,7 +423,7 @@ if(coord<nproc-1)  dpdz(:,:,nz) = BOGUS
 #endif
 #ifdef PPMAPPING
 if(coord==nproc-1) dpdz(1:nx,1:ny,nz) = (p(1:nx,1:ny,nz)-p(1:nx,1:ny,nz-1))  &
-    / dz / JACO1(nz)
+    / dz / jaco_w(nz)
 #else
 if(coord==nproc-1) dpdz(1:nx,1:ny,nz) = (p(1:nx,1:ny,nz)-p(1:nx,1:ny,nz-1)) / dz
 #endif

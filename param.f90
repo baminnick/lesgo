@@ -168,6 +168,7 @@ real(rprec) :: nu_molec = 1.14e-5_rprec
 logical :: trigger = .false.
 integer :: trig_on = 500, trig_off = 2000
 real(rprec) :: trig_factor = 5.0_rprec
+real(rprec) :: initial_noise = 3.0_rprec
 
 logical :: molec=.false., sgs=.true.
 
@@ -179,11 +180,12 @@ integer :: nxp = 32
 #ifdef PPHYBRID
 integer :: nxf = 32
 #endif
+logical :: fourier_check = .false.
+integer :: fourier_nskip = 10000
 
 ! mode limiting options for GQL
 integer :: thrx = 0
-logical :: gql_v2 = .false.
-integer :: nls = 1
+integer :: gql_fourier = 1
 
 !---------------------------------------------------
 ! TIMESTEP PARAMETERS
@@ -195,6 +197,9 @@ integer :: runtime = -1
 
 logical :: use_cfl_dt = .false.
 real(rprec) :: cfl = 0.05
+logical :: cfl_swap = .false.
+integer :: cfl_start_swap = 500, cfl_end_swap = 2000
+real(rprec) :: cfl_swap_factor = 3.2
 real(rprec) :: dt_f=2.0e-4, cfl_f=0.05
 
 real(rprec) :: dt = 2.0e-4_rprec

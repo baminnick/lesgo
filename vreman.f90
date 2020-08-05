@@ -32,7 +32,7 @@ use sgs_param, only : Nu_t, cvre
 use mpi_defs, only : mpi_sync_real_array, MPI_SYNC_DOWN
 #endif
 #ifdef PPMAPPING
-use sim_param, only : JACO1, JACO2
+use sim_param, only : jaco_w, jaco_uv
 #endif
 
 implicit none
@@ -77,7 +77,7 @@ do jz = 1, nz
                 dwdz_p(:,:) = 0.5_rprec*(dwdz(:,:,1) + 0.0_rprec)
 
 #ifdef PPMAPPING
-                dz_p = JACO1(1)*dz
+                dz_p = jaco_w(1)*dz
 #endif
 
             ! Wall
@@ -94,7 +94,7 @@ do jz = 1, nz
                 dwdz_p(:,:) = dwdz(:,:,1)
 
 #ifdef PPMAPPING
-                dz_p = JACO2(1)*dz
+                dz_p = jaco_uv(1)*dz
 #endif
 
             ! Wall-Model
@@ -113,7 +113,7 @@ do jz = 1, nz
                 dwdz_p(:,:) = dwdz(:,:,1)
 
 #ifdef PPMAPPING
-                dz_p = JACO2(1)*dz
+                dz_p = jaco_uv(1)*dz
 #endif
 
         end select
@@ -138,7 +138,7 @@ do jz = 1, nz
                 dwdz_p(:,:) = 0.5_rprec*(dwdz(:,:,nz-1) + 0.0_rprec)
 
 #ifdef PPMAPPING
-                dz_p = JACO1(nz)*dz
+                dz_p = jaco_w(nz)*dz
 #endif
 
             ! Wall
@@ -155,7 +155,7 @@ do jz = 1, nz
                 dwdz_p(:,:) = dwdz(:,:,nz-1)
 
 #ifdef PPMAPPING
-                dz_p = JACO2(nz-1)*dz
+                dz_p = jaco_uv(nz-1)*dz
 #endif
 
             ! Wall-Model
@@ -174,7 +174,7 @@ do jz = 1, nz
                 dwdz_p(:,:) = dwdz(:,:,nz-1)
 
 #ifdef PPMAPPING
-                dz_p = JACO2(nz-1)*dz
+                dz_p = jaco_uv(nz-1)*dz
 #endif
 
         end select
@@ -194,7 +194,7 @@ do jz = 1, nz
         dwdz_p(:,:) = 0.5_rprec*(dwdz(:,:,jz) + dwdz(:,:,jz-1))
 
 #ifdef PPMAPPING
-        dz_p = JACO1(jz)*dz
+        dz_p = jaco_w(jz)*dz
 #endif
 
     end if

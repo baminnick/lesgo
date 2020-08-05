@@ -98,8 +98,7 @@ write(2,i_fmt) 'nxp : ', nxp
 endif
 #ifdef PPGQL
 write(2,i_fmt) 'thrx : ', thrx
-write(2,x3l_fmt) 'gql_v2 : ', gql_v2
-write(2,i_fmt) 'nls : ', nls
+write(2,i_fmt) 'gql_fourier : ', gql_fourier
 #endif
 write(2,x3l_fmt) 'molec, sgs : ', molec, sgs
 write(2,c_fmt) ''
