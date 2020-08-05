@@ -34,6 +34,7 @@ option(USE_GQL "Enable generalized quasilinear model." OFF)
 option(USE_MAPPING "Enable grid mapping transformation." ON)
 option(USE_LVLSET_STRETCH "Enable simplified level set with mapping." OFF)
 option(USE_CNDIFF "Enable Crank-Nicolson time marching for wall-normal diffusion." ON)
+option(USE_MFM "Enable macroscopic forcing method analysis." ON)
 
 option(OUTPUT_SGS "Output time-averaging statistics on SGS model." OFF)
 option(OUTPUT_BUDGET "Output time-averaging statistics needed for budgets." OFF)
@@ -226,6 +227,11 @@ if (USE_CNDIFF)
         tridag_array_diff_uv.f90 tridag_array_diff_w.f90 
         divstress_w_cndiff.f90)
 endif (USE_CNDIFF)
+
+if (USE_MFM)
+    add_definitions(-DPPMFM)
+    set(Sources ${Sources} mfm.f90)
+endif (USE_MFM)
 
 if (OUTPUT_SGS)
     add_definitions(-DPPOUTPUT_SGS)
