@@ -4,9 +4,10 @@ subroutine load_jacobian()
 ! a stretched grid in the wall-normal direction. Based on user
 ! input, the grid may be loaded via external files or created.
 ! 
-! JACO1        - Jacobian on the w-grid
-! JACO2        - Jacobian on the uv-grid
-! mesh_stretch - z-locations on the uv-grid
+! FIELD1 - Jacobian on the w-grid
+! FIELD2 - Jacobian on the uv-grid
+! FIELD3 - z-locations on the uv-grid
+! FIELD4 - z-locations on the w-grid
 ! 
 use sim_param
 use param
@@ -100,11 +101,11 @@ endif
 
 ! Store variables into what LESGO will use
 do jz=1,nz
-    JACO1(jz) = FIELD1(coord*(nz-1)+jz)
+    jaco_w(jz) = FIELD1(coord*(nz-1)+jz)
 end do
 
 do jz=1,nz
-    JACO2(jz) = FIELD2(coord*(nz-1)+jz)
+    jaco_uv(jz) = FIELD2(coord*(nz-1)+jz)
 end do
 
 do jz=1,nz
@@ -118,16 +119,16 @@ end do
 #endif
 
 if (coord == 0) then
-    JACO1(lbz)=JACO1(1)
-    JACO2(lbz)=JACO2(1)
+    jaco_w(lbz)=jaco_w(1)
+    jaco_uv(lbz)=jaco_uv(1)
     mesh_stretch(lbz)=-mesh_stretch(1)
 #ifdef PPLVLSET_STRETCH
     mesh_stretch_w(lbz)=-mesh_stretch_w(1)
 #endif
     write(*,*) '--> Grid stretched using mapping function'
 else
-    JACO1(lbz)=FIELD1((coord-1)*(nz-1)+nz-1)
-    JACO2(lbz)=FIELD2((coord-1)*(nz-1)+nz-1)
+    jaco_w(lbz)=FIELD1((coord-1)*(nz-1)+nz-1)
+    jaco_uv(lbz)=FIELD2((coord-1)*(nz-1)+nz-1)
     mesh_stretch(lbz)=FIELD3((coord-1)*(nz-1)+nz-1)
 #ifdef PPLVLSET_STRETCH
     mesh_stretch_w(lbz)=FIELD4((coord-1)*(nz-1)+nz-1)

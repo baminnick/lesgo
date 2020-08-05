@@ -76,7 +76,7 @@ write(2,c_fmt) ''
 write(2,c_fmt) '---------------------------------------------------'
 write(2,c_fmt) 'MODEL PARAMETERS'
 write(2,c_fmt) '---------------------------------------------------'
-write(2,x3i_fmt) 'sgs_model, wall_damp_exp : ', sgs_model, wall_damp_exp
+write(2,x3i_fmt) 'sgs_model, damp_model, wall_damp_exp : ', sgs_model, damp_model, wall_damp_exp
 write(2,f_fmt) 'Co : ', Co
 write(2,i_fmt) 'cs_count : ', cs_count
 write(2,i_fmt) 'ifilter : ', ifilter
@@ -98,8 +98,7 @@ write(2,i_fmt) 'nxp : ', nxp
 endif
 #ifdef PPGQL
 write(2,i_fmt) 'thrx : ', thrx
-write(2,x3l_fmt) 'gql_v2 : ', gql_v2
-write(2,i_fmt) 'nls : ', nls
+write(2,i_fmt) 'gql_fourier : ', gql_fourier
 #endif
 write(2,x3l_fmt) 'molec, sgs : ', molec, sgs
 write(2,c_fmt) ''
@@ -132,6 +131,7 @@ write(2,f_fmt) 'ubot : ', ubot
 write(2,f_fmt) 'utop : ', utop
 write(2,f_fmt) 'zo : ', zo
 #ifdef PPOUTPUT_WMLES
+write(2,i_fmt) 'ihwm : ', ihwm
 write(2,f_fmt) 'hwm : ', hwm
 write(2,i_fmt) 'nzr : ', nzr
 #endif

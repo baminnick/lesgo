@@ -25,7 +25,7 @@ use types,only:rprec
 use param
 use sim_param, only : u, v, w, RHSx, RHSy, RHSz
 #ifdef PPMAPPING
-use sim_param, only : delta_stretch, JACO1
+use sim_param, only : delta_stretch, jaco_w
 use test_filtermodule, only : filter_size
 #endif
 use sgs_param, only : Cs_opt2, F_LM, F_MM, F_QN, F_NN
@@ -66,10 +66,16 @@ logical :: iwm_file_flag !xiang: for iwm restart
 
 #ifdef PPMAPPING
 call load_jacobian ()
-! Initialize delta_stretch for SGS, only for sgs = 1
-do jz = 1, nz
-    delta_stretch(jz) = filter_size*(dx*dy*(JACO1(jz))*dz)**(1._rprec/3._rprec)
-enddo
+! Initialize delta_stretch for SGS models
+if (fourier) then
+    do jz = 1, nz
+        delta_stretch(jz) = filter_size*(dy*(jaco_w(jz))*dz)**(1._rprec/2._rprec)
+    enddo
+else
+    do jz = 1, nz
+        delta_stretch(jz) = filter_size*(dx*dy*(jaco_w(jz))*dz)**(1._rprec/3._rprec)
+    enddo
+endif
 #endif
 
 #ifdef PPLVLSET_STRETCH
@@ -138,9 +144,9 @@ else if (lbc_mom==1) then
     !     'field with DNS BCs'
     if (coord == 0) write(*,*) '--> Creating initial boundary layer velocity ',&
         'field with LES BCs... to become DNS'
-    !call ic_dns( ) ! debug
-    call ic_les()
-    !call ic_blend()
+    !call ic_dns( )
+    !call ic_les()
+    call ic_blend()
 else
     if (coord == 0) write(*,*) '--> Creating initial boundary layer velocity ',&
     'field with LES BCs'
@@ -163,12 +169,14 @@ end if
 
 ! call mpi_barrier(comm, ierr)
 ! stop
-
 ! Write averaged vertical profiles to standard output
 !do jz = 1, nz
 !    write(6,7780) jz, sum (u(1:nx, :, jz)) / (nx * ny),                        &
 !                  sum (v(1:nx, :, jz)) / (nx * ny),                            &
 !                  sum (w(1:nx, :, jz)) / (nx * ny)
+!    write(6,7780) jz, u(nx/2, ny/2, jz),                        &
+!                  v(nx/2, ny/2, jz),                            &
+!                  w(nx/2, ny/2, jz)
 !end do
 !7780 format('jz, ubar, vbar, wbar:',(1x,I3,1x,F9.4,1x,F9.4,1x,F9.4))
 
@@ -194,6 +202,14 @@ if ((.not. initu) .and. fourier) then
     call phys2wave( u, lbz )
     call phys2wave( v, lbz )
     call phys2wave( w, lbz )
+! debug - comment out "else" portion to read in data in kx space
+!else
+!    call phys2wave( u, lbz )
+!    call phys2wave( v, lbz )
+!    call phys2wave( w, lbz )
+!    call phys2wave( RHSx, lbz )
+!    call phys2wave( RHSy, lbz )
+!    call phys2wave( RHSz, lbz )
 endif
 
 contains
@@ -411,7 +427,7 @@ use sim_param, only : mesh_stretch
 implicit none
 
 real(rprec), dimension(nz) :: ubar
-real(rprec) :: rms, temp, z
+real(rprec) :: temp, z
 integer :: jx, jy, jz
 real(rprec) :: dummy_rand
 
@@ -441,10 +457,10 @@ else
 #else
         z = (real(jz,rprec) - 0.5_rprec) * dz
 #endif
-        !! laminar debug
+        !! laminar velocity profile
         ubar(jz) = (u_star*z_i/nu_molec) * z * (1._rprec - 0.5_rprec*z)
 
-        !! turbulent debug
+        !! turbulent velocity profile
         ! ubar(jz) = 1._rprec/vonk * log( z * z_i * u_star / nu_molec ) + 5.5_rprec
     end do
 endif
@@ -454,21 +470,16 @@ call init_random_seed
 
 ! Add noise to the velocity field
 ! the "default" rms of a unif variable is 0.289
-
-! rms = 3._rprec ! debug
-rms = 0.2_rprec ! debug
-! Using 30 percent of the centerline velocity for rms of noise
-!!rms = (u_star*z_i/nu_molec)*0.5_rprec*0.30_rprec*1.5_rprec/5.0_rprec
-!! rms = (1._rprec/vonk*log(z_i*u_star/nu_molec)+5.5_rprec)*0.289_rprec*1.5_rprec
+! this is how variable initial_noise is scaled
 do jz = 1, nz
     do jy = 1, ny
         do jx = 1, nx
             call random_number(dummy_rand)
-            u(jx,jy,jz)=ubar(jz)+(rms/.289_rprec)*(dummy_rand-.5_rprec)/u_star
+            u(jx,jy,jz)=ubar(jz)+(initial_noise/.289_rprec)*(dummy_rand-.5_rprec)/u_star
             call random_number(dummy_rand)
-            v(jx,jy,jz) = 0._rprec+(rms/.289_rprec)*(dummy_rand-.5_rprec)/u_star
+            v(jx,jy,jz) = 0._rprec+(initial_noise/.289_rprec)*(dummy_rand-.5_rprec)/u_star
             call random_number(dummy_rand)
-            w(jx,jy,jz) = 0._rprec+(rms/.289_rprec)*(dummy_rand-.5_rprec)/u_star
+            w(jx,jy,jz) = 0._rprec+(initial_noise/.289_rprec)*(dummy_rand-.5_rprec)/u_star
         end do
     end do
 end do
@@ -523,7 +534,7 @@ use sim_param, only : mesh_stretch
 implicit none
 integer :: jz, jz_abs
 real(rprec), dimension(nz) :: ubar
-real(rprec) :: rms, sigma_rv, arg, arg2, arg3, z
+real(rprec) :: sigma_rv, arg, arg2, arg3, z
 real(rprec) :: angle
 character(*), parameter :: sub_name = 'ic'
 
@@ -590,8 +601,6 @@ do jz = 1, nz
 
 end do
 
-!rms = 0.0_rprec !! Don't add noise for debugging
-rms = 3._rprec
 sigma_rv = 0.289_rprec
 
 ! Fill u, v, and w with uniformly distributed random numbers between 0 and 1
@@ -601,9 +610,9 @@ call random_number(v)
 call random_number(w)
 
 ! Center random number about 0 and rescale
-u = rms / sigma_rv * (u - 0.5_rprec)
-v = rms / sigma_rv * (v - 0.5_rprec)
-w = rms / sigma_rv * (w - 0.5_rprec)
+u = initial_noise / sigma_rv * (u - 0.5_rprec)
+v = initial_noise / sigma_rv * (v - 0.5_rprec)
+w = initial_noise / sigma_rv * (w - 0.5_rprec)
 
 ! Modify angle of bulk flow based on pressure gradient
 if (mean_p_force_x == 0._rprec) then
@@ -687,9 +696,16 @@ use sim_param, only : mesh_stretch
 implicit none
 integer :: jz, jz_abs
 real(rprec), dimension(nz) :: ubar
-real(rprec) :: rms, sigma_rv, ulam, uturb, gam, z, nu_eff
+real(rprec) :: sigma_rv, z_plus, uturb, z, nu_eff
 real(rprec) :: angle
+real(rprec) :: wall_noise, decay
+real(rprec) :: kappa1, kappa2, beta
 character(*), parameter :: sub_name = 'ic'
+
+! Set fitted constants for initial velocity profile
+kappa2 = 8.0_rprec
+kappa1 = (1.0_rprec/vonk)*log(kappa2) + 5.2_rprec
+beta = 2.0_rprec
 
 do jz = 1, nz
 
@@ -703,23 +719,32 @@ do jz = 1, nz
     z = (jz - 0.5_rprec) * dz
 #endif
 
+    ! Change z-value for different boundary conditions
+    ! For channel flow, choose closest wall
+    if(lbc_mom > 0 .and. ubc_mom > 0) z = min(z, L_z - z)
+    ! For half-channel (lbc_mom > 0 .and. ubc_mom .eq 0) leave as is
+
     if (trigger) then
         nu_eff = nu_molec / trig_factor
     else
         nu_eff = nu_molec
     endif
 
-    ulam = z * z_i * u_star / nu_eff !! ~ z^+
-    uturb = (1.0_rprec/vonk)*log(ulam) + 5.0_rprec !! log-law
-    gam = - 0.01_rprec*(ulam**4)/(1.0_rprec + 5.0_rprec*(ulam))
+    ! Old Blended profile 
+    !z_plus = z * z_i * u_star / nu_eff !! ~ z^+
+    !uturb = (1.0_rprec/vonk)*log(z_plus) + 5.0_rprec !! log-law
+    !gam = - 0.01_rprec*(z_plus**4)/(1.0_rprec + 5.0_rprec*(z_plus))
+    !ubar(jz) = exp(gam)*z_plus + exp(1.0_rprec/gam)*uturb
 
-    ubar(jz) = exp(gam)*ulam + exp(1.0_rprec/gam)*uturb
+    z_plus = z * z_i * u_star / nu_eff !! effective z^+
+    uturb = (1.0_rprec/vonk)*log(kappa2 + z_plus) + 5.2_rprec !! log-law
+    ubar(jz) = uturb*((1.0_rprec + ((z_plus/kappa1)**(-beta)))**(-1.0_rprec/beta))
 
 end do
 
-!rms = 0.0_rprec !! Don't add noise for debugging
-rms = 3._rprec
 sigma_rv = 0.289_rprec
+wall_noise = 10 !! dictates how strong the noise is at the wall
+! The higher wall_noise is, the stronger the noise is
 
 ! Fill u, v, and w with uniformly distributed random numbers between 0 and 1
 call init_random_seed
@@ -728,9 +753,9 @@ call random_number(v)
 call random_number(w)
 
 ! Center random number about 0 and rescale
-u = rms / sigma_rv * (u - 0.5_rprec)
-v = rms / sigma_rv * (v - 0.5_rprec)
-w = rms / sigma_rv * (w - 0.5_rprec)
+u = initial_noise / sigma_rv * (u - 0.5_rprec)
+v = initial_noise / sigma_rv * (v - 0.5_rprec)
+w = initial_noise / sigma_rv * (w - 0.5_rprec)
 
 ! Modify angle of bulk flow based on pressure gradient
 if (mean_p_force_x == 0._rprec) then
@@ -754,20 +779,16 @@ do jz = 1, nz
     jz_abs = jz
     z = (jz-.5_rprec) * dz * z_i
 #endif
+    ! Change z-value for different boundary conditions
     ! For channel flow, choose closest wall
-    if(lbc_mom  > 0 .and. ubc_mom > 0) z = min(z, dz*nproc*(nz-1)*z_i - z)
-    ! For upside-down half-channel, choose upper wall
-    if(lbc_mom == 0 .and. ubc_mom > 0) z = dz*nproc*(nz-1)*z_i - z
+    if(lbc_mom > 0 .and. ubc_mom > 0) z = min(z, L_z - z)
+    ! For half-channel (lbc_mom > 0 .and. ubc_mom .eq 0) leave as is
 
-    if (z <= z_i) then
-        u(:,:,jz) = u(:,:,jz) * (1._rprec-z / z_i) + ubar(jz)*cos(angle)
-        v(:,:,jz) = v(:,:,jz) * (1._rprec-z / z_i) + ubar(jz)*sin(angle)
-        w(:,:,jz) = w(:,:,jz) * (1._rprec-z / z_i)
-    else
-        u(:,:,jz) = u(:,:,jz) * 0.01_rprec + ubar(jz)*cos(angle)
-        v(:,:,jz) = v(:,:,jz) * 0.01_rprec + ubar(jz)*sin(angle)
-        w(:,:,jz) = w(:,:,jz) * 0.01_rprec
-    end if
+    decay = (1-exp(-wall_noise*z))/(1-exp(-wall_noise))
+    u(:,:,jz) = u(:,:,jz) * decay + ubar(jz)*cos(angle)
+    v(:,:,jz) = v(:,:,jz) * decay + ubar(jz)*sin(angle)
+    w(:,:,jz) = w(:,:,jz) * decay
+
 end do
 
 ! Bottom boundary conditions

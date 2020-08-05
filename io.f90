@@ -43,9 +43,12 @@ implicit none
 save
 private
 
-public jt_total, openfiles, energy, output_loop, output_final, output_init,    &
-    write_tau_wall_bot, write_tau_wall_top, kx_energy, kx_energy_fourier,      &
+public jt_total, openfiles, energy, output_loop, output_final, output_init, &
+    write_tau_wall_bot, write_tau_wall_top, kx_energy, kx_energy_fourier,   &
     ky_energy
+#ifdef PPOUTPUT_CLOCK
+public write_clocks
+#endif
 
 ! Where to end with nz index.
 integer :: nz_end
@@ -877,9 +880,9 @@ enddo
 
 end subroutine kx_energy_by_z_fourier
 
-!*******************************************************************************
+!*****************************************************************************
 subroutine write_tau_wall_bot()
-!*******************************************************************************
+!*****************************************************************************
 ! 
 ! Write spatially-averaged statistics on wall stress
 ! 
@@ -1007,9 +1010,9 @@ close(2)
 
 end subroutine write_tau_wall_bot
 
-!*******************************************************************************
+!*****************************************************************************
 subroutine write_tau_wall_top()
-!*******************************************************************************
+!*****************************************************************************
 use types, only : rprec
 use param, only : jt_total, total_time, total_time_dim, dt, dt_dim, wbase
 use param, only : L_x, z_i, u_star
@@ -1034,12 +1037,34 @@ close(2)
 
 end subroutine write_tau_wall_top
 
+#ifdef PPOUTPUT_CLOCK
+!*****************************************************************************
+subroutine write_clocks(t1,t2,t3,t4,t5,t6,t7,t8)
+!*****************************************************************************
+use param, only : jt_total, wbase
+implicit none
+
+real(rprec), intent(in) :: t1,t2,t3,t4,t5,t6,t7,t8
+
+open(2,file=path // 'output/clocks.dat', status='unknown',                &
+    form='formatted', position='append')
+
+! one time header output
+if (jt_total==wbase) write(2,*)                                           &
+    'jt_total, total, deriv, stress, wall_model, divstress, convec, inter, pres'
+
+! continual time-related output
+write(2,*) jt_total, t1,t2,t3,t4,t5,t6,t7,t8
+
+end subroutine write_clocks
+#endif
+
 #ifdef PPCGNS
 #ifdef PPMPI
-!*******************************************************************************
+!*****************************************************************************
 subroutine write_parallel_cgns (file_name, nx, ny, nz, nz_tot, start_n_in,     &
     end_n_in, xin, yin, zin, num_fields, fieldNames, input )
-!*******************************************************************************
+!*****************************************************************************
 implicit none
 
 integer, intent(in) :: nx, ny, nz, nz_tot, num_fields

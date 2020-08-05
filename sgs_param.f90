@@ -21,6 +21,7 @@
 module sgs_param
 !*******************************************************************************
 use types, only : rprec
+use param, only : fourier
 
 save
 private rprec
@@ -36,10 +37,19 @@ real(rprec), dimension(:,:),  allocatable :: S
 real(rprec), dimension(:,:),  allocatable :: nu_coef, nu_coef2
 
 ! RNL-LES only for sgs = 1
-!real(rprec), dimension(:,:,:), allocatable :: S11F, S22F, S33F, S12F, S13F, S23F
-!real(rprec), dimension(:,:,:), allocatable :: Nu_tF !! eddy viscosity
-!real(rprec), dimension(:,:,:), allocatable :: Cs_opt2F !! (C_s)^2, Dynamic Smag Coef
-!real(rprec), dimension(:,:), allocatable :: SF
+real(rprec), dimension(:,:,:), allocatable :: S11_big, S22_big, S33_big
+real(rprec), dimension(:,:,:), allocatable :: S12_big, S13_big, S23_big
+real(rprec), dimension(:,:),   allocatable :: S_big
+real(rprec), dimension(:,:),   allocatable :: txx_big, tyy_big, tzz_big
+real(rprec), dimension(:,:),   allocatable :: txy_big, txz_big, tyz_big
+real(rprec), dimension(:,:),   allocatable :: nu_coef_big, nu_coef2_big
+real(rprec), dimension(:,:,:), allocatable :: dudx_big, dudy_big, dudz_big
+real(rprec), dimension(:,:,:), allocatable :: dvdx_big, dvdy_big, dvdz_big
+real(rprec), dimension(:,:,:), allocatable :: dwdx_big, dwdy_big, dwdz_big
+#ifdef PPCNDIFF
+real(rprec), dimension(:,:),   allocatable :: txz_half1_big, txz_half2_big
+real(rprec), dimension(:,:),   allocatable :: tyz_half1_big, tyz_half2_big
+#endif
 
 ! For all dynamic models (2-5)
 real(rprec), dimension(:,:,:),allocatable :: ee_now
@@ -69,6 +79,9 @@ real(rprec), dimension(:,:), allocatable :: S_S11_hat, S_S12_hat, S_S13_hat
 real(rprec), dimension(:,:), allocatable :: S_S22_hat, S_S23_hat, S_S33_hat
 real(rprec), dimension(:,:), allocatable :: u_hat, v_hat, w_hat, S_hat
 
+! For Vreman SGS model
+real(rprec) :: cvre
+
 ! The following are for dynamically updating T, the timescale for Lagrangian averaging
 !   F_ee2 is the running average of (eij*eij)^2
 !   F_deedt2 is the running average of [d(eij*eij)/dt]^2
@@ -82,9 +95,9 @@ contains
 !*******************************************************************************
 subroutine sgs_param_init ()
 !*******************************************************************************
-use param, only : ld, ny, nz, lbz, molec, nu_molec, u_star,                    &
+use param, only : ld, ny, nz, lbz, molec, nu_molec, u_star,          &
     z_i, dx, dy, dz, sgs_model
-! use param, only : fourier, nxp
+use param, only : fourier, ld_big, ny2
 use test_filtermodule, only : filter_size
 
 implicit none
@@ -103,17 +116,38 @@ allocate ( nu_coef(ld,ny) ); nu_coef = 0._rprec
 allocate ( nu_coef2(ld,ny) ); nu_coef2 = 0._rprec
 
 ! RNL-LES only for sgs = 1
-!if (fourier) then
-!    allocate ( S11F(nxp+2,ny,nz) ); S11F = 0._rprec
-!    allocate ( S12F(nxp+2,ny,nz) ); S12F = 0._rprec
-!    allocate ( S13F(nxp+2,ny,nz) ); S13F = 0._rprec
-!    allocate ( S22F(nxp+2,ny,nz) ); S22F = 0._rprec
-!    allocate ( S23F(nxp+2,ny,nz) ); S23F = 0._rprec
-!    allocate ( S33F(nxp+2,ny,nz) ); S33F = 0._rprec
-!    allocate ( Nu_tF(nxp+2,ny,nz) ); Nu_tF = 0._rprec
-!    allocate ( Cs_opt2F(nxp+2,ny,nz) ); Cs_opt2F = 0._rprec
-!    allocate ( SF(nxp+2,ny) ); SF = 0._rprec
-!endif
+if (fourier) then
+    allocate ( S11_big(ld_big,ny2,nz) ); S11_big = 0.0_rprec
+    allocate ( S22_big(ld_big,ny2,nz) ); S22_big = 0.0_rprec
+    allocate ( S33_big(ld_big,ny2,nz) ); S33_big = 0.0_rprec
+    allocate ( S12_big(ld_big,ny2,nz) ); S12_big = 0.0_rprec
+    allocate ( S13_big(ld_big,ny2,nz) ); S13_big = 0.0_rprec
+    allocate ( S23_big(ld_big,ny2,nz) ); S23_big = 0.0_rprec
+    allocate ( S_big(ld_big,ny2) ); S_big = 0.0_rprec
+    allocate ( txx_big(ld_big,ny2) ); txx_big = 0.0_rprec
+    allocate ( tyy_big(ld_big,ny2) ); tyy_big = 0.0_rprec
+    allocate ( tzz_big(ld_big,ny2) ); tzz_big = 0.0_rprec
+    allocate ( txy_big(ld_big,ny2) ); txy_big = 0.0_rprec
+    allocate ( txz_big(ld_big,ny2) ); txz_big = 0.0_rprec
+    allocate ( tyz_big(ld_big,ny2) ); tyz_big = 0.0_rprec
+    allocate ( nu_coef_big(ld_big,ny2) ); nu_coef_big = 0.0_rprec
+    allocate ( nu_coef2_big(ld_big,ny2) ); nu_coef2_big = 0.0_rprec
+    allocate ( dudx_big(ld_big,ny2,nz) ); dudx_big = 0.0_rprec
+    allocate ( dudy_big(ld_big,ny2,nz) ); dudy_big = 0.0_rprec
+    allocate ( dudz_big(ld_big,ny2,nz) ); dudz_big = 0.0_rprec
+    allocate ( dvdx_big(ld_big,ny2,nz) ); dvdx_big = 0.0_rprec
+    allocate ( dvdy_big(ld_big,ny2,nz) ); dvdy_big = 0.0_rprec
+    allocate ( dvdz_big(ld_big,ny2,nz) ); dvdz_big = 0.0_rprec
+    allocate ( dwdx_big(ld_big,ny2,nz) ); dwdx_big = 0.0_rprec
+    allocate ( dwdy_big(ld_big,ny2,nz) ); dwdy_big = 0.0_rprec
+    allocate ( dwdz_big(ld_big,ny2,nz) ); dwdz_big = 0.0_rprec
+#ifdef PPCNDIFF
+    allocate ( txz_half1_big(ld_big,ny2) ); txz_half1_big = 0.0_rprec
+    allocate ( txz_half2_big(ld_big,ny2) ); txz_half2_big = 0.0_rprec
+    allocate ( tyz_half1_big(ld_big,ny2) ); tyz_half1_big = 0.0_rprec
+    allocate ( tyz_half2_big(ld_big,ny2) ); tyz_half2_big = 0.0_rprec
+#endif
+endif
 
 ! For dynamic models:
 if (sgs_model .ne. 1) then
@@ -204,8 +238,17 @@ if (sgs_model .eq. 5) then
     allocate ( N33(ld,ny) ); N33 = 0._rprec
 endif
 
+if (sgs_model >= 6) then
+    cvre = 0.07_rprec
+endif
+
 ! Set dimensionless constants
-delta = filter_size*(dx*dy*dz)**(1._rprec/3._rprec)
+if (fourier) then
+    delta = filter_size*(dy*dz)**(1._rprec/2._rprec)
+else
+    delta = filter_size*(dx*dy*dz)**(1._rprec/3._rprec)
+endif
+
 if (molec) then
     nu = (nu_molec/(u_star*z_i))
 else

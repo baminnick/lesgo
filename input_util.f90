@@ -266,6 +266,8 @@ do
         select case (uppercase(buff(1:equal_pos-1)))
             case ('SGS_MODEL')
                 read (buff(equal_pos+1:), *) sgs_model
+            case ('DAMP_MODEL')
+                read (buff(equal_pos+1:), *) damp_model
             case ('WALL_DAMP_EXP')
                 read (buff(equal_pos+1:), *) wall_damp_exp
             case ('CS_COUNT')
@@ -302,20 +304,24 @@ do
                 read (buff(equal_pos+1:), *) trig_off
             case ('TRIG_FACTOR')
                 read (buff(equal_pos+1:), *) trig_factor
+            case ('INITIAL_NOISE')
+                read (buff(equal_pos+1:), *) initial_noise
             case ('FOURIER')
                 read (buff(equal_pos+1:), *) fourier
             case ('KXS_IN')
                 call parse_vector( buff(equal_pos+1:), kx_num, kxs_in )
             case ('NXP')
                 read (buff(equal_pos+1:), *) nxp
+            case ( 'FOURIER_CHECK')
+                read (buff(equal_pos+1:), *) fourier_check
+            case ( 'FOURIER_NSKIP')
+                read (buff(equal_pos+1:), *) fourier_nskip
             case ('THRX')
                 read (buff(equal_pos+1:), *) thrx
-            case ('GQL_V2')
-                read (buff(equal_pos+1:), *) gql_v2
-            case ('NLS')
-                read (buff(equal_pos+1:), *) nls
+            case ('GQL_FOURIER')
+                read (buff(equal_pos+1:), *) gql_fourier
             case default
-                ! if (coord == 0) write(*,*) 'Found unused data value in '       &
+                ! if (coord == 0) write(*,*) 'Found unused data value in ' &
                 !     // block_name // ' block: ' // buff(1:equal_pos-1)
         end select
     elseif( block_exit_pos == 1 ) then
@@ -348,10 +354,6 @@ do
             endif
 
         endif !! end of fourier setting check
-
-#ifdef PPGQL
-        if ((gql_v2) .and. (.not. fourier)) write(*,*) 'GQLv2: Fourier setting must be on!'
-#endif
 
         return
     else
@@ -392,6 +394,14 @@ do
                 read (buff(equal_pos+1:), *) use_cfl_dt
             case ('CFL')
                 read (buff(equal_pos+1:), *) cfl
+            case ('CFL_SWAP')
+                read (buff(equal_pos+1:), *) cfl_swap
+            case ('CFL_START_SWAP')
+                read (buff(equal_pos+1:), *) cfl_start_swap
+            case ('CFL_END_SWAP')
+                read (buff(equal_pos+1:), *) cfl_end_swap
+            case ('CFL_SWAP_FACTOR')
+                read (buff(equal_pos+1:), *) cfl_swap_factor
             case('DT')
                 read (buff(equal_pos+1:), *) dt
             case('CUMULATIVE_TIME')
@@ -457,6 +467,8 @@ do
                 Read (buff(equal_pos+1:), *) lbc_mom
             case ('UBC_MOM')
                 Read (buff(equal_pos+1:), *) ubc_mom
+            case ('IHWM')
+                Read (buff(equal_pos+1:), *) ihwm
             case ('TLWM_KXIN')
                 call parse_vector( buff(equal_pos+1:), tlwm_kxnum, tlwm_kxin )
             case ('UBOT')

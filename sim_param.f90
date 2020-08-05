@@ -53,7 +53,7 @@ real(rprec), dimension(:,:,:), allocatable :: u_low, v_low, w_low,             &
 real(rprec), target, dimension(:,:,:), allocatable :: p
 
 #ifdef PPMAPPING
-real(rprec), dimension(:), allocatable :: JACO1, JACO2
+real(rprec), dimension(:), allocatable :: jaco_w, jaco_uv
 real(rprec), dimension(:), allocatable :: mesh_stretch, delta_stretch
 #ifdef PPLVLSET_STRETCH
 real(rprec), dimension(:), allocatable :: mesh_stretch_w
@@ -71,6 +71,11 @@ real(rprec), target, dimension(:,:,:), allocatable :: pF
 real(rprec), dimension(:,:,:), allocatable :: dudyF, dudzF,                    &
     dvdxF, dvdzF, dwdxF, dwdyF
 real(rprec), dimension(:,:,:), allocatable :: txzF, tyzF
+
+#ifdef PPCNDIFF
+real(rprec), dimension(:,:,:), allocatable :: txz_half1, txz_half2
+real(rprec), dimension(:,:,:), allocatable :: tyz_half1, tyz_half2
+#endif
 
 contains
 
@@ -172,6 +177,13 @@ allocate ( dwdyF(nxp+2, ny, lbz:nz) ); dwdyF = 0.0_rprec
 allocate ( txzF(nxp+2, ny, lbz:nz) ); txzF = 0.0_rprec
 allocate ( tyzF(nxp+2, ny, lbz:nz) ); tyzF = 0.0_rprec
 
+#ifdef PPCNDIFF
+allocate ( txz_half1(ld, ny, lbz:nz) ); txz_half1 = 0.0_rprec
+allocate ( txz_half2(ld, ny, lbz:nz) ); txz_half2 = 0.0_rprec
+allocate ( tyz_half1(ld, ny, lbz:nz) ); tyz_half1 = 0.0_rprec
+allocate ( tyz_half2(ld, ny, lbz:nz) ); tyz_half2 = 0.0_rprec
+#endif
+
 #if defined(PPTURBINES) || defined(PPATM) || defined(PPLVLSET)
 allocate ( fxa(ld, ny, lbz:nz) ); fxa = 0.0_rprec
 allocate ( fya(ld, ny, lbz:nz) ); fya = 0.0_rprec
@@ -185,8 +197,8 @@ allocate ( fz(ld, ny, nz) ); fz = 0.0_rprec
 #endif
 
 #ifdef PPMAPPING
-allocate ( JACO1(lbz:nz) ); JACO1 = 1/BOGUS
-allocate ( JACO2(lbz:nz) ); JACO2 = 1/BOGUS
+allocate ( jaco_w(lbz:nz) ); jaco_w = 1/BOGUS
+allocate ( jaco_uv(lbz:nz) ); jaco_uv = 1/BOGUS
 allocate ( mesh_stretch(lbz:nz) ); mesh_stretch = BOGUS
 allocate ( delta_stretch(lbz:nz) ); delta_stretch = BOGUS
 #ifdef PPLVLSET_STRETCH

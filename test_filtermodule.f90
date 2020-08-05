@@ -30,7 +30,9 @@ integer, parameter :: filter_size=1
 ! alpha is ratio of test filter to grid filter widths
 real(rprec) :: alpha_test = 2.0_rprec * filter_size 
 real(rprec) :: alpha_test_test = 4.0_rprec * filter_size
+real(rprec) :: alpha_test_fourier = 2.0_rprec * filter_size
 real(rprec), dimension(:,:), allocatable :: G_test, G_test_test
+real(rprec), dimension(:,:), allocatable :: G_test_fourier
 
 contains
 
@@ -44,27 +46,36 @@ use fft
 implicit none
 
 real(rprec) :: delta_test, kc2_test, delta_test_test, kc2_test_test
+real(rprec) :: delta_test_fourier, kc2_test_fourier
 
 ! Allocate the arrays
 allocate( G_test(lh,ny) )
+allocate( G_test_fourier(lh,ny) )
 
 ! Include the normalization for the forward FFT
 G_test = 1._rprec/(nx*ny)
 
+! Normalization accounted for in dft_direct_forw/back_2d_n_yonlyC
+G_test_fourier = 1._rprec
+
 ! Filter characteristic width
 ! "2d-delta", not full 3d one
 delta_test = alpha_test * sqrt(dx*dy) 
+delta_test_fourier = alpha_test_fourier * dy
 
 ! Calculate the kernel
 ! spectral cutoff filter
 if(ifilter==1) then
-    if (sgs_model==6.OR.sgs_model==7) then
-        print *, 'Use Gaussian or Top-hat filter for mixed models'
-        stop
-    endif
+    !if (sgs_model==6.OR.sgs_model==7) then
+    !    print *, 'Use Gaussian or Top-hat filter for mixed models'
+    !    stop
+    !endif
     kc2_test = (pi/(delta_test))**2
     where (real(k2, rprec) >= kc2_test) G_test = 0._rprec
-    
+
+    kc2_test_fourier = (pi/(delta_test_fourier))**2
+    where (real(ky*ky, rprec) >= kc2_test_fourier) G_test_fourier = 0._rprec
+
 ! Gaussian filter
 else if(ifilter==2) then 
     G_test=exp(-(delta_test)**2*k2/(4._rprec*6._rprec))*G_test   
@@ -78,6 +89,8 @@ endif
 ! since our k2 has zero at Nyquist, we have to do this by hand
 G_test(lh,:) = 0._rprec
 G_test(:,ny/2+1) = 0._rprec
+G_test_fourier(lh,:) = 0._rprec
+G_test_fourier(:,ny/2+1) = 0._rprec
 
 ! Second test filter, if necessary (with scale dependent dynamic)
 if ((sgs_model == 3) .or. (sgs_model == 5)) then
@@ -93,10 +106,10 @@ if ((sgs_model == 3) .or. (sgs_model == 5)) then
     ! Calculate the kernel
     ! spectral cutoff filter
     if (ifilter==1) then 
-        if (sgs_model==6.OR.sgs_model==7) then
-            print *, 'Use Gaussian or Top-hat filter for mixed models'
-            stop
-        endif
+        !if (sgs_model==6.OR.sgs_model==7) then
+        !    print *, 'Use Gaussian or Top-hat filter for mixed models'
+        !    stop
+        !endif
         
         kc2_test_test = (pi/(delta_test_test))**2
         where (real(k2, rprec) >= kc2_test_test) G_test_test = 0._rprec
@@ -144,6 +157,31 @@ f = f .MULR. G_test
 call dfftw_execute_dft_c2r(back, f, f)     
 
 end subroutine test_filter
+
+!*******************************************************************************
+subroutine test_filter_fourier(f)
+!*******************************************************************************
+! This is only for fourier mode. Applies test filter in only the y direction.
+! Unlike test_filter, this subroutine assumes f is already in kx, y space.
+use types, only : rprec
+use derivatives, only : dft_direct_forw_2d_n_yonlyC, dft_direct_back_2d_n_yonlyC
+use param, only : ny
+use emul_complex, only : OPERATOR(.MULR.)
+implicit none
+
+real(rprec), dimension(:,:), intent(inout) :: f
+
+! Perform in-place FFT, y --> ky
+call dft_direct_forw_2d_n_yonlyC( f(:,:) )
+
+! Perform f = G_test*f, emulating f as complex
+! Nyquist frequency and normalization is taken care of with G_test_fourier
+f = f .MULR. G_test_fourier
+
+! Transform back, ky --> y
+call dft_direct_back_2d_n_yonlyC( f(:,:) )
+
+end subroutine test_filter_fourier
 
 !*******************************************************************************
 subroutine test_test_filter(f)
