@@ -17,9 +17,9 @@
 !!  along with lesgo.  If not, see <http://www.gnu.org/licenses/>.
 !!
 
-!*******************************************************************************
+!******************************************************************************
 subroutine initial()
-!*******************************************************************************
+!******************************************************************************
 use iwmles
 use types,only:rprec
 use param
@@ -44,9 +44,9 @@ use string_util, only : string_concat
 use mpi_defs, only : mpi_sync_real_array, MPI_SYNC_DOWNUP
 #endif
 #ifdef PPHYBRID
-use derivatives, only : mpi_sync_hybrid
+use derivatives, only : mpi_sync_hybrid, phys2waveZ
 #endif
-use derivatives, only: phys2wave, phys2waveZ
+use derivatives, only: phys2wave
 
 implicit none
 
@@ -251,9 +251,9 @@ end if
 contains
 
 #ifndef PPCPS
-!*******************************************************************************
+!******************************************************************************
 subroutine ic_uniform()
-!*******************************************************************************
+!******************************************************************************
 ! This subroutine creates a uniform initial condition without turbulence.
 !
 implicit none
@@ -265,9 +265,9 @@ w = 0._rprec
 end subroutine ic_uniform
 #endif
 
-!*******************************************************************************
+!******************************************************************************
 function check_for_interp() result(flag)
-!*******************************************************************************
+!******************************************************************************
 integer :: Nx_f, Ny_f, Nz_f, nproc_f
 real(rprec) :: Lx_f, Ly_f, Lz_f
 logical :: exst, flag
@@ -289,25 +289,25 @@ end if
 
 end function check_for_interp
 
-!*******************************************************************************
+!******************************************************************************
 subroutine ic_file()
-!*******************************************************************************
+!******************************************************************************
 ! This subroutine reads the initial conditions from the checkpoint file.
 !
 open(12, file=fname, form='unformatted', convert=read_endian)
 
-read(12) u(:, :, 1:nz), v(:, :, 1:nz), w(:, :, 1:nz),                          &
-         RHSx(:, :, 1:nz), RHSy(:, :, 1:nz), RHSz(:, :, 1:nz),                 &
-         Cs_opt2(:,:,1:nz), F_LM(:,:,1:nz), F_MM(:,:,1:nz),                    &
+read(12) u(:, :, 1:nz), v(:, :, 1:nz), w(:, :, 1:nz),                   &
+         RHSx(:, :, 1:nz), RHSy(:, :, 1:nz), RHSz(:, :, 1:nz),          &
+         Cs_opt2(:,:,1:nz), F_LM(:,:,1:nz), F_MM(:,:,1:nz),             &
          F_QN(:,:,1:nz), F_NN(:,:,1:nz)
 
 close(12)
 
 end subroutine ic_file
 
-!*******************************************************************************
+!******************************************************************************
 subroutine ic_interp()
-!*******************************************************************************
+!******************************************************************************
 ! This subroutine reads the initial conditions from a checkpoint file and
 ! interpolates onto the current grid
 !
@@ -402,25 +402,25 @@ do i = 1, nx
             k1 = binary_search(z_r, grid%z(k))
             k2 = k1 + 1
             if (k1 == nz_tot_r) then
-                u(i,j,k) = ax*ay*u_f(i1,j1,k1) + bx*ay*u_f(i2,j1,k1)           &
+                u(i,j,k) = ax*ay*u_f(i1,j1,k1) + bx*ay*u_f(i2,j1,k1)        &
                          + ax*by*u_f(i1,j2,k1) + bx*by*u_f(i2,j2,k1)
-                v(i,j,k) = ax*ay*v_f(i1,j1,k1) + bx*ay*v_f(i2,j1,k1)           &
+                v(i,j,k) = ax*ay*v_f(i1,j1,k1) + bx*ay*v_f(i2,j1,k1)        &
                          + ax*by*v_f(i1,j2,k1) + bx*by*v_f(i2,j2,k1)
             else if (k1 == 0) then
-                u(i,j,k) = ax*ay*u_f(i1,j1,k2) + bx*ay*u_f(i2,j1,k2)           &
+                u(i,j,k) = ax*ay*u_f(i1,j1,k2) + bx*ay*u_f(i2,j1,k2)        &
                          + ax*by*u_f(i1,j2,k2) + bx*by*u_f(i2,j2,k2)
-                v(i,j,k) = ax*ay*v_f(i1,j1,k2) + bx*ay*v_f(i2,j1,k2)           &
+                v(i,j,k) = ax*ay*v_f(i1,j1,k2) + bx*ay*v_f(i2,j1,k2)        &
                          + ax*by*v_f(i1,j2,k2) + bx*by*v_f(i2,j2,k2)
             else
                 bz = (grid%z(k) - z_r(k1)) / dz_f
                 az = 1._rprec - bz
-                u(i,j,k) = ax*ay*az*u_f(i1,j1,k1) + bx*ay*az*u_f(i2,j1,k1)     &
-                         + ax*by*az*u_f(i1,j2,k1) + bx*by*az*u_f(i2,j2,k1)     &
-                         + ax*ay*bz*u_f(i1,j1,k2) + bx*ay*bz*u_f(i2,j1,k2)     &
+                u(i,j,k) = ax*ay*az*u_f(i1,j1,k1) + bx*ay*az*u_f(i2,j1,k1)  &
+                         + ax*by*az*u_f(i1,j2,k1) + bx*by*az*u_f(i2,j2,k1)  &
+                         + ax*ay*bz*u_f(i1,j1,k2) + bx*ay*bz*u_f(i2,j1,k2)  &
                          + ax*by*bz*u_f(i1,j2,k2) + bx*by*bz*u_f(i2,j2,k2)
-                v(i,j,k) = ax*ay*az*v_f(i1,j1,k1) + bx*ay*az*v_f(i2,j1,k1)     &
-                         + ax*by*az*v_f(i1,j2,k1) + bx*by*az*v_f(i2,j2,k1)     &
-                         + ax*ay*bz*v_f(i1,j1,k2) + bx*ay*bz*v_f(i2,j1,k2)     &
+                v(i,j,k) = ax*ay*az*v_f(i1,j1,k1) + bx*ay*az*v_f(i2,j1,k1)  &
+                         + ax*by*az*v_f(i1,j2,k1) + bx*by*az*v_f(i2,j2,k1)  &
+                         + ax*ay*bz*v_f(i1,j1,k2) + bx*ay*bz*v_f(i2,j1,k2)  &
                          + ax*by*bz*v_f(i1,j2,k2) + bx*by*bz*v_f(i2,j2,k2)
             end if
 
@@ -428,17 +428,17 @@ do i = 1, nx
             k1 = binary_search(zw_r, grid%zw(k))
             k2 = k1 + 1
             if (k1 == nz_tot_r) then
-                w(i,j,k) = ax*ay*w_f(i1,j1,k1) + bx*ay*w_f(i2,j1,k1)           &
+                w(i,j,k) = ax*ay*w_f(i1,j1,k1) + bx*ay*w_f(i2,j1,k1)        &
                          + ax*by*w_f(i1,j2,k1) + bx*by*w_f(i2,j2,k1)
             else if (k1 == 0) then
-                w(i,j,k) = ax*ay*w_f(i1,j1,k2) + bx*ay*w_f(i2,j1,k2)           &
+                w(i,j,k) = ax*ay*w_f(i1,j1,k2) + bx*ay*w_f(i2,j1,k2)        &
                          + ax*by*w_f(i1,j2,k2) + bx*by*w_f(i2,j2,k2)
             else
                 bz = (grid%zw(k) - zw_r(k1)) / dz_f
                 az = 1._rprec - bz
-                w(i,j,k) = ax*ay*az*w_f(i1,j1,k1) + bx*ay*az*w_f(i2,j1,k1)     &
-                         + ax*by*az*w_f(i1,j2,k1) + bx*by*az*w_f(i2,j2,k1)     &
-                         + ax*ay*bz*w_f(i1,j1,k2) + bx*ay*bz*w_f(i2,j1,k2)     &
+                w(i,j,k) = ax*ay*az*w_f(i1,j1,k1) + bx*ay*az*w_f(i2,j1,k1)  &
+                         + ax*by*az*w_f(i1,j2,k1) + bx*by*az*w_f(i2,j2,k1)  &
+                         + ax*ay*bz*w_f(i1,j1,k2) + bx*ay*bz*w_f(i2,j1,k2)  &
                          + ax*by*bz*w_f(i1,j2,k2) + bx*by*bz*w_f(i2,j2,k2)
             end if
 
@@ -448,9 +448,9 @@ end do
 
 end subroutine ic_interp
 
-!*******************************************************************************
+!******************************************************************************
 subroutine ic_dns()
-!*******************************************************************************
+!******************************************************************************
 ! This subroutine produces an initial condition for the boundary layer when
 ! using DNS boundary conditions.
 !
@@ -549,9 +549,9 @@ endif
 
 end subroutine ic_dns
 
-!*******************************************************************************
+!******************************************************************************
 subroutine ic_les()
-!*******************************************************************************
+!******************************************************************************
 ! This subroutine produces an initial condition for the boundary layer.
 ! A log profile is used that flattens at z=z_i. Noise is added to
 ! promote the generation of turbulence
@@ -711,9 +711,9 @@ end if
 
 end subroutine ic_les
 
-!*******************************************************************************
+!******************************************************************************
 subroutine ic_blend()
-!*******************************************************************************
+!******************************************************************************
 !
 ! This subroutine initializes the flow using a blended turbulent profile.
 ! The blended profile is laminar near the wall, u^+ ~ z^+, and the turbulent
