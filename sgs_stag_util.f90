@@ -663,12 +663,21 @@ call level_set_BC ()
 ! (only 2:nz-1) exchange information between processors to set
 ! values at nz from jz=1 above to jz=nz below
 #ifdef PPCNDIFF
+#ifdef PPHYBRID
+call mpi_sync_hybrid( txz, 0, MPI_SYNC_DOWN )
+call mpi_sync_hybrid( txz_half1, 0, MPI_SYNC_DOWN )
+call mpi_sync_hybrid( txz_half2, 0, MPI_SYNC_DOWN )
+call mpi_sync_hybrid( tyz, 0, MPI_SYNC_DOWN )
+call mpi_sync_hybrid( tyz_half1, 0, MPI_SYNC_DOWN )
+call mpi_sync_hybrid( tyz_half2, 0, MPI_SYNC_DOWN )
+#else
 call mpi_sync_real_array( txz, 0, MPI_SYNC_DOWN )
 call mpi_sync_real_array( txz_half1, 0, MPI_SYNC_DOWN )
 call mpi_sync_real_array( txz_half2, 0, MPI_SYNC_DOWN )
 call mpi_sync_real_array( tyz, 0, MPI_SYNC_DOWN )
 call mpi_sync_real_array( tyz_half1, 0, MPI_SYNC_DOWN )
 call mpi_sync_real_array( tyz_half2, 0, MPI_SYNC_DOWN )
+#endif
 #else
 #ifdef PPHYBRID
 call mpi_sync_hybrid( txz, 0, MPI_SYNC_DOWN )

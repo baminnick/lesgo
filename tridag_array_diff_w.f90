@@ -25,32 +25,45 @@ use types, only : rprec
 use param
 implicit none
 
+#ifdef PPHYBRID
+real(rprec), dimension(nxp,ny,0:nz), intent(in) :: a, b, c
+real(rprec), dimension(nxp+2,ny,0:nz), intent(in) :: r
+real(rprec), dimension(nxp+2,ny,0:nz), intent(out) :: u
+real(rprec) :: bet(nxp, ny)
+real(rprec), dimension(nxp,ny,0:nz) :: gam
+#else
 real(rprec), dimension(nx,ny,0:nz), intent(in) :: a, b, c
 real(rprec), dimension(ld,ny,0:nz), intent(in) :: r
 real(rprec), dimension(ld,ny,0:nz), intent(out) :: u
+real(rprec) :: bet(nx, ny)
+real(rprec), dimension(nx,ny,0:nz) :: gam
+#endif
 
 integer :: nchunks, chunksize
 integer :: cstart, cend
 integer :: jx, jy, j
 integer :: tag0, q
-integer :: j_minf, j_minb, j_maxf, j_maxb
-
-real(rprec) :: bet(nx, ny)
-real(rprec), dimension(nx,ny,0:nz) :: gam
+integer :: j_minf, j_minb, j_maxf, j_maxb, end_nx
 
 ! Initialize variables
 nchunks = ny
+#ifdef PPHYBRID
+! Leave nchunks = nu since now in physical space
+end_nx = nxp
+#else
 if (fourier) then
     ! Change chunksize in fourier mode because lh is smaller
     nchunks = 1
 endif
+end_nx = nx
+#endif
 
 ! make sure nchunks divides ny evenly
 chunksize = ny / nchunks
 
 if (coord == 0) then
     do jy = 1, ny
-        do jx = 1, nx
+        do jx = 1, end_nx
 #ifdef PPSAFETYMODE
             if (b(jx, jy, 2) == 0._rprec) then
                 write (*, *) 'tridag_array_diff_w: rewrite eqs, jx, jy= ', jx, jy
@@ -83,17 +96,17 @@ do q = 1, nchunks
 
     if (coord /= 0) then
         ! wait for c(:,:,0), bet(:,:), u(:,:,0) from "down"
-        call mpi_recv(c(1, cstart, 0), nx*chunksize, MPI_RPREC, down, tag0+1,  &
+        call mpi_recv(c(1, cstart, 0), end_nx*chunksize, MPI_RPREC, down, tag0+1,  &
                        comm, status, ierr)
-        call mpi_recv(bet(1, cstart), nx*chunksize, MPI_RPREC, down, tag0+2,   &
+        call mpi_recv(bet(1, cstart), end_nx*chunksize, MPI_RPREC, down, tag0+2,   &
                        comm, status, ierr)
-        call mpi_recv(u(1, cstart, 0), ld*chunksize, MPI_RPREC, down, tag0+3,  &
+        call mpi_recv(u(1, cstart, 0), (end_nx+2)*chunksize, MPI_RPREC, down, tag0+3,  &
                        comm, status, ierr)
     end if
 
     do j = j_minf, j_maxf
         do jy = cstart, cend
-            do jx = 1, nx
+            do jx = 1, end_nx
                 gam(jx, jy, j) = c(jx, jy, j-1) / bet(jx, jy)
                 bet(jx, jy) = b(jx, jy, j) - a(jx, jy, j)*gam(jx, jy, j)
 
@@ -113,11 +126,11 @@ do q = 1, nchunks
 
     if (coord /= nproc - 1) then
         ! send c(nz-1), bet, u(nz-1) to "up"
-        call mpi_send (c(1, cstart, nz-1), nx*chunksize, MPI_RPREC, up, tag0+1, &
+        call mpi_send (c(1, cstart, nz-1), end_nx*chunksize, MPI_RPREC, up, tag0+1, &
                        comm, ierr)
-        call mpi_send (bet(1, cstart), nx*chunksize, MPI_RPREC, up, tag0+2,    &
+        call mpi_send (bet(1, cstart), end_nx*chunksize, MPI_RPREC, up, tag0+2,    &
                        comm, ierr)
-        call mpi_send (u(1, cstart, nz-1), ld*chunksize, MPI_RPREC, up, tag0+3, &
+        call mpi_send (u(1, cstart, nz-1), (end_nx+2)*chunksize, MPI_RPREC, up, tag0+3, &
                        comm, ierr)                   
     end if
 end do
@@ -129,15 +142,15 @@ do q = 1, nchunks
 
     if (coord /= nproc - 1) then  
         ! wait for u(n), gam(n) from "up"
-        call mpi_recv (u(1, cstart, nz), ld*chunksize, MPI_RPREC, up, tag0+4,   &
+        call mpi_recv (u(1, cstart, nz), (end_nx+2)*chunksize, MPI_RPREC, up, tag0+4,   &
                        comm, status, ierr)
-        call mpi_recv (gam(1, cstart, nz), nx*chunksize, MPI_RPREC, up, tag0+5, &
+        call mpi_recv (gam(1, cstart, nz), end_nx*chunksize, MPI_RPREC, up, tag0+5, &
                        comm, status, ierr)
     end if
 
     do j = j_maxb, j_minb, -1
         do jy = cstart, cend
-            do jx = 1, nx
+            do jx = 1, end_nx
                 u(jx, jy, j) = u(jx, jy, j) - gam(jx, jy, j+1) *         &
                     u(jx, jy, j+1)
             end do
@@ -145,9 +158,9 @@ do q = 1, nchunks
     end do
 
     ! send u(2), gam(2) to "down"
-    call mpi_send (u(1, cstart, 1), ld*chunksize, MPI_RPREC, down, tag0+4,     &
+    call mpi_send (u(1, cstart, 1), (end_nx+2)*chunksize, MPI_RPREC, down, tag0+4,     &
                    comm, ierr)
-    call mpi_send (gam(1, cstart, 1), nx*chunksize, MPI_RPREC, down, tag0+5,   &
+    call mpi_send (gam(1, cstart, 1), end_nx*chunksize, MPI_RPREC, down, tag0+5,   &
                    comm, ierr)
 
 end do

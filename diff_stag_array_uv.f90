@@ -36,14 +36,23 @@ use sim_param, only : jaco_w, jaco_uv, mesh_stretch
 #endif
 use derivatives, only : dft_direct_forw_2d_n_yonlyC, &
     dft_direct_back_2d_n_yonlyC
+#ifdef PPHYBRID
+use derivatives, only : wave2physF, phys2waveF
+#endif
 
 implicit none
 
-real(rprec), dimension(ld,ny,0:nz) :: Rx, usol, Ry, vsol
-real(rprec), dimension(nx,ny,0:nz) :: a, b, c
+real(rprec), dimension(ld,ny,0:nz) :: Rx, Ry
 real(rprec), dimension(ld,ny,lbz:nz) :: dtxzdz_rhs, dtyzdz_rhs
 real(rprec) :: nu_a, nu_b, nu_c, nu_r, const1, const2, const3
-integer :: jx, jy, jz, jz_min, jz_max
+#ifdef PPHYBRID
+real(rprec), dimension(nxp+2,ny,0:nz) :: RxF, RyF, usol, vsol
+real(rprec), dimension(nxp,ny,0:nz) :: a, b, c
+#else
+real(rprec), dimension(ld,ny,0:nz) :: usol, vsol
+real(rprec), dimension(nx,ny,0:nz) :: a, b, c
+#endif
+integer :: jx, jy, jz, jz_min, jz_max, end_nx
 
 ! Set constants
 const1 = (dt/(2._rprec*dz))
@@ -74,6 +83,22 @@ dtyzdz_rhs(:,:,nz) = BOGUS
 Rx(:,:,1:nz-1) = Rx(:,:,1:nz-1) - dt * 0.5_rprec * dtxzdz_rhs(:,:,1:nz-1)
 Ry(:,:,1:nz-1) = Ry(:,:,1:nz-1) - dt * 0.5_rprec * dtyzdz_rhs(:,:,1:nz-1)
 
+#ifdef PPHYBRID
+! Move RHS to physical space (kx,ky,z) --> (x,y,z) on RNL coord
+if (fourier) then
+    call wave2physF( Rx, RxF )
+    call wave2physF( Ry, RyF )
+else
+    ! non-RNL coords have Rx already in physical space, so no transform needed
+    ! Still have to move over values, note: nxp = nx on these coords
+    RxF = Rx
+    RyF = Ry
+endif
+end_nx = nxp
+#else
+end_nx = nx
+#endif
+
 ! Transform eddy viscosity kx, ky, z --> kx, y, z
 ! however only going to use the kx=0 mode, assuming Nu_t(y,z) only
 if ((fourier) .and. (sgs)) then
@@ -91,7 +116,7 @@ if (coord == 0) then
         ! Stress free
         case (0)
             do jy = 1, ny
-            do jx = 1, nx
+            do jx = 1, end_nx
                 if (sgs) then
                     ! Nu_t(jx,jy,1) on w, not needed here
                     if (fourier) then
@@ -117,7 +142,7 @@ if (coord == 0) then
         ! DNS BC or Wall-resolved
         case (1)
             do jy = 1, ny
-            do jx = 1, nx
+            do jx = 1, end_nx
                 if (sgs) then
                     ! Nu_t(jx,jy,1) on uvp, not needed here
                     if (fourier) then
@@ -135,6 +160,10 @@ if (coord == 0) then
                 b(jx,jy,1) = 1._rprec + const1*(1._rprec/jaco_uv(1))*        &
                     (const2*(1._rprec/jaco_w(2))*nu_c + (nu/mesh_stretch(1)))
                 c(jx,jy,1) = -const1*(1._rprec/jaco_uv(1))*const2*(1._rprec/jaco_w(2))*nu_c
+#ifdef PPHYBRID
+                RxF(jx,jy,1) = RxF(jx,jy,1) + const1*(1._rprec/jaco_uv(1))* &
+                    (nu/mesh_stretch(1))*ubot
+#else
                 if (fourier) then
                     Rx(1,1,1) = Rx(1,1,1) + const1*(1._rprec/jaco_uv(1))* &
                         (nu/mesh_stretch(1))*ubot
@@ -142,14 +171,19 @@ if (coord == 0) then
                     Rx(jx,jy,1) = Rx(jx,jy,1) + const1*(1._rprec/jaco_uv(1))* &
                         (nu/mesh_stretch(1))*ubot
                 endif
+#endif
 #else
                 b(jx,jy,1) = 1._rprec + const1*(const2*nu_c + const3*nu)
                 c(jx,jy,1) = -const1*const2*nu_c
+#ifdef PPHYBRID
+                RxF(jx,jy,1) = RxF(jx,jy,1) + const1*const3*nu*ubot
+#else
                 if (fourier) then
                     Rx(1,1,1) = Rx(1,1,1) + const1*const3*nu*ubot
                 else
                     Rx(jx,jy,1) = Rx(jx,jy,1) + const1*const3*nu*ubot
                 endif
+#endif
 #endif
             end do
             end do
@@ -157,7 +191,7 @@ if (coord == 0) then
         ! Wall-model 
         case (2:)
             do jy = 1, ny
-            do jx = 1, nx
+            do jx = 1, end_nx
                 if (sgs) then
                     ! Nu_t(jx,jy,1) on uvp, not needed here
                     if (fourier) then
@@ -173,13 +207,23 @@ if (coord == 0) then
                 b(jx,jy,1) = 1._rprec + const1*(1._rprec/jaco_uv(1))*            &
                     const2*(1._rprec/jaco_w(2))*nu_c
                 c(jx,jy,1) = -const1*(1._rprec/jaco_uv(1))*const2*(1._rprec/jaco_w(2))*nu_c
+#ifdef PPHYBRID
+                RxF(jx,jy,1) = RxF(jx,jy,1) + const1*(1._rprec/jaco_uv(1))*txz(jx,jy,1)
+                RyF(jx,jy,1) = RyF(jx,jy,1) + const1*(1._rprec/jaco_uv(1))*tyz(jx,jy,1)
+#else
                 Rx(jx,jy,1) = Rx(jx,jy,1) + const1*(1._rprec/jaco_uv(1))*txz(jx,jy,1)
                 Ry(jx,jy,1) = Ry(jx,jy,1) + const1*(1._rprec/jaco_uv(1))*tyz(jx,jy,1)
+#endif
 #else
                 b(jx,jy,1) = 1._rprec + const1*const2*nu_c
                 c(jx,jy,1) = -const1*const2*nu_c
+#ifdef PPHYBRID
+                RxF(jx,jy,1) = RxF(jx,jy,1) + const1*txz(jx,jy,1)
+                RyF(jx,jy,1) = RyF(jx,jy,1) + const1*tyz(jx,jy,1)
+#else
                 Rx(jx,jy,1) = Rx(jx,jy,1) + const1*txz(jx,jy,1)
                 Ry(jx,jy,1) = Ry(jx,jy,1) + const1*tyz(jx,jy,1)
+#endif
 #endif
             end do
             end do
@@ -201,7 +245,7 @@ if (coord == nproc-1) then
         ! Stress free
         case (0)
             do jy = 1, ny
-            do jx = 1, nx
+            do jx = 1, end_nx
                 if (sgs) then
                     ! Nu_t(jx,jy,nz) on w, not needed here
                     if (fourier) then
@@ -227,7 +271,7 @@ if (coord == nproc-1) then
         ! DNS BC or Wall-resolved
         case (1)
             do jy = 1, ny
-            do jx = 1, nx
+            do jx = 1, end_nx
                 if (sgs) then
                     ! Nu_t(jx,jy,nz) on uvp nz-1, not needed here
                     if (fourier) then
@@ -245,6 +289,10 @@ if (coord == nproc-1) then
                 a(jx,jy,nz-1) = -const1*(1._rprec/jaco_uv(nz-1))*const2*(1._rprec/jaco_w(nz-1))*nu_a
                 b(jx,jy,nz-1) = 1._rprec + const1*(1._rprec/jaco_uv(nz-1))*          &
                     (const2*(1._rprec/jaco_w(nz-1))*nu_a + (nu/(L_z-mesh_stretch(nz-1))))
+#ifdef PPHYBRID
+                RxF(jx,jy,nz-1) = RxF(jx,jy,nz-1) + const1*(1._rprec/jaco_uv(nz-1))* &
+                    (nu/(L_z-mesh_stretch(nz-1)))*utop
+#else
                 if (fourier) then
                     Rx(1,1,nz-1) = Rx(1,1,nz-1) + const1*(1._rprec/jaco_uv(nz-1))* &
                         (nu/(L_z-mesh_stretch(nz-1)))*utop
@@ -252,14 +300,19 @@ if (coord == nproc-1) then
                     Rx(jx,jy,nz-1) = Rx(jx,jy,nz-1) + const1*(1._rprec/jaco_uv(nz-1))* &
                         (nu/(L_z-mesh_stretch(nz-1)))*utop
                 endif
+#endif
 #else
                 a(jx,jy,nz-1) = -const1*const2*nu_a
                 b(jx,jy,nz-1) = 1._rprec + const1*(const2*nu_a + const3*nu)
+#ifdef PPHYBRID
+                RxF(jx,jy,nz-1) = RxF(jx,jy,nz-1) + const1*const3*nu*utop
+#else
                 if (fourier) then
                     Rx(1,1,nz-1) = Rx(1,1,nz-1) + const1*const3*nu*utop
                 else
                     Rx(jx,jy,nz-1) = Rx(jx,jy,nz-1) + const1*const3*nu*utop
                 endif
+#endif
 #endif
             end do
             end do
@@ -267,7 +320,7 @@ if (coord == nproc-1) then
         ! Wall-model
         case (2:)
             do jy = 1, ny
-            do jx = 1, nx
+            do jx = 1, end_nx
                 if (sgs) then
                     ! Nu_t(jx,jy,nz) on uvp, not needed here
                     if (fourier) then
@@ -283,13 +336,23 @@ if (coord == nproc-1) then
                 a(jx,jy,nz-1) = -const1*(1._rprec/jaco_uv(nz-1))*const2*(1._rprec/jaco_w(nz-1))*nu_a
                 b(jx,jy,nz-1) = 1._rprec + const1*(1._rprec/jaco_uv(nz-1))*            &
                     const2*(1._rprec/jaco_w(nz-1))*nu_a
+#ifdef PPHYBRID
+                RxF(jx,jy,nz-1) = RxF(jx,jy,nz-1) - const1*(1._rprec/jaco_uv(nz-1))*txz(jx,jy,nz)
+                RyF(jx,jy,nz-1) = RyF(jx,jy,nz-1) - const1*(1._rprec/jaco_uv(nz-1))*tyz(jx,jy,nz)
+#else
                 Rx(jx,jy,nz-1) = Rx(jx,jy,nz-1) - const1*(1._rprec/jaco_uv(nz-1))*txz(jx,jy,nz)
                 Ry(jx,jy,nz-1) = Ry(jx,jy,nz-1) - const1*(1._rprec/jaco_uv(nz-1))*tyz(jx,jy,nz)
+#endif
 #else
                 a(jx,jy,nz-1) = -const1*const2*nu_a
                 b(jx,jy,nz-1) = 1._rprec + const1*const2*nu_a
+#ifdef PPHYBRID
+                RxF(jx,jy,nz-1) = RxF(jx,jy,nz-1) - const1*txz(jx,jy,nz)
+                RyF(jx,jy,nz-1) = RyF(jx,jy,nz-1) - const1*tyz(jx,jy,nz)
+#else
                 Rx(jx,jy,nz-1) = Rx(jx,jy,nz-1) - const1*txz(jx,jy,nz)
                 Ry(jx,jy,nz-1) = Ry(jx,jy,nz-1) - const1*tyz(jx,jy,nz)
+#endif
 #endif
             end do
             end do
@@ -306,7 +369,7 @@ endif
 ! Treating SGS viscosity explicitly!
 do jz = jz_min, jz_max
 do jy = 1, ny
-do jx = 1, nx
+do jx = 1, end_nx
     if (sgs) then
         if (fourier) then
             nu_a = Nu_t(1,jy,jz) + nu
@@ -352,16 +415,37 @@ end do
 ! Now transform Rx and Ry, kx, ky, z --> kx, y, z
 if ((fourier) .and. (sgs)) then
     do jz = 1, nz
+#ifdef PPHYBRID
+        call dft_direct_forw_2d_n_yonlyC( Nu_t(:,:,jz) )
+        ! No need to transform Rx and Ry, now using RxF and RyF
+#else
         call dft_direct_forw_2d_n_yonlyC( Nu_t(:,:,jz) )
         call dft_direct_back_2d_n_yonlyC( Rx(:,:,jz) )
         call dft_direct_back_2d_n_yonlyC( Ry(:,:,jz) )
+#endif
     end do
 endif
 
 ! Find intermediate velocity in TDMA
+#ifdef PPHYBRID
+call tridag_array_diff_uv (a, b, c, RxF, usol)
+call tridag_array_diff_uv (a, b, c, RyF, vsol)
+#else
 call tridag_array_diff_uv (a, b, c, Rx, usol)
 call tridag_array_diff_uv (a, b, c, Ry, vsol)
+#endif
 
+#ifdef PPHYBRID
+if (fourier) then
+    ! Transform back and omit non-RNL wavenumbers in fourier coord
+    call phys2waveF( usol, u)
+    call phys2waveF( vsol, v)
+else
+    ! No need to transform for physical coords, also nx = nxp here
+    u(:nx,:ny,1:nz-1) = usol(:nx,:ny,1:nz-1)
+    v(:nx,:ny,1:nz-1) = vsol(:nx,:ny,1:nz-1)
+endif
+#else
 ! Since a,b,c(y,z) and Rx,Ry(kx,y,z) we have usol,vsol(kx,y,z)
 ! No need to change Rx, Ry back, will be overwritten in next time-step
 if ((fourier) .and. (sgs)) then
@@ -374,5 +458,6 @@ endif
 ! Fill velocity solution
 u(:nx,:ny,1:nz-1) = usol(:nx,:ny,1:nz-1)
 v(:nx,:ny,1:nz-1) = vsol(:nx,:ny,1:nz-1)
+#endif
 
 end subroutine diff_stag_array_uv

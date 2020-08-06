@@ -35,15 +35,26 @@ use sim_param, only : jaco_w, jaco_uv, mesh_stretch
 #endif
 use derivatives, only : dft_direct_forw_2d_n_yonlyC, &
     dft_direct_back_2d_n_yonlyC
+#ifdef PPHYBRID
+use param, only : nproc_rnl
+use derivatives, only : wave2physF, phys2waveF
+#endif
 
 implicit none
 
-real(rprec), dimension(ld,ny,0:nz) :: Rz, wsol
-real(rprec), dimension(nx,ny,0:nz) :: a, b, c
+real(rprec), dimension(ld,ny,0:nz) :: Rz
 real(rprec), dimension(ld,ny,lbz:nz) :: dtzzdz_rhs
 real(rprec) :: nu_a, nu_b, nu_c, nu_r, const1, const2
+#ifdef PPHYBRID
+real(rprec), dimension(nxp+2,ny,0:nz) :: RzF, wsol
+real(rprec), dimension(nxp,ny,0:nz) :: a, b, c
+real(rprec), dimension(nxp,ny) :: Nu_up
+#else
+real(rprec), dimension(ld,ny,0:nz) :: wsol
+real(rprec), dimension(nx,ny,0:nz) :: a, b, c
 real(rprec), dimension(nx,ny) :: Nu_up
-integer :: jx, jy, jz, jz_min, jz_max
+#endif
+integer :: jx, jy, jz, jz_min, jz_max, end_nx
 
 ! Set constants
 const1 = (dt/dz)
@@ -69,6 +80,20 @@ dtzzdz_rhs(:,:,0) = BOGUS
 ! Assuming fixed dt here!
 Rz(:,:,1:nz-1) = Rz(:,:,1:nz-1) - dt * 0.5_rprec * dtzzdz_rhs(:,:,1:nz-1)
 ! Not adding dtzzdz to Rz at top wall, assumed zero as done in divstress_w.f90
+
+#ifdef PPHYBRID
+! Move RHS to physical space (kx,ky,z) --> (x,y,z) on RNL coord
+if (fourier) then
+    call wave2physF( Rz, RzF)
+else
+    ! non-RNL coords have Rz already in physical space, so no transform needed
+    ! Still have to move over values, note: nxp = nx on these coords
+    RzF = Rz
+endif
+end_nx = nxp
+#else
+end_nx = nx
+#endif
 
 ! Unlike uv, w has one less equation on bottom coord
 #ifdef PPSAFETYMODE
@@ -101,7 +126,7 @@ if (coord == 0) then
         ! Stress free
         case (0)
             do jy = 1, ny
-            do jx = 1, nx
+            do jx = 1, end_nx
                 if (sgs) then
                     if (fourier) then
                         nu_c = 0.5_rprec*(Nu_t(1,jy,3)+Nu_t(1,jy,2)) + nu
@@ -141,7 +166,7 @@ if (coord == 0) then
         ! DNS BC or Wall-model
         case (1:)
             do jy = 1, ny
-            do jx = 1, nx
+            do jx = 1, end_nx
                 if (sgs) then
                     if (fourier) then
                         nu_c = 0.5_rprec*(Nu_t(1,jy,3)+Nu_t(1,jy,2)) + nu
@@ -194,7 +219,7 @@ if (coord == nproc-1) then
         ! Stress free
         case (0)
             do jy = 1, ny
-            do jx = 1, nx
+            do jx = 1, end_nx
                 if (sgs) then
                     ! Nu_t(jx,jy,nz) on w, need to interpolate
                     if (fourier) then
@@ -233,7 +258,7 @@ if (coord == nproc-1) then
         ! DNS BC or Wall-model
         case (1:)
             do jy = 1, ny
-            do jx = 1, nx
+            do jx = 1, end_nx
                 if (sgs) then
                     ! Nu_t(jx,jy,nz) on uvp point nz-1, no need to interpolate
                     if (fourier) then
@@ -282,14 +307,26 @@ endif
 #ifdef PPMPI
 ! Pass SGS info up
 if (sgs) then
+#ifdef PPHYBRID
+if (coord .ne. (nproc_rnl - 1)) then
+    call mpi_sendrecv( Nu_t(1,1,nz-1), nxp*ny, MPI_RPREC, up, 9,             &
+        Nu_up(1,1), nxp*ny, MPI_RPREC, down, 9, comm, status, ierr)
+else !! RNL coord near interface
+    Nu_up(:,:) = 0.0_rprec !! fill with zeros initially
+    Nu_up(1,:) = Nu_t(1,:,nz-1) !! fill only kx=0
+    call mpi_sendrecv(Nu_up, nxp*ny, MPI_RPREC, up, 9,                      &
+        Nu_up, nxp*ny, MPI_RPREC, down, 9, comm, status, ierr)
+endif
+#else
     call mpi_sendrecv ( Nu_t(1,1,nz-1), nx*ny, MPI_RPREC, up, 9,            &
         Nu_up(1, 1), nx*ny, MPI_RPREC, down, 9, comm, status, ierr)
+#endif
 endif
 
 ! Now compute coefficients
 if (coord > 0) then
     do jy = 1, ny
-    do jx = 1, nx
+    do jx = 1, end_nx
         if (sgs) then
             ! Interpolate eddy viscosity onto uv-grid
             if (fourier) then
@@ -332,7 +369,7 @@ endif
 ! Treating SGS viscosity explicitly!
 do jz = jz_min, jz_max
 do jy = 1, ny
-do jx = 1, nx
+do jx = 1, end_nx
     if (sgs) then
         ! Interpolate eddy viscosity onto uv-grid
         if (fourier) then
@@ -374,14 +411,42 @@ end do
 ! Now transform Rz, kx, ky, z --> kx, y, z
 if ((fourier) .and. (sgs)) then
     do jz = 1, nz
+#ifdef PPHYBRID
+        call dft_direct_forw_2d_n_yonlyC( Nu_t(:,:,jz) )
+        ! No need to transform Rz, now using RzF
+#else
         call dft_direct_forw_2d_n_yonlyC( Nu_t(:,:,jz) )
         call dft_direct_back_2d_n_yonlyC( Rz(:,:,jz) )
+#endif
     enddo
 endif
 
 ! Find intermediate velocity in TDMA
+#ifdef PPHYBRID
+call tridag_array_diff_w (a, b, c, RzF, wsol)
+#else
 call tridag_array_diff_w (a, b, c, Rz, wsol)
+#endif
 
+#ifdef PPHYBRID
+if (fourier) then
+    ! Transform back and omit non-RNL wavenumbers in fourier coord
+    call phys2waveF( wsol, w )
+
+    ! Overwrite level at bottom wall to enforce no-penetration
+    if (coord == 0) then
+        w(:,:,1) = w(:,:,1) + dt * ( tadv1 * RHSz(:,:,1) + tadv2 * RHSz_f(:,:,1) )
+    endif
+else
+    ! No need to transfrom for physical coords, also nx = nxp here
+    w(:nx,:ny,1:nz-1) = wsol(:nx,:ny,1:nz-1)   
+
+    ! Overwrite level at top wall to enforce no-penetration
+    if (coord == nproc-1) then
+        w(:,:,nz) = w(:,:,nz) + dt * ( tadv1 * RHSz(:,:,nz) + tadv2 * RHSz_f(:,:,nz) )
+    endif
+endif
+#else
 ! Since a,b,c(y,z) and Rz(kx,y,z) we have wsol(kx,y,z) therefore transform
 ! No need to change Rz back, will be overwritten in next time-step
 if ((fourier) .and. (sgs)) then
@@ -401,5 +466,6 @@ endif
 if (coord == nproc-1) then
     w(:,:,nz) = w(:,:,nz) + dt * ( tadv1 * RHSz(:,:,nz) + tadv2 * RHSz_f(:,:,nz) )
 endif
+#endif
 
 end subroutine diff_stag_array_w
