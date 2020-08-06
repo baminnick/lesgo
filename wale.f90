@@ -29,8 +29,13 @@ use param
 use sim_param, only : dudx, dudy, dudz, dvdx, dvdy, dvdz, dwdx, dwdy, dwdz
 use sgs_param, only : Nu_t
 use derivatives, only : dft_direct_back_2d_n_yonlyC, dft_direct_forw_2d_n_yonlyC
+#ifdef PPHYBRID
+use derivatives, only : mpi_sync_hybrid
+use mpi_defs, only : MPI_SYNC_DOWN
+#else
 #ifdef PPMPI
 use mpi_defs, only : mpi_sync_real_array, MPI_SYNC_DOWN
+#endif
 #endif
 #ifdef PPMAPPING
 use sim_param, only : delta_stretch
@@ -54,11 +59,15 @@ integer :: jz, jz_min, jz_max
 cwale = 0.325_rprec*Co/0.16_rprec !! wale constant
 eps = 1e-12 !! some small number in case denominator is zero
 
+#ifdef PPHYBRID
+call mpi_sync_hybrid( dwdz(:,:,1:), 1, MPI_SYNC_DOWN )
+#else
 #ifdef PPMPI
 ! dwdz calculated for 0:nz-1 (on w-nodes) except bottom process
 ! (only 1:nz-1) exchange information between processors to set
 ! values at nz from jz=1 above to jz=nz below
 call mpi_sync_real_array( dwdz(:,:,1:), 1, MPI_SYNC_DOWN )
+#endif
 #endif
 
 if (fourier) then

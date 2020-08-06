@@ -28,8 +28,13 @@ use types, only : rprec
 use param
 use sim_param, only : dudx, dudy, dudz, dvdx, dvdy, dvdz, dwdx, dwdy, dwdz
 use sgs_param, only : Nu_t, cvre
+#ifdef PPHYBRID
+use derivatives, only : mpi_sync_hybrid
+use mpi_defs, only : MPI_SYNC_DOWN
+#else
 #ifdef PPMPI
 use mpi_defs, only : mpi_sync_real_array, MPI_SYNC_DOWN
+#endif
 #endif
 #ifdef PPMAPPING
 use sim_param, only : jaco_w, jaco_uv
@@ -48,11 +53,15 @@ integer :: jz, jz_min, jz_max
 eps = 1e-12 !! some small number in case denominator is zero
 dz_p = dz !! to be overwritten in mapping to stretched grid
 
+#ifdef PPHYBRID
+call mpi_sync_hybrid( dwdz(:,:,1:), 1, MPI_SYNC_DOWN )
+#else
 #ifdef PPMPI
 ! dwdz calculated for 0:nz-1 (on w-nodes) except bottom process
 ! (only 1:nz-1) exchange information between processors to set
 ! values at nz from jz=1 above to jz=nz below
 call mpi_sync_real_array( dwdz(:,:,1:), 1, MPI_SYNC_DOWN )
+#endif
 #endif
 
 do jz = 1, nz
