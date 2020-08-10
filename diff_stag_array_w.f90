@@ -36,7 +36,6 @@ use sim_param, only : jaco_w, jaco_uv, mesh_stretch
 use derivatives, only : dft_direct_forw_2d_n_yonlyC, &
     dft_direct_back_2d_n_yonlyC
 #ifdef PPHYBRID
-use param, only : nproc_rnl
 use derivatives, only : wave2physF, phys2waveF
 #endif
 
