@@ -1657,7 +1657,13 @@ use level_set_base, only : phi
 use sim_param, only : fx, fy, fz, fxa, fya, fza
 #endif
 
+!debug
+use derivatives, only : wave2phys, phys2wave
+
 implicit none
+
+!debug
+real(rprec), dimension(ny,lbz:nz) :: u_sum, v_sum, w_sum, u_avg, v_avg, w_avg
 
 integer, intent(in) :: itype
 character (64) :: fname
@@ -1953,7 +1959,9 @@ if (fourier) then
     ! Assuming user only wants a single xplane location
 
     ! Common file name portion for all output types
-    call string_splice(fname, path // 'output/vel.x-', xplane_loc(1), '.', jt_total)
+! debug
+!    call string_splice(fname, path // 'output/vel.x-', xplane_loc(1), '.', jt_total)
+    call string_splice(fname, path // 'output/vel.x-avg.', jt_total)
 
 #if defined(PPCGNS) && defined(PPMPI)
         ! Write CGNS Output
@@ -1968,13 +1976,52 @@ if (fourier) then
 
 #else
         ! Write binary output
+! Uncomment code below to write instantaneous x-plane velocity data
+! debug
+!        call string_concat(fname, bin_ext)
+!        open(unit=13,file=fname,form='unformatted',convert=write_endian, access='direct',recl=ny*nz*rprec)
+!        write(13,rec=1) uF(1,:ny,1:nz)
+!        write(13,rec=2) vF(1,:ny,1:nz)
+!        write(13,rec=3) wF(1,:ny,1:nz)
+!        close(13)
+
+! Uncomment code below to write instantaneous x-plane average velocity data
+! This includes y & z locations, and w is interpolated onto uv-grid
+! debug
+! Transform to obtain streamwise average
+call wave2phys( u, lbz )
+call wave2phys( v, lbz )
+call wave2phys( w, lbz )
+
+! Interpolate w velocity to uv-grid
+w_uv = interp_to_uv_grid(w(1:nx,1:ny,lbz:nz), lbz)
+
+! Compute streamwise average
+u_sum = 0._rprec
+v_sum = 0._rprec
+w_sum = 0._rprec
+do i = 1, nx
+    u_sum = u_sum + u(i,:,:)
+    v_sum = v_sum + v(i,:,:)
+    w_sum = w_sum + w_uv(i,:,:) !! using w interpolated onto uv-grid
+enddo
+u_avg(:,:) = u_sum(:,:) / nx
+v_avg(:,:) = v_sum(:,:) / nx
+w_avg(:,:) = w_sum(:,:) / nx
+
+! Output data
         call string_concat(fname, bin_ext)
         open(unit=13,file=fname,form='unformatted',convert=write_endian, access='direct',recl=ny*nz*rprec)
-        write(13,rec=1) uF(1,:ny,1:nz)
-        write(13,rec=2) vF(1,:ny,1:nz)
-        write(13,rec=3) wF(1,:ny,1:nz)
+        write(13,rec=1) u_avg(:ny,1:nz)
+        write(13,rec=2) v_avg(:ny,1:nz)
+        write(13,rec=3) w_avg(:ny,1:nz)
         close(13)
 #endif
+
+! Transform back to Fourier space
+call phys2wave( u, lbz )
+call phys2wave( v, lbz )
+call phys2wave( w, lbz )
 
     ! Now to compute vorticity
     allocate(vortx(nx,ny,lbz:nz), vorty(nx,ny,lbz:nz), vortz(nx,ny,lbz:nz))
