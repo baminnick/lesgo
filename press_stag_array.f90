@@ -18,7 +18,7 @@
 !!
 
 !*******************************************************************************
-subroutine press_stag_array()
+subroutine press_stag_array(u,v,w,divtz,p,dpdx,dpdy,dpdz)
 !*******************************************************************************
 !
 ! Calculate the pressure and its derivatives on exit. Everything is in physical
@@ -27,7 +27,6 @@ subroutine press_stag_array()
 use types, only : rprec
 use param
 use messages
-use sim_param, only : u, v, w, divtz, p, dpdx, dpdy, dpdz
 use fft
 #ifdef PPMAPPING
 use sim_param, only : jaco_w, jaco_uv
@@ -40,6 +39,10 @@ integer :: jx, jy, jz
 integer :: ir, ii
 integer :: jz_min
 integer :: end_kx
+
+real(rprec), dimension(ld,ny,lbz:nz), intent(in) :: u, v, w, divtz
+real(rprec), dimension(ld,ny,lbz:nz), intent(out) :: p
+real(rprec), dimension(ld,ny,nz), intent(out) :: dpdx, dpdy, dpdz
 
 real(rprec), save, dimension(:,:,:), allocatable :: rH_x, rH_y, rH_z
 real(rprec), save, dimension(:,:), allocatable :: rtopw, rbottomw

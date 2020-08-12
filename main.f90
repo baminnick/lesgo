@@ -73,6 +73,10 @@ use functions, only : x_avg
 use functions, only : gql_filter
 #endif
 
+#ifdef PPMFM
+use mfm, only : gm_transport
+#endif
+
 use messages
 
 implicit none
@@ -391,6 +395,10 @@ call clock_convec%stop
     RHSz(:,:,1:nz-1) = -RHSz(:,:,1:nz-1) - divtz(:,:,1:nz-1)
     if (coord == nproc-1) RHSz(:,:,nz) = -RHSz(:,:,nz)-divtz(:,:,nz)
 
+#ifdef PPMFM
+    call gm_transport()
+#endif
+
     ! Coriolis: add forcing to RHS
     if (coriolis_forcing) then
         ! This is to put in the coriolis forcing using coriol,ug and vg as
@@ -516,7 +524,7 @@ call clock_convec%stop
 #ifdef PPOUTPUT_CLOCK
     call clock_pres%start
 #endif
-    call press_stag_array()
+    call press_stag_array(u,v,w,divtz,p,dpdx,dpdy,dpdz)
 #ifdef PPOUTPUT_CLOCK
     call clock_pres%stop
 #endif
@@ -551,7 +559,7 @@ call clock_convec%stop
     ! Projection method provides u,v,w for jz=1:nz
     !   uses fx,fy,fz calculated above
     !   for MPI: syncs 1 -> Nz and Nz-1 -> 0 nodes info for u,v,w
-    call project ()
+    call project (u,v,w,dpdx,dpdy,dpdz)
 
 #ifdef PPLVLSET
     if (global_CA_calc) call level_set_global_CA()

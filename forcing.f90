@@ -197,13 +197,13 @@ end do
 end subroutine inflow_cond
 
 !*******************************************************************************
-subroutine project ()
+subroutine project (u,v,w,dpdx,dpdy,dpdz)
 !*******************************************************************************
 !
 ! provides u, v, w at 1:nz
 !
+use types, only : rprec
 use param
-use sim_param
 use messages
 #ifdef PPMPI
 use mpi_defs, only : mpi_sync_real_array, MPI_SYNC_DOWNUP
@@ -216,6 +216,8 @@ implicit none
 integer :: jx, jy, jz
 integer :: jz_min
 real(rprec) :: RHS, tconst
+real(rprec), dimension(ld, ny, lbz:nz), intent(inout) :: u, v, w
+real(rprec), dimension(ld, ny, nz), intent(in) :: dpdx, dpdy, dpdz
 
 ! Caching
 tconst = tadv1 * dt

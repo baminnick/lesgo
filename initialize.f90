@@ -73,6 +73,10 @@ use hit_inflow, only : initialize_HIT
 use atm_lesgo_interface, only: atm_lesgo_initialize
 #endif
 
+#ifdef PPMFM
+use mfm, only : mfm_init
+#endif
+
 implicit none
 
 character(*), parameter :: make_output_dir = 'mkdir -p ' // path // 'output'
@@ -157,6 +161,10 @@ call initialize_HIT()
 #ifdef PPLVLSET
 call level_set_base_init()
 call level_set_init ()
+#endif
+
+#ifdef PPMFM
+call mfm_init()
 #endif
 
 ! Formulate the fft plans--may want to use FFTW_USE_WISDOM

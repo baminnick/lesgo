@@ -33,17 +33,30 @@ implicit none
 save
 private
 
-public :: gmt
+public :: mfm_init, ic_gmt, gm_transport
 
 ! Main simulation variables for the GMT
-real(rprec), dimension(:,:,:), allocatable :: gmx, gmy, gmz
-real(rprec), dimension(:,:,:), allocatable :: gmtxx, gmtxy, gmtyy, &
-    gmtxz, gmtyz, gmtzz, div_gmtx, div_gmty, div_gmtz
+real(rprec), dimension(:,:,:), allocatable :: gmu, gmv, gmw,            &
+    dgmudx, dgmudy, dgmudz, dgmvdx, dgmvdy, dgmvdz,                     &
+    dgmwdx, dgmwdy, dgmwdz,                                             &
+    gmtxx, gmtxy, gmtyy, gmtxz, gmtyz, gmtzz,                           &
+    div_gmtx, div_gmty, div_gmtz,                                       &
+    rhs_gmx, rhs_gmy, rhs_gmz, rhs_gmx_f, rhs_gmy_f, rhs_gmz_f,         &
+    gmp, dgmpdx, dgmpdy, dgmpdz
 #ifdef PPCNDIFF
 real(rprec), dimension(:,:,:), allocatable :: gmtxz_half1, gmtxz_half2
 real(rprec), dimension(:,:,:), allocatable :: gmtyz_half1, gmtyz_half2
 #endif
-real(rprec), dimension(:,:,:), allocatable :: u_big, v_big, w_big
+real(rprec), dimension(:,:,:), allocatable :: u_big, v_big, w_big,      &
+    dgmudx_big, dgmudy_big, dgmudz_big,                                 & 
+    dgmvdx_big, dgmvdy_big, dgmvdz_big,                                 & 
+    dgmwdx_big, dgmwdy_big, dgmwdz_big,                                 & 
+    temp_big
+
+! Whether to initialize gmt field
+logical, public :: init_gmt = .true.
+! Name of file for restarting
+character(64) :: fname
 
 contains 
 
@@ -53,12 +66,21 @@ subroutine mfm_init
 !
 ! This subroutine initializes the variables for the mfm module
 !
-use param, only : lbz, ld, nx, ny, nz, nxp
+use param
 
 ! Allocate simulations variables
-allocate ( gmx(nxp+2, ny, lbz:nz) ); gmx = 0._rprec
-allocate ( gmy(nxp+2, ny, lbz:nz) ); gmy = 0._rprec
-allocate ( gmz(nxp+2, ny, lbz:nz) ); gmz = 0._rprec
+allocate ( gmu(nxp+2, ny, lbz:nz) ); gmu = 0._rprec
+allocate ( gmv(nxp+2, ny, lbz:nz) ); gmv = 0._rprec
+allocate ( gmw(nxp+2, ny, lbz:nz) ); gmw = 0._rprec
+allocate ( dgmudx(nxp+2, ny, lbz:nz) ); dgmudx = 0._rprec
+allocate ( dgmudy(nxp+2, ny, lbz:nz) ); dgmudy = 0._rprec
+allocate ( dgmudz(nxp+2, ny, lbz:nz) ); dgmudz = 0._rprec
+allocate ( dgmvdx(nxp+2, ny, lbz:nz) ); dgmvdx = 0._rprec
+allocate ( dgmvdy(nxp+2, ny, lbz:nz) ); dgmvdy = 0._rprec
+allocate ( dgmvdz(nxp+2, ny, lbz:nz) ); dgmvdz = 0._rprec
+allocate ( dgmwdx(nxp+2, ny, lbz:nz) ); dgmwdx = 0._rprec
+allocate ( dgmwdy(nxp+2, ny, lbz:nz) ); dgmwdy = 0._rprec
+allocate ( dgmwdz(nxp+2, ny, lbz:nz) ); dgmwdz = 0._rprec
 allocate ( gmtxx(nxp+2, ny, lbz:nz) ); gmtxx = 0._rprec
 allocate ( gmtxy(nxp+2, ny, lbz:nz) ); gmtxy = 0._rprec
 allocate ( gmtyy(nxp+2, ny, lbz:nz) ); gmtyy = 0._rprec
@@ -74,20 +96,202 @@ allocate ( gmtxz_half2(nxp+2, ny, lbz:nz) ); gmtxz_half2 = 0.0_rprec
 allocate ( gmtyz_half1(nxp+2, ny, lbz:nz) ); gmtyz_half1 = 0.0_rprec
 allocate ( gmtyz_half2(nxp+2, ny, lbz:nz) ); gmtyz_half2 = 0.0_rprec
 #endif
+allocate ( rhs_gmx(nxp+2, ny, lbz:nz) ); rhs_gmx = 0.0_rprec
+allocate ( rhs_gmy(nxp+2, ny, lbz:nz) ); rhs_gmy = 0.0_rprec
+allocate ( rhs_gmz(nxp+2, ny, lbz:nz) ); rhs_gmz = 0.0_rprec
+allocate ( rhs_gmx_f(nxp+2, ny, lbz:nz) ); rhs_gmx_f = 0.0_rprec
+allocate ( rhs_gmy_f(nxp+2, ny, lbz:nz) ); rhs_gmy_f = 0.0_rprec
+allocate ( rhs_gmz_f(nxp+2, ny, lbz:nz) ); rhs_gmz_f = 0.0_rprec
+allocate ( gmp(nxp+2, ny, lbz:nz) ); gmp = 0._rprec
+allocate ( dgmpdx(nxp+2, ny, nz) ); dgmpdx = 0._rprec
+allocate ( dgmpdy(nxp+2, ny, nz) ); dgmpdy = 0._rprec
+allocate ( dgmpdz(nxp+2, ny, nz) ); dgmpdz = 0._rprec
+
+! Big variables
 allocate ( u_big(ld_big, ny2, lbz:nz) ); u_big = 0._rprec
 allocate ( v_big(ld_big, ny2, lbz:nz) ); v_big = 0._rprec
 allocate ( w_big(ld_big, ny2, lbz:nz) ); w_big = 0._rprec
+allocate ( dgmudx_big(ld_big,ny2, lbz:nz) ); dgmudx_big = 0._rprec
+allocate ( dgmudy_big(ld_big,ny2, lbz:nz) ); dgmudy_big = 0._rprec
+allocate ( dgmudz_big(ld_big,ny2, lbz:nz) ); dgmudz_big = 0._rprec
+allocate ( dgmvdx_big(ld_big,ny2, lbz:nz) ); dgmvdx_big = 0._rprec
+allocate ( dgmvdy_big(ld_big,ny2, lbz:nz) ); dgmvdy_big = 0._rprec
+allocate ( dgmvdz_big(ld_big,ny2, lbz:nz) ); dgmvdz_big = 0._rprec
+allocate ( dgmwdx_big(ld_big,ny2, lbz:nz) ); dgmwdx_big = 0._rprec
+allocate ( dgmwdy_big(ld_big,ny2, lbz:nz) ); dgmwdy_big = 0._rprec
+allocate ( dgmwdz_big(ld_big,ny2, lbz:nz) ); dgmwdz_big = 0._rprec
+allocate ( temp_big(ld_big, ny2, lbz:nz) ); temp_big = 0._rprec
 
 end subroutine mfm_init
 
 !******************************************************************************
 subroutine ic_gmt
 !******************************************************************************
-!
-! This subroutine initializes the initial velocity profile for the GMT equation
-!
+! Set initial profile for GMT equation, determine if there is a file to read
+! in or a new profile needs to be generated
+use param, only : coord, lbc_mom
+use string_util
+use grid_m
+
+fname = path // 'gmt.out'
+#ifdef PPMPI
+call string_concat( fname, '.c', coord )
+#endif
+inquire (file=fname, exist=init_gmt)
+
+if (init_gmt) then
+    if (coord == 0) write(*,*) "--> Reading initial GMT field from file"
+    call ic_gmt_file
+else
+    if (coord == 0) write(*,*) "--> Creating initial GMT field as blended profile"
+    call ic_gmt_blend
+endif
 
 end subroutine ic_gmt
+
+!******************************************************************************
+subroutine ic_gmt_file
+!******************************************************************************
+! Read initial profile for GMT equation from a file
+use param, only : nz, read_endian
+use mpi_defs, only : mpi_sync_real_array, MPI_SYNC_DOWNUP
+use grid_m
+
+open(12, file=fname, form='unformatted', convert=read_endian)
+read(12) gmu(:,:,1:nz), gmv(:,:,1:nz), gmw(:,:,1:nz),                 &
+    rhs_gmx(:,:,1:nz), rhs_gmy(:,:,1:nz), rhs_gmz(:,:,1:nz)
+
+#ifdef PPMPI
+call mpi_sync_real_array(gmu, 0, MPI_SYNC_DOWNUP)
+call mpi_sync_real_array(gmv, 0, MPI_SYNC_DOWNUP)
+call mpi_sync_real_array(gmw, 0, MPI_SYNC_DOWNUP)
+call mpi_sync_real_array(rhs_gmx, 0, MPI_SYNC_DOWNUP)
+call mpi_sync_real_array(rhs_gmy, 0, MPI_SYNC_DOWNUP)
+call mpi_sync_real_array(rhs_gmz, 0, MPI_SYNC_DOWNUP)
+#endif
+
+end subroutine ic_gmt_file
+
+!******************************************************************************
+subroutine ic_gmt_blend
+!******************************************************************************
+!
+! This subroutine initializes the initial velocity profile for the GMT equation
+! as a blended turbulent profile
+!
+use param
+#ifdef PPMAPPING
+use sim_param, only : mesh_stretch
+#endif
+implicit none
+integer :: jz, jz_abs
+real(rprec), dimension(nz) :: ubar
+real(rprec) :: sigma_rv, z_plus, uturb, z, nu_eff
+real(rprec) :: wall_noise, decay
+real(rprec) :: kappa1, kappa2, beta
+
+! Set fitted constants for initial velocity profile
+kappa2 = 8.0_rprec
+kappa1 = (1.0_rprec/vonk)*log(kappa2) + 5.2_rprec
+beta = 2.0_rprec
+
+do jz = 1, nz
+
+#ifdef PPMPI
+#ifdef PPMAPPING
+    z = mesh_stretch(jz)
+#else
+    z = (coord*(nz-1) + jz - 0.5_rprec) * dz
+#endif
+#else
+    z = (jz - 0.5_rprec) * dz
+#endif
+
+    ! Change z-value for different boundary conditions
+    ! For channel flow, choose closest wall
+    if(lbc_mom > 0 .and. ubc_mom > 0) z = min(z, L_z - z)
+    ! For half-channel (lbc_mom > 0 .and. ubc_mom .eq 0) leave as is
+
+    if (trigger) then
+        nu_eff = nu_molec / trig_factor
+    else
+        nu_eff = nu_molec
+    endif
+
+    ! Old Blended profile 
+    !z_plus = z * z_i * u_star / nu_eff !! ~ z^+
+    !uturb = (1.0_rprec/vonk)*log(z_plus) + 5.0_rprec !! log-law
+    !gam = - 0.01_rprec*(z_plus**4)/(1.0_rprec + 5.0_rprec*(z_plus))
+    !ubar(jz) = exp(gam)*z_plus + exp(1.0_rprec/gam)*uturb
+
+    z_plus = z * z_i * u_star / nu_eff !! effective z^+
+    uturb = (1.0_rprec/vonk)*log(kappa2 + z_plus) + 5.2_rprec !! log-law
+    ubar(jz) = uturb*((1.0_rprec + ((z_plus/kappa1)**(-beta)))**(-1.0_rprec/beta))
+
+end do
+
+sigma_rv = 0.289_rprec
+wall_noise = 10 !! dictates how strong the noise is at the wall
+! The higher wall_noise is, the stronger the noise is
+
+! Fill u, v, and w with uniformly distributed random numbers between 0 and 1
+call init_random_seed
+call random_number(gmu)
+call random_number(gmv)
+call random_number(gmw)
+
+! Center random number about 0 and rescale
+gmu = initial_noise / sigma_rv * (gmu - 0.5_rprec)
+gmv = initial_noise / sigma_rv * (gmv - 0.5_rprec)
+gmw = initial_noise / sigma_rv * (gmw - 0.5_rprec)
+
+! Rescale noise depending on distance from wall and mean log profile
+! z is in meters
+do jz = 1, nz
+#ifdef PPMPI
+    jz_abs = coord * (nz-1) + jz
+#ifdef PPMAPPING
+    z = mesh_stretch(jz)
+#else
+    z = (coord * (nz-1) + jz - 0.5_rprec) * dz * z_i
+#endif
+#else
+    jz_abs = jz
+    z = (jz-.5_rprec) * dz * z_i
+#endif
+    ! Change z-value for different boundary conditions
+    ! For channel flow, choose closest wall
+    if(lbc_mom > 0 .and. ubc_mom > 0) z = min(z, L_z - z)
+    ! For half-channel (lbc_mom > 0 .and. ubc_mom .eq 0) leave as is
+
+    decay = (1-exp(-wall_noise*z))/(1-exp(-wall_noise))
+    gmu(:,:,jz) = gmu(:,:,jz) * decay + ubar(jz)
+    gmv(:,:,jz) = gmv(:,:,jz) * decay
+    gmw(:,:,jz) = gmw(:,:,jz) * decay
+end do
+
+! Bottom boundary conditions
+if (coord == 0) then
+    gmw(:, :, 1) = 0._rprec
+#ifdef PPMPI
+    gmu(:, :, 0) = 0._rprec
+    gmv(:, :, 0) = 0._rprec
+    gmw(:, :, 0) = 0._rprec
+#endif
+end if
+
+! Set upper boundary condition as zero for u, v, and w
+#ifdef PPMPI
+if (coord == nproc-1) then
+#endif
+    gmw(1:nx, 1:ny, nz) = 0._rprec
+    gmu(1:nx, 1:ny, nz) = 0._rprec
+    gmv(1:nx, 1:ny, nz) = 0._rprec
+#ifdef PPMPI
+end if
+#endif
+
+end subroutine ic_gmt_blend
 
 !******************************************************************************
 subroutine mfm_checkpoint
@@ -95,6 +299,13 @@ subroutine mfm_checkpoint
 !
 ! This subroutine saves checkpoint variables for MFM analysis
 !
+use param, only : nz, write_endian
+
+open(11, file=fname, form='unformatted', convert=write_endian,              &
+    status='unknown', position='rewind')
+write (11) gmu(:,:,1:nz), gmv(:,:,1:nz), gmw(:,:,1:nz),                     &
+    rhs_gmx(:,:,1:nz), rhs_gmy(:,:,1:nz), rhs_gmz(:,:,1:nz)
+close(11)
 
 end subroutine mfm_checkpoint
 
@@ -105,7 +316,8 @@ subroutine gmt_wallstress
 ! This subroutine computed txz, tyz, dudz, dvdz at walls for the GMT
 ! 
 use types, only : rprec
-use param, only : lbc_mom, ubc_mom, coord, nproc, nz, ny, nx, dz, Lz
+use param, only : lbc_mom, ubc_mom, coord, nproc, nz, ny, nx, dz, L_z
+use param, only : nu_molec, u_star, ubot, utop, z_i
 #ifdef PPMAPPING 
 use sim_param, only : mesh_stretch
 #endif
@@ -125,8 +337,8 @@ if (coord == 0) then
     select case (lbc_mom)
         ! Stress free
         case (0)
-            dgmxdz(:,:,1) = 0.0_rprec
-            dgmydz(:,:,1) = 0.0_rprec
+            dgmudz(:,:,1) = 0.0_rprec
+            dgmvdz(:,:,1) = 0.0_rprec
             gmtxz(:,:,1) = 0.0_rprec
             gmtyz(:,:,1) = 0.0_rprec
 
@@ -134,10 +346,10 @@ if (coord == 0) then
         case (1)
             do j = 1, ny
             do i = 1, nx
-                dgmxdz(i,j,1) = ( gmx(i,j,1) - ubot ) / denom
-                dgmydz(i,j,1) = gmy(i,j,1) / denom
-                gmtxz(i,j,1) = -nu_molec/(z_i*u_star)*dgmxdz(i,j,1)
-                gmtyz(i,j,1) = -nu_molec/(z_i*u_star)*dgmydz(i,j,1)
+                dgmudz(i,j,1) = ( gmu(i,j,1) - ubot ) / denom
+                dgmvdz(i,j,1) = gmv(i,j,1) / denom
+                gmtxz(i,j,1) = -nu_molec/(z_i*u_star)*dgmudz(i,j,1)
+                gmtyz(i,j,1) = -nu_molec/(z_i*u_star)*dgmvdz(i,j,1)
             enddo
             enddo
 
@@ -156,8 +368,8 @@ if (coord == nproc-1) then
     select case (ubc_mom)
         ! Stress free
         case (0)
-            dgmxdz(:,:,nz) = 0.0_rprec
-            dgmydz(:,:,nz) = 0.0_rprec
+            dgmudz(:,:,nz) = 0.0_rprec
+            dgmvdz(:,:,nz) = 0.0_rprec
             gmtxz(:,:,nz) = 0.0_rprec
             gmtyz(:,:,nz) = 0.0_rprec
 
@@ -165,10 +377,10 @@ if (coord == nproc-1) then
         case (1)
             do j = 1, ny
             do i = 1, nx
-                dgmxdz(i,j,nz) = ( utop - gmx(i,j,nz-1) ) / denom
-                dgmydz(i,j,nz) = -gmy(i,j,nz-1) / denom
-                gmtxz(i,j,nz) = -nu_molec/(z_i*u_star)*dgmxdz(i,j,nz)
-                gmtyz(i,j,nz) = -nu_molec/(z_i*u_star)*dgmydz(i,j,nz)
+                dgmudz(i,j,nz) = ( utop - gmu(i,j,nz-1) ) / denom
+                dgmvdz(i,j,nz) = -gmv(i,j,nz-1) / denom
+                gmtxz(i,j,nz) = -nu_molec/(z_i*u_star)*dgmudz(i,j,nz)
+                gmtyz(i,j,nz) = -nu_molec/(z_i*u_star)*dgmvdz(i,j,nz)
             enddo
             enddo
 
@@ -187,7 +399,7 @@ subroutine to_big(a, a_big)
 ! 
 
 use fft
-use param, only : lbz, ny, nz, nxp
+use param
 
 real(rprec), dimension(ld, ny, lbz:nz), intent(inout) :: a
 real(rprec), dimension(ld_big, ny2, lbz:nz), intent(inout) :: a_big
@@ -205,39 +417,75 @@ do jz = lbz, nz
     call dfftw_execute_dft_c2r(back_big, a_big(:,:,jz), a_big(:,:,jz))
 enddo
 
-end subroutine
+end subroutine to_big
 
 !******************************************************************************
-subroutine gmt
+subroutine to_small(a_big, a)
+!******************************************************************************
+! 
+! Undo padding to variable after multiplication in physical space
+! 
+! Note: This subroutine is not yet ready for fourier mode
+! 
+
+use fft
+use param, only : lbz, ny, nz, nxp
+
+real(rprec), dimension(ld, ny, lbz:nz), intent(inout) :: a
+real(rprec), dimension(ld_big, ny2, lbz:nz), intent(inout) :: a_big
+
+integer :: jz
+
+do jz = 1, nz-1
+    call dfftw_execute_dft_r2c(forw_big, a_big(:,:,jz), a_big(:,:,jz))
+    call unpadd(a(:,:,jz), a_big(:,:,jz))
+    call dfftw_execute_dft_c2r(back, a(:,:,jz), a(:,:,jz))
+enddo
+
+end subroutine to_small
+
+!******************************************************************************
+subroutine gm_transport
 !******************************************************************************
 !
 ! This subroutine solves the generalized momentum transport (GMT) equation
 !
-use param, only : nu_molec
+use param
+use sim_param
 use derivatives, only : filt_da, ddx, ddy, ddz_uv, ddz_w
+#ifdef PPMPI
 use mpi
+use mpi_defs, only : mpi_sync_real_array, MPI_SYNC_DOWN
+#endif
+use forcing, only : project
 
 real(rprec) :: diff_coef
+integer :: jz, jz_min, jz_max
+
+! Save previous timestep's RHS
+rhs_gmx_f = rhs_gmx
+rhs_gmy_f = rhs_gmy
+rhs_gmz_f = rhs_gmz
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Calculate derivatives of generalized momentum
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! dudx, dudy, dvdx, dvdy, dwdx, dwdy derivatives (in Fourier space)
-call filt_da(gmx, dgmxdx, dgmxdy, lbz)
-call filt_da(gmy, dgmydx, dgmydy, lbz)
-call filt_da(gmz, dgmzdx, dgmzdy, lbz)
+call filt_da(gmu, dgmudx, dgmudy, lbz)
+call filt_da(gmv, dgmvdx, dgmvdy, lbz)
+call filt_da(gmw, dgmwdx, dgmwdy, lbz)
 
 ! dudz, dvdz using finite differences (for 1:nz on uv-nodes)
 ! except bottom coord, only 2:nz
-call ddz_uv(gmx, dgmxdz, lbz)
-call ddz_uv(gmy, dgmydz, lbz)
+call ddz_uv(gmu, dgmudz, lbz)
+call ddz_uv(gmv, dgmvdz, lbz)
 
 ! dwdz using finite differences (for 0:nz-1 on w-nodes)
 ! except bottom coord, only 1:nz-1
-call ddz_w(gmz, dgmzdz, lbz)
+call ddz_w(gmw, dgmwdz, lbz)
 
 ! Wall stress and derivatives at the wall
-! (txz, tyz, dgmxdz, dgmydz at jz=1)
+! (txz, tyz, dgmudz, dgmvdz at jz=1)
 if (coord == 0) then
     call gmt_wallstress()
 endif
@@ -254,10 +502,10 @@ diff_coef = -2.0_rprec*(nu_molec/(u_star*z_i))
 
 ! Calculate stress for bottom level
 if (coord == 0) then
-    gmtxx(:,:,1) = diff_coef*dgmxdx(:,:,1)
-    gmtxy(:,:,1) = diff_coef*0.5_rprec*( dgmxdy(:,:,1) + dgmydx(:,:,1) )
-    gmtyy(:,:,1) = diff_coef*dgmydy(:,:,1)
-    gmtzz(:,:,1) = diff_coef*dgmzdz(:,:,1)
+    gmtxx(:,:,1) = diff_coef*dgmudx(:,:,1)
+    gmtxy(:,:,1) = diff_coef*0.5_rprec*( dgmudy(:,:,1) + dgmvdx(:,:,1) )
+    gmtyy(:,:,1) = diff_coef*dgmvdy(:,:,1)
+    gmtzz(:,:,1) = diff_coef*dgmwdz(:,:,1)
     ! Remember txz & tyz already calculated in gmt_wallstress
 
     ! since first level already calculated
@@ -271,20 +519,20 @@ endif
 
 ! Calculate stress for entire domain
 do jz = jz_min, nz-1
-    gmtxx(:,:,jz) = diff_coef*dgmxdx(:,:,jz)
-    gmtxy(:,:,jz) = diff_coef*0.5_rprec*( dgmxdy(:,:,jz) + dgmydx(:,:,jz) )
-    gmtyy(:,:,jz) = diff_coef*dgmydy(:,:,jz)
-    gmtzz(:,:,jz) = diff_coef*dgmzdz(:,:,jz)
+    gmtxx(:,:,jz) = diff_coef*dgmudx(:,:,jz)
+    gmtxy(:,:,jz) = diff_coef*0.5_rprec*( dgmudy(:,:,jz) + dgmvdx(:,:,jz) )
+    gmtyy(:,:,jz) = diff_coef*dgmvdy(:,:,jz)
+    gmtzz(:,:,jz) = diff_coef*dgmwdz(:,:,jz)
 #ifdef PPCNDIFF
-    gmtxz(:,:,jz) = diff_coef*0.5_rprec*( dgmxdz(:,:,jz) + dgmzdx(:,:,jz) )
-    gmtxz_half1(:,:,jz) = diff_coef*0.5_rprec*( dgmzdx(:,:,jz) )
-    gmtxz_half2(:,:,jz) = diff_coef*0.5_rprec*( dgmxdz(:,:,jz) )
-    gmtyz(:,:,jz) = diff_coef*0.5_rprec*( dgmydz(:,:,jz) + dgmzdy(:,:,jz) )
-    gmtyz_half1(:,:,jz) = diff_coef*0.5_rprec*( dgmzdy(:,:,jz) )
-    gmtyz_half2(:,:,jz) = diff_coef*0.5_rprec*( dgmydz(:,:,jz) )
+    gmtxz(:,:,jz) = diff_coef*0.5_rprec*( dgmudz(:,:,jz) + dgmwdx(:,:,jz) )
+    gmtxz_half1(:,:,jz) = diff_coef*0.5_rprec*( dgmwdx(:,:,jz) )
+    gmtxz_half2(:,:,jz) = diff_coef*0.5_rprec*( dgmudz(:,:,jz) )
+    gmtyz(:,:,jz) = diff_coef*0.5_rprec*( dgmvdz(:,:,jz) + dgmwdy(:,:,jz) )
+    gmtyz_half1(:,:,jz) = diff_coef*0.5_rprec*( dgmwdy(:,:,jz) )
+    gmtyz_half2(:,:,jz) = diff_coef*0.5_rprec*( dgmvdz(:,:,jz) )
 #else
-    gmtxz(:,:,jz) = diff_coef*0.5_rprec*( dgmxdz(:,:,jz) + dgmzdx(:,:,jz) )
-    gmtyz(:,:,jz) = diff_coef*0.5_rprec*( dgmydz(:,:,jz) + dgmzdy(:,:,jz) )
+    gmtxz(:,:,jz) = diff_coef*0.5_rprec*( dgmudz(:,:,jz) + dgmwdx(:,:,jz) )
+    gmtyz(:,:,jz) = diff_coef*0.5_rprec*( dgmvdz(:,:,jz) + dgmwdy(:,:,jz) )
 #endif
 enddo
 
@@ -325,13 +573,177 @@ call divstress_w(div_gmtz, gmtxz, gmtyz, gmtzz)
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Advective term
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! Using simulation velocities (u,v,w) here to advect GMT
+! This differs from the convec subroutine in the main loop in two main ways:
+! 1. Uses coupling between simulation velocities (u,v,w) and GMT velocities
+! 2. Is not u x omega, instead computed as u[sim]*grad(u[gmt])
 
 ! Move variables to big domain
 call to_big(u, u_big)
 call to_big(v, v_big)
 call to_big(w, w_big)
+call to_big(dgmudx, dgmudx_big)
+call to_big(dgmudy, dgmudy_big)
+call to_big(dgmudz, dgmudz_big)
+call to_big(dgmvdx, dgmvdx_big)
+call to_big(dgmvdy, dgmvdy_big)
+call to_big(dgmvdz, dgmvdz_big)
+call to_big(dgmwdx, dgmwdx_big)
+call to_big(dgmwdy, dgmwdy_big)
+call to_big(dgmwdz, dgmwdz_big)
 
-end subroutine gmt
+! Compute advective term in x-GMT
+! Interpolate w and dudz onto uv-grid
+if (coord == 0) then
+    ! Bottom wall take w(jz=1) = 0
+    temp_big(:,:,1) = u_big(:,:,1)*dgmudx_big(:,:,1) +      &
+        v_big(:,:,1)*dgmudy_big(:,:,1) +                    &
+        0.5_rprec*w_big(:,:,2)*dgmudz_big(:,:,2)
+    jz_min = 2
+else
+    jz_min = 1
+endif
+
+if (coord == nproc-1) then
+    ! Top wall take w(jz=nz) = 0
+    temp_big(:,:,nz-1) = u_big(:,:,nz-1)*dgmudx_big(:,:,nz-1) +   &
+        v_big(:,:,nz-1)*dgmudy_big(:,:,nz-1) +                    &
+        0.5_rprec*w_big(:,:,nz-1)*dgmudz_big(:,:,nz-1)
+    jz_max = nz-2
+else
+    jz_max = nz-1
+endif
+
+! For entire domain
+do jz = jz_min, jz_max
+    temp_big(:,:,jz) = u_big(:,:,jz)*dgmudx_big(:,:,jz) +      &
+        v_big(:,:,jz)*dgmudy_big(:,:,jz) +                     &
+        0.5_rprec*(w_big(:,:,jz+1)*dgmudz_big(:,:,jz+1) +      &
+        w_big(:,:,jz)*dgmudz_big(:,:,jz))
+enddo
+
+! Move temp_big into RHSx for GMT and make small
+call to_small(temp_big, rhs_gmx)
+
+! Compute advective term in y-GMT
+! Interpolate w and dvdz onto uv-grid
+if (coord == 0) then
+    ! Bottom wall take w(jz=1) = 0
+    temp_big(:,:,1) = u_big(:,:,1)*dgmvdx_big(:,:,1) +      &
+        v_big(:,:,1)*dgmvdy_big(:,:,1) +                    &
+        0.5_rprec*w_big(:,:,2)*dgmvdz_big(:,:,2)
+    jz_min = 2
+else
+    jz_min = 1
+endif
+
+if (coord == nproc-1) then
+    ! Top wall take w(jz=nz) = 0
+    temp_big(:,:,nz-1) = u_big(:,:,nz-1)*dgmvdx_big(:,:,nz-1) +   &
+        v_big(:,:,nz-1)*dgmvdy_big(:,:,nz-1) +                    &
+        0.5_rprec*w_big(:,:,nz-1)*dgmvdz_big(:,:,nz-1)
+    jz_max = nz-2
+else
+    jz_max = nz-1
+endif
+
+! For entire domain
+do jz = jz_min, jz_max
+    temp_big(:,:,jz) = u_big(:,:,jz)*dgmvdx_big(:,:,jz) +      &
+        v_big(:,:,jz)*dgmvdy_big(:,:,jz) +                     &
+        0.5_rprec*(w_big(:,:,jz+1)*dgmvdz_big(:,:,jz+1) +      &
+        w_big(:,:,jz)*dgmvdz_big(:,:,jz))
+enddo
+
+! Move temp_big into RHSy for GMT and make small
+call to_small(temp_big, rhs_gmy)
+
+! Compute advective term in z-GMT
+! Interpolate u, v, and dwdz onto w-grid
+if (coord == 0) then
+    ! Bottom wall take w(jz=1) = dwdx(jz=1) = dwdy(jz=1) = 0
+    temp_big(:,:,1) = 0._rprec
+    jz_min = 2
+else
+    jz_min = 1
+endif
+
+if (coord == nproc-1) then
+    ! Top wall take w(jz=nz) = dwdx(jz=1) = dwdy(jz=1) = 0
+    temp_big(:,:,nz) = 0._rprec
+    jz_max = nz-1
+else
+    jz_max = nz-1
+endif
+
+! For entire domain
+do jz = jz_min, jz_max
+    temp_big(:,:,jz) =                                                      &
+        0.5_rprec*(u_big(:,:,jz)+u_big(:,:,jz-1))*dgmwdx_big(:,:,jz) +      &
+        0.5_rprec*(v_big(:,:,jz)+v_big(:,:,jz-1))*dgmwdy_big(:,:,jz) +      &
+        w_big(:,:,jz)*0.5_rprec*(dgmwdz_big(:,:,jz)+dgmwdz_big(:,:,jz-1))
+enddo
+
+! Move temp_big into RHSz for GMT and make small
+call to_small(temp_big, rhs_gmz)
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! Add terms to the RHS
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! Add div-tau term 
+rhs_gmx(:,:,1:nz-1) = -rhs_gmx(:,:,1:nz-1) - div_gmtx(:,:,1:nz-1)
+rhs_gmy(:,:,1:nz-1) = -rhs_gmy(:,:,1:nz-1) - div_gmty(:,:,1:nz-1)
+rhs_gmz(:,:,1:nz-1) = -rhs_gmz(:,:,1:nz-1) - div_gmtz(:,:,1:nz-1)
+
+! Add pressure forcing -- Should this be in the GMT? debug
+if (use_mean_p_force) then
+    rhs_gmx(:,:,1:nz-1) = rhs_gmx(:,:,1:nz-1) + mean_p_force_x
+    rhs_gmy(:,:,1:nz-1) = rhs_gmy(:,:,1:nz-1) + mean_p_force_y
+endif
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! Calculate Intermediate Velocity
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+#ifdef PPCNDIFF
+! NOT READY - debug
+#else
+gmu(:,:,1:nz-1) = gmu(:,:,1:nz-1) +                                         &
+    dt * ( tadv1 * rhs_gmx(:,:,1:nz-1) + tadv2 * rhs_gmx_f(:,:,1:nz-1) )
+gmv(:,:,1:nz-1) = gmv(:,:,1:nz-1) +                                         &
+    dt * ( tadv1 * rhs_gmy(:,:,1:nz-1) + tadv2 * rhs_gmy_f(:,:,1:nz-1) )
+gmw(:,:,1:nz-1) = gmw(:,:,1:nz-1) +                                         &
+    dt * ( tadv1 * rhs_gmz(:,:,1:nz-1) + tadv2 * rhs_gmz_f(:,:,1:nz-1) )
+if (coord == nproc-1) then
+    gmw(:,:,nz) = gmw(:,:,nz) +                                             &
+        dt * ( tadv1 * rhs_gmz(:,:,nz) + tadv2 * rhs_gmz_f(:,:,nz) )
+endif
+#endif
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! Pressure Solve
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+call press_stag_array(gmu,gmv,gmw,div_gmtz,gmp,dgmpdx,dgmpdy,dgmpdz)
+
+! Add pressure gradients to RHS variables (for next time step)
+rhs_gmx(:,:,1:nz-1) = rhs_gmx(:,:,1:nz-1) - dgmpdx(:,:,1:nz-1)
+rhs_gmy(:,:,1:nz-1) = rhs_gmy(:,:,1:nz-1) - dgmpdy(:,:,1:nz-1)
+rhs_gmz(:,:,1:nz-1) = rhs_gmz(:,:,1:nz-1) - dgmpdz(:,:,1:nz-1)
+if (coord == nproc-1) then
+    rhs_gmz(:,:,nz) = rhs_gmz(:,:,nz) - dgmpdz(:,:,nz)
+endif
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! Forcing
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+
+
+
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! Projection step
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+call project(gmu,gmv,gmw,dgmpdx,dgmpdy,dgmpdz)
+
+end subroutine gm_transport
 
 end module mfm

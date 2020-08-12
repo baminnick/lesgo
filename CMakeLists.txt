@@ -231,6 +231,7 @@ endif (USE_CNDIFF)
 if (USE_MFM)
     add_definitions(-DPPMFM)
     set(Sources ${Sources} mfm.f90)
+    set(exec_name "${exec_name}-mfm")
 endif (USE_MFM)
 
 if (OUTPUT_SGS)

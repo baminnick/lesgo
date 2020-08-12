@@ -44,6 +44,9 @@ use string_util, only : string_concat
 use mpi_defs, only : mpi_sync_real_array, MPI_SYNC_DOWNUP
 #endif
 use derivatives, only: phys2wave
+#ifdef PPMFM
+use mfm, only : ic_gmt
+#endif
 
 implicit none
 
@@ -165,6 +168,10 @@ if (cumulative_time) then
     end if
     close(13)
 end if
+#endif
+
+#ifdef PPMFM
+call ic_gmt()
 #endif
 
 ! call mpi_barrier(comm, ierr)
