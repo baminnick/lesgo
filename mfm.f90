@@ -129,9 +129,10 @@ subroutine ic_gmt
 !******************************************************************************
 ! Set initial profile for GMT equation, determine if there is a file to read
 ! in or a new profile needs to be generated
-use param, only : coord, lbc_mom
+use param, only : coord, lbc_mom, BOGUS, lbz
 use string_util
 use grid_m
+use mpi_defs, only : mpi_sync_real_array, MPI_SYNC_DOWNUP
 
 fname = path // 'gmt.out'
 #ifdef PPMPI
@@ -146,6 +147,20 @@ else
     if (coord == 0) write(*,*) "--> Creating initial GMT field as blended profile"
     call ic_gmt_blend
 endif
+
+#ifdef PPMPI
+! Exchange ghost node information for u, v, and w
+call mpi_sync_real_array( gmu, 0, MPI_SYNC_DOWNUP )
+call mpi_sync_real_array( gmv, 0, MPI_SYNC_DOWNUP )
+call mpi_sync_real_array( gmw, 0, MPI_SYNC_DOWNUP )
+
+!--set 0-level velocities to BOGUS
+if (coord == 0) then
+    gmu(:, :, lbz) = BOGUS
+    gmv(:, :, lbz) = BOGUS
+    gmw(:, :, lbz) = BOGUS
+end if
+#endif
 
 end subroutine ic_gmt
 
@@ -459,7 +474,7 @@ use mpi_defs, only : mpi_sync_real_array, MPI_SYNC_DOWN
 #endif
 use forcing, only : project
 
-real(rprec) :: diff_coef
+real(rprec) :: diff_coef, rmsdivvel, const
 integer :: jz, jz_min, jz_max
 
 ! Save previous timestep's RHS
@@ -591,13 +606,16 @@ call to_big(dgmwdx, dgmwdx_big)
 call to_big(dgmwdy, dgmwdy_big)
 call to_big(dgmwdz, dgmwdz_big)
 
+! Normalization for FFTs
+const = 1._rprec/(nx2*ny2)
+
 ! Compute advective term in x-GMT
 ! Interpolate w and dudz onto uv-grid
 if (coord == 0) then
     ! Bottom wall take w(jz=1) = 0
-    temp_big(:,:,1) = u_big(:,:,1)*dgmudx_big(:,:,1) +      &
-        v_big(:,:,1)*dgmudy_big(:,:,1) +                    &
-        0.5_rprec*w_big(:,:,2)*dgmudz_big(:,:,2)
+    temp_big(:,:,1) = const*(u_big(:,:,1)*dgmudx_big(:,:,1) +      &
+        v_big(:,:,1)*dgmudy_big(:,:,1) +                           &
+        0.5_rprec*w_big(:,:,2)*dgmudz_big(:,:,2))
     jz_min = 2
 else
     jz_min = 1
@@ -605,9 +623,9 @@ endif
 
 if (coord == nproc-1) then
     ! Top wall take w(jz=nz) = 0
-    temp_big(:,:,nz-1) = u_big(:,:,nz-1)*dgmudx_big(:,:,nz-1) +   &
-        v_big(:,:,nz-1)*dgmudy_big(:,:,nz-1) +                    &
-        0.5_rprec*w_big(:,:,nz-1)*dgmudz_big(:,:,nz-1)
+    temp_big(:,:,nz-1) = const*(u_big(:,:,nz-1)*dgmudx_big(:,:,nz-1) +   &
+        v_big(:,:,nz-1)*dgmudy_big(:,:,nz-1) +                           &
+        0.5_rprec*w_big(:,:,nz-1)*dgmudz_big(:,:,nz-1))
     jz_max = nz-2
 else
     jz_max = nz-1
@@ -615,10 +633,10 @@ endif
 
 ! For entire domain
 do jz = jz_min, jz_max
-    temp_big(:,:,jz) = u_big(:,:,jz)*dgmudx_big(:,:,jz) +      &
-        v_big(:,:,jz)*dgmudy_big(:,:,jz) +                     &
-        0.5_rprec*(w_big(:,:,jz+1)*dgmudz_big(:,:,jz+1) +      &
-        w_big(:,:,jz)*dgmudz_big(:,:,jz))
+    temp_big(:,:,jz) = const*(u_big(:,:,jz)*dgmudx_big(:,:,jz) +      &
+        v_big(:,:,jz)*dgmudy_big(:,:,jz) +                            &
+        0.5_rprec*(w_big(:,:,jz+1)*dgmudz_big(:,:,jz+1) +             &
+        w_big(:,:,jz)*dgmudz_big(:,:,jz)))
 enddo
 
 ! Move temp_big into RHSx for GMT and make small
@@ -628,9 +646,9 @@ call to_small(temp_big, rhs_gmx)
 ! Interpolate w and dvdz onto uv-grid
 if (coord == 0) then
     ! Bottom wall take w(jz=1) = 0
-    temp_big(:,:,1) = u_big(:,:,1)*dgmvdx_big(:,:,1) +      &
-        v_big(:,:,1)*dgmvdy_big(:,:,1) +                    &
-        0.5_rprec*w_big(:,:,2)*dgmvdz_big(:,:,2)
+    temp_big(:,:,1) = const*(u_big(:,:,1)*dgmvdx_big(:,:,1) +      &
+        v_big(:,:,1)*dgmvdy_big(:,:,1) +                           &
+        0.5_rprec*w_big(:,:,2)*dgmvdz_big(:,:,2))
     jz_min = 2
 else
     jz_min = 1
@@ -638,9 +656,9 @@ endif
 
 if (coord == nproc-1) then
     ! Top wall take w(jz=nz) = 0
-    temp_big(:,:,nz-1) = u_big(:,:,nz-1)*dgmvdx_big(:,:,nz-1) +   &
-        v_big(:,:,nz-1)*dgmvdy_big(:,:,nz-1) +                    &
-        0.5_rprec*w_big(:,:,nz-1)*dgmvdz_big(:,:,nz-1)
+    temp_big(:,:,nz-1) = const*(u_big(:,:,nz-1)*dgmvdx_big(:,:,nz-1) +   &
+        v_big(:,:,nz-1)*dgmvdy_big(:,:,nz-1) +                           &
+        0.5_rprec*w_big(:,:,nz-1)*dgmvdz_big(:,:,nz-1))
     jz_max = nz-2
 else
     jz_max = nz-1
@@ -648,10 +666,10 @@ endif
 
 ! For entire domain
 do jz = jz_min, jz_max
-    temp_big(:,:,jz) = u_big(:,:,jz)*dgmvdx_big(:,:,jz) +      &
-        v_big(:,:,jz)*dgmvdy_big(:,:,jz) +                     &
-        0.5_rprec*(w_big(:,:,jz+1)*dgmvdz_big(:,:,jz+1) +      &
-        w_big(:,:,jz)*dgmvdz_big(:,:,jz))
+    temp_big(:,:,jz) = const*(u_big(:,:,jz)*dgmvdx_big(:,:,jz) +      &
+        v_big(:,:,jz)*dgmvdy_big(:,:,jz) +                            &
+        0.5_rprec*(w_big(:,:,jz+1)*dgmvdz_big(:,:,jz+1) +             &
+        w_big(:,:,jz)*dgmvdz_big(:,:,jz)))
 enddo
 
 ! Move temp_big into RHSy for GMT and make small
@@ -677,10 +695,10 @@ endif
 
 ! For entire domain
 do jz = jz_min, jz_max
-    temp_big(:,:,jz) =                                                      &
+    temp_big(:,:,jz) = const*(                                              &
         0.5_rprec*(u_big(:,:,jz)+u_big(:,:,jz-1))*dgmwdx_big(:,:,jz) +      &
         0.5_rprec*(v_big(:,:,jz)+v_big(:,:,jz-1))*dgmwdy_big(:,:,jz) +      &
-        w_big(:,:,jz)*0.5_rprec*(dgmwdz_big(:,:,jz)+dgmwdz_big(:,:,jz-1))
+        w_big(:,:,jz)*0.5_rprec*(dgmwdz_big(:,:,jz)+dgmwdz_big(:,:,jz-1)))
 enddo
 
 ! Move temp_big into RHSz for GMT and make small
@@ -697,14 +715,15 @@ rhs_gmz(:,:,1:nz-1) = -rhs_gmz(:,:,1:nz-1) - div_gmtz(:,:,1:nz-1)
 ! Add pressure forcing -- Should this be in the GMT? debug
 if (use_mean_p_force) then
     rhs_gmx(:,:,1:nz-1) = rhs_gmx(:,:,1:nz-1) + mean_p_force_x
-    rhs_gmy(:,:,1:nz-1) = rhs_gmy(:,:,1:nz-1) + mean_p_force_y
 endif
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Calculate Intermediate Velocity
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 #ifdef PPCNDIFF
-! NOT READY - debug
+call diff_stag_array_uv(gmu,gmv,rhs_gmx,rhs_gmy,rhs_gmx_f,rhs_gmy_f,        &
+    gmtxz_half2,gmtyz_half2,gmtxz,gmtyz)
+call diff_stag_array_w(gmw,rhs_gmz,rhs_gmz_f,gmtzz)
 #else
 gmu(:,:,1:nz-1) = gmu(:,:,1:nz-1) +                                         &
     dt * ( tadv1 * rhs_gmx(:,:,1:nz-1) + tadv2 * rhs_gmx_f(:,:,1:nz-1) )
@@ -743,6 +762,29 @@ endif
 ! Projection step
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 call project(gmu,gmv,gmw,dgmpdx,dgmpdy,dgmpdz)
+
+! Output updated information on GMT to screen
+if (modulo (jt_total, wbase) == 0) then
+    call rmsdiv(dgmudx,dgmvdy,dgmwdz,rmsdivvel)
+
+    if(coord == 0) then
+        write(*,'(a,E15.7)') ' GM  Velocity divergence metric: ', rmsdivvel
+        write(*,'(a)') '===================== GMT BOTTOM ======================='
+        write(*,*) 'u: ', gmu(nx/2,ny/2,1:2)
+        write(*,*) 'v: ', gmv(nx/2,ny/2,1:2)
+        write(*,*) 'w: ', gmw(nx/2,ny/2,1:2)
+        write(*,'(a)') '========================================================'
+    end if
+    call mpi_barrier(comm, ierr)
+    if(coord == nproc-1) then
+        write(*,'(a)') '====================== GMT TOP ========================='
+        write(*,*) 'u: ', gmu(nx/2,ny/2,nz-2:nz-1)
+        write(*,*) 'v: ', gmv(nx/2,ny/2,nz-2:nz-1)
+        write(*,*) 'w: ', gmw(nx/2,ny/2,nz-1:nz)
+        write(*,'(a)') '========================================================'
+    end if
+    call mpi_barrier(comm, ierr)
+end if
 
 end subroutine gm_transport
 

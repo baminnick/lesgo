@@ -484,8 +484,8 @@ call clock_convec%stop
     call clock_inter%start
 #endif
 #ifdef PPCNDIFF
-    call diff_stag_array_uv()
-    call diff_stag_array_w()
+    call diff_stag_array_uv(u,v,RHSx,RHSy,RHSx_f,RHSy_f,txz_half2,tyz_half2,txz,tyz)
+    call diff_stag_array_w(w,RHSz,RHSz_f,tzz)
 #else
     u(:,:,1:nz-1) = u(:,:,1:nz-1) +                                     &
         dt * ( tadv1 * RHSx(:,:,1:nz-1) + tadv2 * RHSx_f(:,:,1:nz-1) )
@@ -587,7 +587,7 @@ call clock_convec%stop
 
         ! Calculate rms divergence of velocity
         ! only written to screen, not used otherwise
-        call rmsdiv(rmsdivvel)
+        call rmsdiv(dudx,dvdy,dwdz,rmsdivvel)
         maxcfl = get_max_cfl()
         maxvisc = get_max_visc()
 

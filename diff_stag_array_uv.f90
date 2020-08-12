@@ -18,7 +18,7 @@
 !!
 
 !*******************************************************************************
-subroutine diff_stag_array_uv()
+subroutine diff_stag_array_uv(u,v,RHSx,RHSy,RHSx_f,RHSy_f,txz_half2,tyz_half2,txz,tyz)
 !*******************************************************************************
 !
 ! Calculate the intermediate xy-velocity from implicit CN scheme on exit.
@@ -26,8 +26,6 @@ subroutine diff_stag_array_uv()
 use types, only : rprec
 use param
 use messages
-use sim_param, only : u, txz_half2, RHSx, RHSx_f, txz
-use sim_param, only : v, tyz_half2, RHSy, RHSy_f, tyz
 use sgs_param, only : nu, Nu_t
 use derivatives, only : ddz_w
 use fft
@@ -38,6 +36,10 @@ use derivatives, only : dft_direct_forw_2d_n_yonlyC, &
     dft_direct_back_2d_n_yonlyC
 
 implicit none
+
+real(rprec), dimension(ld,ny,lbz:nz), intent(inout) :: u, v
+real(rprec), dimension(ld,ny,lbz:nz), intent(in) :: RHSx, RHSy, RHSx_f, RHSy_f
+real(rprec), dimension(ld,ny,lbz:nz), intent(in) :: txz_half2, tyz_half2, txz, tyz
 
 real(rprec), dimension(ld,ny,0:nz) :: Rx, usol, Ry, vsol
 real(rprec), dimension(nx,ny,0:nz) :: a, b, c

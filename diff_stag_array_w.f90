@@ -18,7 +18,7 @@
 !!
 
 !*******************************************************************************
-subroutine diff_stag_array_w()
+subroutine diff_stag_array_w(w,RHSz,RHSz_f,tzz)
 !*******************************************************************************
 !
 ! Calculate the intermediate z-velocity from implicit CN scheme on exit.
@@ -26,7 +26,6 @@ subroutine diff_stag_array_w()
 use types, only : rprec
 use param
 use messages
-use sim_param, only : w, RHSz, RHSz_f, tzz
 use sgs_param, only : nu, Nu_t
 use derivatives, only : ddz_uv
 use fft
@@ -37,6 +36,9 @@ use derivatives, only : dft_direct_forw_2d_n_yonlyC, &
     dft_direct_back_2d_n_yonlyC
 
 implicit none
+
+real(rprec), dimension(ld,ny,lbz:nz), intent(inout) :: w
+real(rprec), dimension(ld,ny,lbz:nz), intent(in) :: RHSz, RHSz_f, tzz
 
 real(rprec), dimension(ld,ny,0:nz) :: Rz, wsol
 real(rprec), dimension(nx,ny,0:nz) :: a, b, c

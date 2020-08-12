@@ -18,7 +18,7 @@
 !!
 
 !*******************************************************************************
-subroutine rmsdiv(rms)
+subroutine rmsdiv(dudx,dvdy,dwdz,rms)
 !*******************************************************************************
 !
 ! This subroutine calculates the velocity divergence metric. Currently using the
@@ -26,11 +26,11 @@ subroutine rmsdiv(rms)
 !
 use types, only : rprec
 use param
-use sim_param, only : dudx, dvdy, dwdz
 
 implicit none
 integer :: jx, jy, jz, jz_max
-real(rprec) :: rms
+real(rprec), dimension(ld,ny,lbz:nz), intent(in) :: dudx, dvdy, dwdz
+real(rprec), intent(out) :: rms
 #ifdef PPMPI
 real(rprec) :: rms_global
 #endif
