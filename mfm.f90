@@ -503,9 +503,19 @@ call ddz_w(gmw, dgmwdz, lbz)
 ! (txz, tyz, dgmudz, dgmvdz at jz=1)
 if (coord == 0) then
     call gmt_wallstress()
+#ifdef PPCNDIFF
+    ! Add boundary condition to explicit portion
+    gmtxz_half2(1:nx,:,1) = gmtxz(1:nx,:,1)
+    gmtyz_half2(1:nx,:,1) = gmtyz(1:nx,:,1)
+#endif
 endif
 if (coord == nproc-1) then
     call gmt_wallstress()
+#ifdef PPCNDIFF
+    ! Add boundary condition to explicit portion
+    gmtxz_half2(1:nx,:,nz) = gmtxz(1:nx,:,nz)
+    gmtyz_half2(1:nx,:,nz) = gmtyz(1:nx,:,nz)
+#endif
 endif
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -711,11 +721,10 @@ call to_small(temp_big, rhs_gmz)
 rhs_gmx(:,:,1:nz-1) = -rhs_gmx(:,:,1:nz-1) - div_gmtx(:,:,1:nz-1)
 rhs_gmy(:,:,1:nz-1) = -rhs_gmy(:,:,1:nz-1) - div_gmty(:,:,1:nz-1)
 rhs_gmz(:,:,1:nz-1) = -rhs_gmz(:,:,1:nz-1) - div_gmtz(:,:,1:nz-1)
+if (coord == nproc-1) rhs_gmz(:,:,nz) = -rhs_gmz(:,:,nz) - div_gmtz(:,:,nz)
 
-! Add pressure forcing -- Should this be in the GMT? debug
-if (use_mean_p_force) then
-    rhs_gmx(:,:,1:nz-1) = rhs_gmx(:,:,1:nz-1) + mean_p_force_x
-endif
+! Add pressure forcing -- only use for debugging purposes
+if (use_mean_p_force) rhs_gmx(:,:,1:nz-1)=rhs_gmx(:,:,1:nz-1)+mean_p_force_x
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Calculate Intermediate Velocity
@@ -738,6 +747,10 @@ endif
 #endif
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! Macroscopic Forcing
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Pressure Solve
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 call press_stag_array(gmu,gmv,gmw,div_gmtz,gmp,dgmpdx,dgmpdy,dgmpdz)
@@ -751,14 +764,6 @@ if (coord == nproc-1) then
 endif
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! Forcing
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-
-
-
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Projection step
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 call project(gmu,gmv,gmw,dgmpdx,dgmpdy,dgmpdz)
@@ -768,19 +773,20 @@ if (modulo (jt_total, wbase) == 0) then
     call rmsdiv(dgmudx,dgmvdy,dgmwdz,rmsdivvel)
 
     if(coord == 0) then
+        write(*,*)
         write(*,'(a,E15.7)') ' GM  Velocity divergence metric: ', rmsdivvel
         write(*,'(a)') '===================== GMT BOTTOM ======================='
-        write(*,*) 'u: ', gmu(nx/2,ny/2,1:2)
-        write(*,*) 'v: ', gmv(nx/2,ny/2,1:2)
-        write(*,*) 'w: ', gmw(nx/2,ny/2,1:2)
+        write(*,*) 'u: ', gmu(nxp/2,ny/2,1:2)
+        write(*,*) 'v: ', gmv(nxp/2,ny/2,1:2)
+        write(*,*) 'w: ', gmw(nxp/2,ny/2,1:2)
         write(*,'(a)') '========================================================'
     end if
     call mpi_barrier(comm, ierr)
     if(coord == nproc-1) then
         write(*,'(a)') '====================== GMT TOP ========================='
-        write(*,*) 'u: ', gmu(nx/2,ny/2,nz-2:nz-1)
-        write(*,*) 'v: ', gmv(nx/2,ny/2,nz-2:nz-1)
-        write(*,*) 'w: ', gmw(nx/2,ny/2,nz-1:nz)
+        write(*,*) 'u: ', gmu(nxp/2,ny/2,nz-2:nz-1)
+        write(*,*) 'v: ', gmv(nxp/2,ny/2,nz-2:nz-1)
+        write(*,*) 'w: ', gmw(nxp/2,ny/2,nz-1:nz)
         write(*,'(a)') '========================================================'
     end if
     call mpi_barrier(comm, ierr)
