@@ -58,6 +58,12 @@ logical, public :: init_gmt = .true.
 ! Name of file for restarting
 character(64) :: fname
 
+! Boundary conditions
+real(rprec), public :: gmu_bot = 0._rprec
+real(rprec), public :: gmu_top = 0._rprec
+real(rprec), public :: gmv_bot = 0._rprec
+real(rprec), public :: gmv_top = 0._rprec
+
 contains 
 
 !******************************************************************************
@@ -332,7 +338,7 @@ subroutine gmt_wallstress
 ! 
 use types, only : rprec
 use param, only : lbc_mom, ubc_mom, coord, nproc, nz, ny, nx, dz, L_z
-use param, only : nu_molec, u_star, ubot, utop, z_i
+use param, only : nu_molec, u_star, z_i
 #ifdef PPMAPPING 
 use sim_param, only : mesh_stretch
 #endif
@@ -361,8 +367,8 @@ if (coord == 0) then
         case (1)
             do j = 1, ny
             do i = 1, nx
-                dgmudz(i,j,1) = ( gmu(i,j,1) - ubot ) / denom
-                dgmvdz(i,j,1) = gmv(i,j,1) / denom
+                dgmudz(i,j,1) = ( gmu(i,j,1) - gmu_bot ) / denom
+                dgmvdz(i,j,1) = ( gmv(i,j,1) - gmv_bot ) / denom
                 gmtxz(i,j,1) = -nu_molec/(z_i*u_star)*dgmudz(i,j,1)
                 gmtyz(i,j,1) = -nu_molec/(z_i*u_star)*dgmvdz(i,j,1)
             enddo
@@ -392,8 +398,8 @@ if (coord == nproc-1) then
         case (1)
             do j = 1, ny
             do i = 1, nx
-                dgmudz(i,j,nz) = ( utop - gmu(i,j,nz-1) ) / denom
-                dgmvdz(i,j,nz) = -gmv(i,j,nz-1) / denom
+                dgmudz(i,j,nz) = ( gmu_top - gmu(i,j,nz-1) ) / denom
+                dgmvdz(i,j,nz) = ( gmv_top - gmv(i,j,nz-1) ) / denom
                 gmtxz(i,j,nz) = -nu_molec/(z_i*u_star)*dgmudz(i,j,nz)
                 gmtyz(i,j,nz) = -nu_molec/(z_i*u_star)*dgmvdz(i,j,nz)
             enddo
@@ -724,7 +730,7 @@ rhs_gmz(:,:,1:nz-1) = -rhs_gmz(:,:,1:nz-1) - div_gmtz(:,:,1:nz-1)
 if (coord == nproc-1) rhs_gmz(:,:,nz) = -rhs_gmz(:,:,nz) - div_gmtz(:,:,nz)
 
 ! Add pressure forcing -- only use for debugging purposes
-if (use_mean_p_force) rhs_gmx(:,:,1:nz-1)=rhs_gmx(:,:,1:nz-1)+mean_p_force_x
+!if (use_mean_p_force) rhs_gmx(:,:,1:nz-1)=rhs_gmx(:,:,1:nz-1)+mean_p_force_x
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Calculate Intermediate Velocity
