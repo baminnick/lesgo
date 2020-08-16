@@ -68,6 +68,9 @@ real(rprec), public :: gmv_top = 0._rprec
 integer, public :: ic_mfm = 1
 real(rprec), public :: initial_noise_gmt = 0._rprec
 
+! Target Macroscopic field
+real(rprec), dimension(:), allocatable :: gmu_bar, gmv_bar, gmw_bar
+
 contains 
 
 !******************************************************************************
@@ -132,6 +135,11 @@ allocate ( dgmwdy_big(ld_big,ny2, lbz:nz) ); dgmwdy_big = 0._rprec
 allocate ( dgmwdz_big(ld_big,ny2, lbz:nz) ); dgmwdz_big = 0._rprec
 allocate ( temp_big(ld_big, ny2, lbz:nz) ); temp_big = 0._rprec
 
+! MFM variables
+allocate ( gmu_bar(nz) ); gmu_bar = 0._rprec
+allocate ( gmv_bar(nz) ); gmv_bar = 0._rprec
+allocate ( gmw_bar(nz) ); gmw_bar = 0._rprec
+
 end subroutine mfm_init
 
 !******************************************************************************
@@ -139,10 +147,16 @@ subroutine ic_gmt
 !******************************************************************************
 ! Set initial profile for GMT equation, determine if there is a file to read
 ! in or a new profile needs to be generated
-use param, only : coord, lbc_mom, BOGUS, lbz
+use param, only : coord, lbc_mom, BOGUS, lbz, nz
 use string_util
 use grid_m
 use mpi_defs, only : mpi_sync_real_array, MPI_SYNC_DOWNUP
+#ifdef PPMAPPING
+use sim_param, only : mesh_stretch
+#endif
+
+integer :: jz
+real(rprec) :: z
 
 fname = path // 'gmt.out'
 #ifdef PPMPI
@@ -150,6 +164,29 @@ call string_concat( fname, '.c', coord )
 #endif
 inquire (file=fname, exist=init_gmt)
 
+! Initialize target macroscopic field
+do jz = 1, nz
+#ifdef PPMPI
+#ifdef PPMAPPING
+    z = mesh_stretch(jz)
+#else
+    z = (coord*(nz-1) + jz - 0.5_rprec) * dz
+#endif
+#else
+    z = (jz - 0.5_rprec) * dz
+#endif
+
+    select case (ic_mfm)
+        ! Linear profile in u, zero for v and w
+        case (1)
+        gmu_bar(jz) = z
+        gmv_bar(jz) = 0.0_rprec
+        gmw_bar(jz) = 0.0_rprec
+
+    end select
+end do
+
+! Initialize GMT field
 if (init_gmt) then
     if (coord == 0) write(*,*) "--> Reading initial GMT field from file"
     call ic_gmt_file
@@ -214,31 +251,7 @@ use sim_param, only : mesh_stretch
 implicit none
 integer :: jz, jz_abs
 real(rprec) :: z
-real(rprec), dimension(nz) :: ubar, vbar, wbar
 real(rprec) :: wall_noise, decay, rms, sigma_rv
-
-do jz = 1, nz
-
-#ifdef PPMPI
-#ifdef PPMAPPING
-    z = mesh_stretch(jz)
-#else
-    z = (coord*(nz-1) + jz - 0.5_rprec) * dz
-#endif
-#else
-    z = (jz - 0.5_rprec) * dz
-#endif
-
-    select case (ic_mfm)
-        ! Linear profile in u, zero for v and w
-        case (1)
-        ubar(jz) = z
-        vbar(jz) = 0.0_rprec
-        wbar(jz) = 0.0_rprec
-
-    end select
-
-end do
 
 sigma_rv = 0.289_rprec
 wall_noise = 10 !! dictates how strong the noise is at the wall
@@ -275,9 +288,9 @@ do jz = 1, nz
     ! For half-channel (lbc_mom > 0 .and. ubc_mom .eq 0) leave as is
 
     decay = (1-exp(-wall_noise*z))/(1-exp(-wall_noise))
-    gmu(:,:,jz) = gmu(:,:,jz) * decay + ubar(jz)
-    gmv(:,:,jz) = gmv(:,:,jz) * decay + vbar(jz)
-    gmw(:,:,jz) = gmw(:,:,jz) * decay + wbar(jz)
+    gmu(:,:,jz) = gmu(:,:,jz) * decay + gmu_bar(jz)
+    gmv(:,:,jz) = gmv(:,:,jz) * decay + gmv_bar(jz)
+    gmw(:,:,jz) = gmw(:,:,jz) * decay + gmw_bar(jz)
 end do
 
 ! Bottom boundary conditions
@@ -591,7 +604,9 @@ use mpi_defs, only : mpi_sync_real_array, MPI_SYNC_DOWN
 use forcing, only : project
 
 real(rprec) :: diff_coef, rmsdivvel, const
-integer :: jz, jz_min, jz_max
+integer :: jx, jy, jz, jz_min, jz_max
+
+real(rprec), dimension(nz) :: gmu_avg, gmv_avg, gmw_avg, du, dv, dw
 
 ! Save previous timestep's RHS
 rhs_gmx_f = rhs_gmx
@@ -865,6 +880,35 @@ endif
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Macroscopic Forcing
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! Compute difference in current macroscopic field and target
+! and update the intermediate velocity field with this difference
+do jz = 1, nz-1
+    ! Average in x and y
+    do jx = 1, nx
+    do jy = 1, ny
+        gmu_avg(jz) = gmu_avg(jz) + gmu(jx,jy,jz)
+        gmv_avg(jz) = gmv_avg(jz) + gmv(jx,jy,jz)
+        gmw_avg(jz) = gmw_avg(jz) + gmw(jx,jy,jz)
+    end do
+    end do
+    gmu_avg(jz) = gmu_avg(jz) / (nx*ny)
+    gmv_avg(jz) = gmv_avg(jz) / (nx*ny)
+    gmw_avg(jz) = gmw_avg(jz) / (nx*ny)
+
+    ! Find difference
+    du(jz) = gmu_bar(jz) - gmu_avg(jz)
+    dv(jz) = gmv_bar(jz) - gmv_avg(jz)
+    dw(jz) = gmw_bar(jz) - gmw_avg(jz)
+
+    ! Update intermediate velocity
+    do jx = 1, nx
+    do jy = 1, ny
+        gmu(jx,jy,jz) = gmu(jx,jy,jz) + du(jz)
+        gmv(jx,jy,jz) = gmv(jx,jy,jz) + dv(jz)
+        gmw(jx,jy,jz) = gmw(jx,jy,jz) + dw(jz)
+    end do
+    end do
+enddo
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Pressure Solve
