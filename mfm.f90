@@ -64,6 +64,10 @@ real(rprec), public :: gmu_top = 0._rprec
 real(rprec), public :: gmv_bot = 0._rprec
 real(rprec), public :: gmv_top = 0._rprec
 
+! Initial condition
+integer, public :: ic_mfm = 1
+real(rprec), public :: initial_noise_gmt = 0._rprec
+
 contains 
 
 !******************************************************************************
@@ -150,8 +154,11 @@ if (init_gmt) then
     if (coord == 0) write(*,*) "--> Reading initial GMT field from file"
     call ic_gmt_file
 else
-    if (coord == 0) write(*,*) "--> Creating initial GMT field as blended profile"
-    call ic_gmt_blend
+    if (coord == 0) write(*,*) "--> Creating initial GMT field by prescribed macroscopic forcing"
+    call ic_gmt_mfm
+! Uncomment this for debugging purposes... to initialize the same as initial.f90
+!    if (coord == 0) write(*,*) "--> Creating initial GMT field as blended profile"
+!    call ic_gmt_blend
 endif
 
 #ifdef PPMPI
@@ -192,6 +199,109 @@ call mpi_sync_real_array(rhs_gmz, 0, MPI_SYNC_DOWNUP)
 #endif
 
 end subroutine ic_gmt_file
+
+!******************************************************************************
+subroutine ic_gmt_mfm
+!******************************************************************************
+!
+! This subroutine initializes the initial generalized momentum profile to 
+! achieve a specified macroscopic forcing
+!
+use param
+#ifdef PPMAPPING
+use sim_param, only : mesh_stretch
+#endif
+implicit none
+integer :: jz, jz_abs
+real(rprec) :: z
+real(rprec), dimension(nz) :: ubar, vbar, wbar
+real(rprec) :: wall_noise, decay, rms, sigma_rv
+
+do jz = 1, nz
+
+#ifdef PPMPI
+#ifdef PPMAPPING
+    z = mesh_stretch(jz)
+#else
+    z = (coord*(nz-1) + jz - 0.5_rprec) * dz
+#endif
+#else
+    z = (jz - 0.5_rprec) * dz
+#endif
+
+    select case (ic_mfm)
+        ! Linear profile in u, zero for v and w
+        case (1)
+        ubar(jz) = z
+        vbar(jz) = 0.0_rprec
+        wbar(jz) = 0.0_rprec
+
+    end select
+
+end do
+
+sigma_rv = 0.289_rprec
+wall_noise = 10 !! dictates how strong the noise is at the wall
+! The higher wall_noise is, the stronger the noise is
+
+! Fill u, v, and w with uniformly distributed random numbers between 0 and 1
+call init_random_seed
+call random_number(gmu)
+call random_number(gmv)
+call random_number(gmw)
+
+! Center random number about 0 and rescale
+gmu = initial_noise_gmt / sigma_rv * (gmu - 0.5_rprec)
+gmv = initial_noise_gmt / sigma_rv * (gmv - 0.5_rprec)
+gmw = initial_noise_gmt / sigma_rv * (gmw - 0.5_rprec)
+
+! Rescale noise depending on distance from wall and mean log profile
+! z is in meters
+do jz = 1, nz
+#ifdef PPMPI
+    jz_abs = coord * (nz-1) + jz
+#ifdef PPMAPPING
+    z = mesh_stretch(jz)
+#else
+    z = (coord * (nz-1) + jz - 0.5_rprec) * dz * z_i
+#endif
+#else
+    jz_abs = jz
+    z = (jz-.5_rprec) * dz * z_i
+#endif
+    ! Change z-value for different boundary conditions
+    ! For channel flow, choose closest wall
+    if(lbc_mom > 0 .and. ubc_mom > 0) z = min(z, L_z - z)
+    ! For half-channel (lbc_mom > 0 .and. ubc_mom .eq 0) leave as is
+
+    decay = (1-exp(-wall_noise*z))/(1-exp(-wall_noise))
+    gmu(:,:,jz) = gmu(:,:,jz) * decay + ubar(jz)
+    gmv(:,:,jz) = gmv(:,:,jz) * decay + vbar(jz)
+    gmw(:,:,jz) = gmw(:,:,jz) * decay + wbar(jz)
+end do
+
+! Bottom boundary conditions
+if (coord == 0) then
+    gmw(:, :, 1) = 0._rprec !! Always no-penetration
+#ifdef PPMPI
+    gmu(:, :, 0) = gmu_bot
+    gmv(:, :, 0) = gmv_bot
+    gmw(:, :, 0) = 0._rprec !! Always no-penetration
+#endif
+end if
+
+! Set upper boundary condition as zero for u, v, and w
+#ifdef PPMPI
+if (coord == nproc-1) then
+#endif
+    gmw(1:nx, 1:ny, nz) = 0._rprec !! Always no-penetration
+    gmu(1:nx, 1:ny, nz) = gmu_top
+    gmv(1:nx, 1:ny, nz) = gmv_top
+#ifdef PPMPI
+end if
+#endif
+
+end subroutine ic_gmt_mfm
 
 !******************************************************************************
 subroutine ic_gmt_blend
