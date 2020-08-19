@@ -735,7 +735,7 @@ call ypert_fourier(uF,upert)
 call ypert_fourier(vF,vpert)
 call ypert_fourier(wF,wpert)
 #ifdef PPSCALARS
-call ypert(thetaF,theta_pert)
+call ypert_fourier(thetaF,theta_pert)
 #endif
 
 ! Consider each y and z location
