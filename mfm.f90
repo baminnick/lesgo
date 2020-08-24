@@ -37,9 +37,8 @@ public :: mfm_init, ic_gmt, gm_transport, mfm_checkpoint
 
 ! Main simulation variables for the GMT
 real(rprec), public, dimension(:,:,:), allocatable :: gmu, gmv, gmw
-real(rprec), dimension(:,:,:), allocatable ::                           &
-    dgmudx, dgmudy, dgmudz, dgmvdx, dgmvdy, dgmvdz,                     &
-    dgmwdx, dgmwdy, dgmwdz,                                             &
+real(rprec), dimension(:,:,:), allocatable :: dgmudx, dgmudy, dgmudz,   &
+    dgmvdx, dgmvdy, dgmvdz, dgmwdx, dgmwdy, dgmwdz,                     &
     gmtxx, gmtxy, gmtyy, gmtxz, gmtyz, gmtzz,                           &
     div_gmtx, div_gmty, div_gmtz,                                       &
     rhs_gmx, rhs_gmy, rhs_gmz, rhs_gmx_f, rhs_gmy_f, rhs_gmz_f,         &
@@ -593,7 +592,8 @@ end subroutine to_small
 subroutine gm_transport
 !******************************************************************************
 !
-! This subroutine solves the generalized momentum transport (GMT) equation
+! This subroutine marches the generalized momentum transport (GMT) equation
+! one time-step
 !
 use param
 use sim_param
@@ -887,6 +887,11 @@ endif
 ! Adding this difference acts as the source term for the GMT and 
 ! ensures the macroscopic field is unchanging with time-step
 do jz = 1, nz-1
+    ! Initialize averages
+    gmu_avg(jz) = 0.0_rprec
+    gmv_avg(jz) = 0.0_rprec
+    gmw_avg(jz) = 0.0_rprec
+
     ! Average in x and y
     do jx = 1, nx
     do jy = 1, ny
