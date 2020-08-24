@@ -71,6 +71,17 @@ type rs_t
     real(rprec) :: up2, vp2, wp2, upvp, upwp, vpwp
 end type rs_t
 
+#ifdef PPMFM
+type tavg_mfm_t
+    real(rprec) :: gmu, gmv, gmw_uv
+    real(rprec) :: u1v1, u1v2, u1v3, u2v1, u2v2, u2v3, u3v1, u3v2, u3v3
+end type tavg_mfm_t
+
+type rs_mfm_t
+    real(rprec) :: u1v1, u1v2, u1v3, u2v1, u2v2, u2v3, u3v1, u3v2, u3v3
+end type rs_mfm_t
+#endif
+
 #ifdef PPOUTPUT_SGS
 type tavg_sgs_t
     real(rprec) :: cs_opt2, Nu_t
@@ -121,7 +132,6 @@ type turbspec_t
     real(rprec) :: upup, vpvp, wpwp, upvp, upwp, vpwp
     real(rprec) :: vortxp2, vortyp2, vortzp2
 end type turbspec_t
-
 #endif
 
 #ifdef PPOUTPUT_WMLES
@@ -185,6 +195,11 @@ type(tavg_t), allocatable, dimension(:) :: tavg_zplane
 
 type(rs_t), allocatable, dimension(:,:,:) :: rs
 type(rs_t), allocatable, dimension(:) :: rs_zplane, cnpy_zplane
+
+#ifdef PPMFM
+type(tavg_mfm_t), allocatable, dimension(:,:,:) :: tavg_mfm
+type(rs_mfm_t), allocatable, dimension(:,:,:) :: rs_mfm
+#endif
 
 #ifdef PPOUTPUT_SGS
 type(tavg_sgs_t), allocatable, dimension(:,:,:) :: tavg_sgs
@@ -360,6 +375,38 @@ c % upwp = a % uw - a % u_w * a % w   !!pj
 c % vpwp = a % vw - a % v_w * a % w   !!pj
 
 end function rs_compute
+
+#ifdef PPMFM
+!*******************************************************************************
+function rs_mfm_compute( a, b, lbz2) result(c)
+!*******************************************************************************
+implicit none
+integer, intent(in) :: lbz2
+type(tavg_mfm_t), dimension(:,:,lbz2:), intent(in) :: a
+type(tavg_t), dimension(:,:,lbz2:), intent(in) :: b
+type(rs_mfm_t), allocatable, dimension(:,:,:) :: c
+
+integer :: ubx, uby, ubz
+
+ubx=ubound(a,1)
+uby=ubound(a,2)
+ubz=ubound(a,3)
+
+allocate(c(ubx,uby,lbz2:ubz))
+
+!! All on the uv grid
+c % u1v1 = a % u1v1 - b % u * a % gmu
+c % u1v1 = a % u1v1 - b % u * a % gmv
+c % u1v1 = a % u1v1 - b % u * a % gmw_uv
+c % u1v1 = a % u1v1 - b % v * a % gmu
+c % u1v1 = a % u1v1 - b % v * a % gmv
+c % u1v1 = a % u1v1 - b % v * a % gmw_uv
+c % u1v1 = a % u1v1 - b % w_uv * a % gmu
+c % u1v1 = a % u1v1 - b % w_uv * a % gmv
+c % u1v1 = a % u1v1 - b % w_uv * a % gmw_uv
+
+end function rs_mfm_compute
+#endif
 
 #ifdef PPOUTPUT_BUDGET
 !*******************************************************************************

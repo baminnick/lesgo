@@ -33,10 +33,11 @@ implicit none
 save
 private
 
-public :: mfm_init, ic_gmt, gm_transport
+public :: mfm_init, ic_gmt, gm_transport, mfm_checkpoint
 
 ! Main simulation variables for the GMT
-real(rprec), dimension(:,:,:), allocatable :: gmu, gmv, gmw,            &
+real(rprec), public, dimension(:,:,:), allocatable :: gmu, gmv, gmw
+real(rprec), dimension(:,:,:), allocatable ::                           &
     dgmudx, dgmudy, dgmudz, dgmvdx, dgmvdy, dgmvdz,                     &
     dgmwdx, dgmwdy, dgmwdz,                                             &
     gmtxx, gmtxy, gmtyy, gmtxz, gmtyz, gmtzz,                           &
@@ -878,10 +879,13 @@ endif
 #endif
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! Macroscopic Forcing
+! Inverse Macroscopic Forcing
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Compute difference in current macroscopic field and target
 ! and update the intermediate velocity field with this difference
+! 
+! Adding this difference acts as the source term for the GMT and 
+! ensures the macroscopic field is unchanging with time-step
 do jz = 1, nz-1
     ! Average in x and y
     do jx = 1, nx

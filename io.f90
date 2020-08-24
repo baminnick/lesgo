@@ -2224,6 +2224,9 @@ use string_util, only : string_concat
 #if PPUSE_TURBINES
 use turbines, only : turbines_checkpoint
 #endif
+#ifdef PPMFM
+use mfm, only : mfm_checkpoint
+#endif
 
 ! HIT Inflow
 #ifdef PPHIT
@@ -2284,6 +2287,10 @@ end if
 call turbines_checkpoint
 #endif
 
+#ifdef PPMFM
+call mfm_checkpoint
+#endif
+
 !  Update total_time.dat after simulation
 if (coord == 0) then
     !--only do this for true final output, not intermediate recording
@@ -2326,6 +2333,9 @@ use grid_m
 use functions, only : cell_indx
 use stat_defs, only : point, xplane, yplane, zplane
 use stat_defs, only : tavg, tavg_zplane
+#ifdef PPMFM
+use stat_defs, only : tavg_mfm
+#endif
 #ifdef PPOUTPUT_SGS
 use stat_defs, only : tavg_sgs
 #endif
@@ -2364,6 +2374,9 @@ z => grid % z
 if( tavg_calc ) then
 
     allocate(tavg(nx,ny,lbz:nz))
+#ifdef PPMFM
+    allocate(tavg_mfm(nx,ny,lbz:nz))
+#endif
     allocate(tavg_zplane(nz))
 #ifdef PPOUTPUT_SGS
     allocate(tavg_sgs(nx,ny,lbz:nz))
@@ -2417,6 +2430,28 @@ if( tavg_calc ) then
         ! to replace commented line below, set all types of tavg_zplane = 0._rprec
         ! call type_set( tavg_zplane(k), 0._rprec )
     end do
+
+#ifdef PPMFM
+    do k = 1, Nz
+    do j = 1, Ny
+    do i = 1, Nx
+        tavg_mfm(i,j,k) % gmu = 0._rprec
+        tavg_mfm(i,j,k) % gmv = 0._rprec
+        tavg_mfm(i,j,k) % gmw_uv = 0._rprec
+
+        tavg_mfm(i,j,k) % u1v1 = 0._rprec
+        tavg_mfm(i,j,k) % u1v2 = 0._rprec
+        tavg_mfm(i,j,k) % u1v3 = 0._rprec
+        tavg_mfm(i,j,k) % u2v1 = 0._rprec
+        tavg_mfm(i,j,k) % u2v2 = 0._rprec
+        tavg_mfm(i,j,k) % u2v3 = 0._rprec
+        tavg_mfm(i,j,k) % u3v1 = 0._rprec
+        tavg_mfm(i,j,k) % u3v2 = 0._rprec
+        tavg_mfm(i,j,k) % u3v3 = 0._rprec
+    enddo
+    enddo
+    enddo
+#endif
 
 #ifdef PPOUTPUT_SGS
     do k = 1, Nz
@@ -2767,6 +2802,9 @@ use stat_defs, only : tavg_sgs
 #ifdef PPOUTPUT_BUDGET
 use stat_defs, only : tavg_budget
 #endif
+#ifdef PPMFM
+use stat_defs, only : tavg_mfm
+#endif
 #ifdef PPOUTPUT_TURBSPEC
 use stat_defs, only : tavg_turbspecx, tavg_turbspecy
 #endif
@@ -2779,6 +2817,9 @@ character (*), parameter :: ftavg_sgs_in = path // 'tavg_sgs.out'
 #endif
 #ifdef PPOUTPUT_BUDGET
 character (*), parameter :: ftavg_budget_in = path // 'tavg_budget.out'
+#endif
+#ifdef PPMFM
+character (*), parameter :: ftavg_mfm_in = path // 'tavg_mfm.out'
 #endif
 #ifdef PPOUTPUT_TURBSPEC
 character (*), parameter :: ftavg_turbspec_in = path // 'tavg_turbspec.out'
@@ -2848,6 +2889,18 @@ else
     close(1)
 #endif
 
+#ifdef PPMFM
+    fname = ftavg_mfm_in
+#ifdef PPMPI
+    call string_concat( fname, MPI_suffix, coord )
+#endif
+    open(1, file=fname, action='read', position='rewind', form='unformatted',  &
+        convert=read_endian)
+    read(1) tavg_total_time
+    read(1) tavg_mfm
+    close(1)
+#endif
+
 end if
 
 ! Initialize tavg_dt
@@ -2880,6 +2933,11 @@ use sgs_param
 use sim_param, only : fxa, fya, fza
 #endif
 
+#ifdef PPMFM
+use stat_defs, only : tavg_mfm
+use mfm, only : gmu, gmv, gmw
+#endif
+
 use functions, only : interp_to_uv_grid, interp_to_w_grid
 
 implicit none
@@ -2889,16 +2947,27 @@ real(rprec) :: u_p, u_p2, v_p, v_p2, w_p, w_p2
 real(rprec), allocatable, dimension(:,:,:) :: w_uv, u_w, v_w
 real(rprec), allocatable, dimension(:,:,:) :: pres_real
 real(rprec), allocatable, dimension(:,:,:) :: dwdx_uv, dwdy_uv, dudz_uv, dvdz_uv
+#ifdef PPMFM
+real(rprec) :: gmu_p, gmv_p, gmw_p
+real(rprec), allocatable, dimension(:,:,:) :: gmw_uv
+#endif
 
 allocate(w_uv(nx,ny,lbz:nz), u_w(nx,ny,lbz:nz), v_w(nx,ny,lbz:nz))
 allocate(pres_real(nx,ny,lbz:nz))
 allocate( dwdx_uv(nx,ny,lbz:nz), dwdy_uv(nx,ny,lbz:nz),                        &
     dudz_uv(nx,ny,lbz:nz), dvdz_uv(nx,ny,lbz:nz) )
+#ifdef PPMFM
+allocate(gmw_uv(nx,ny,lbz:nz))
+#endif
 
 ! Prepare variables for time-averaging
 w_uv(1:nx,1:ny,lbz:nz) = interp_to_uv_grid(w(1:nx,1:ny,lbz:nz), lbz )
 u_w(1:nx,1:ny,lbz:nz) = interp_to_w_grid(u(1:nx,1:ny,lbz:nz), lbz )
 v_w(1:nx,1:ny,lbz:nz) = interp_to_w_grid(v(1:nx,1:ny,lbz:nz), lbz )
+
+#ifdef PPMFM
+gmw_uv(1:nx,1:ny,lbz:nz) = interp_to_uv_grid(gmw(1:nx,1:ny,lbz:nz), lbz )
+#endif
 
 pres_real(1:nx,1:ny,lbz:nz) = 0._rprec
 pres_real(1:nx,1:ny,lbz:nz) = p(1:nx,1:ny,lbz:nz)                              &
@@ -2961,6 +3030,26 @@ do i = 1, nx
     !tavg(i,j,k) % dwdx = tavg(i,j,k) % dwdx + dwdx_uv(i,j,k) * tavg_dt
     !tavg(i,j,k) % dwdy = tavg(i,j,k) % dwdy + dwdy_uv(i,j,k) * tavg_dt
     !tavg(i,j,k) % dwdz = tavg(i,j,k) % dwdz + dwdz(i,j,k)    * tavg_dt
+
+#ifdef PPMFM
+    gmu_p = gmu(i,j,k) !! uv grid
+    gmv_p = gmv(i,j,k) !! uv grid
+    gmw_p = gmw_uv(i,j,k) !! uv grid
+
+    tavg_mfm(i,j,k) % gmu = tavg_mfm(i,j,k) % gmu + gmu_p * tavg_dt !! uv grid
+    tavg_mfm(i,j,k) % gmv = tavg_mfm(i,j,k) % gmv + gmv_p * tavg_dt !! uv grid
+    tavg_mfm(i,j,k) % gmw_uv = tavg_mfm(i,j,k) % gmw_uv + gmw_p * tavg_dt !! uv grid
+
+    tavg_mfm(i,j,k) % u1v1 = tavg_mfm(i,j,k) % u1v1 + u_p * gmu_p * tavg_dt !! uv grid
+    tavg_mfm(i,j,k) % u1v2 = tavg_mfm(i,j,k) % u1v2 + u_p * gmv_p * tavg_dt !! uv grid
+    tavg_mfm(i,j,k) % u1v3 = tavg_mfm(i,j,k) % u1v3 + u_p * gmw_p * tavg_dt !! uv grid
+    tavg_mfm(i,j,k) % u2v1 = tavg_mfm(i,j,k) % u2v1 + v_p * gmu_p * tavg_dt !! uv grid
+    tavg_mfm(i,j,k) % u2v2 = tavg_mfm(i,j,k) % u2v2 + v_p * gmv_p * tavg_dt !! uv grid
+    tavg_mfm(i,j,k) % u2v3 = tavg_mfm(i,j,k) % u2v3 + v_p * gmw_p * tavg_dt !! uv grid
+    tavg_mfm(i,j,k) % u3v1 = tavg_mfm(i,j,k) % u3v1 + w_p2 * gmu_p * tavg_dt !! uv grid
+    tavg_mfm(i,j,k) % u3v2 = tavg_mfm(i,j,k) % u3v2 + w_p2 * gmv_p * tavg_dt !! uv grid
+    tavg_mfm(i,j,k) % u3v3 = tavg_mfm(i,j,k) % u3v3 + w_p2 * gmw_p * tavg_dt !! uv grid
+#endif
 
 end do
 end do
@@ -3560,6 +3649,10 @@ use stat_defs, only : tavg_turbspecx, tavg_turbspecy, turbspecx, turbspecy
 use stat_defs, only : turbspec_compute
 #endif
 
+#ifdef PPMFM
+use stat_defs, only : tavg_mfm_t, tavg_mfm, rs_mfm_compute, rs_mfm
+#endif
+
 #ifdef PPMPI
 use mpi_defs, only : mpi_sync_real_array,MPI_SYNC_DOWNUP
 use param, only : ierr,comm
@@ -3585,6 +3678,10 @@ character(64) :: fname_rxx, fname_ryy, fname_rzz, fname_rxy, fname_rxz, fname_ry
 
 #ifdef PPOUTPUT_TURBSPEC
 character(64) :: fname_sxvel, fname_syvel, fname_sxvort, fname_syvort
+#endif
+
+#ifdef PPMFM
+character(64) :: fname_mfm
 #endif
 
 integer :: i,j,k
@@ -3625,6 +3722,9 @@ fname_syvel = path // 'output/syvel'
 fname_sxvort = path // 'output/sxvort'
 fname_syvort = path // 'output/syvort'
 #endif
+#ifdef PPMFM
+fname_mfm = path // 'output/mfm'
+#endif
 
 ! CGNS
 #ifdef PPCGNS
@@ -3653,6 +3753,9 @@ call string_concat(fname_sxvel, '.cgns')
 call string_concat(fname_syvel, '.cgns')
 call string_concat(fname_sxvort, '.cgns')
 call string_concat(fname_syvort, '.cgns')
+#endif
+#ifdef PPMFM
+call string_concat(fname_mfm, '.cgns')
 #endif
 ! Binary
 #else
@@ -3686,6 +3789,9 @@ call string_concat(fname_sxvel, bin_ext)
 call string_concat(fname_syvel, bin_ext)
 call string_concat(fname_sxvort, bin_ext)
 call string_concat(fname_syvort, bin_ext)
+#endif
+#ifdef PPMFM
+call string_concat(fname_mfm, bin_ext)
 #endif
 #endif
 
@@ -3730,6 +3836,23 @@ do i = 1, Nx
     !tavg(i,j,k) % dwdx = tavg(i,j,k) % dwdx / tavg_total_time
     !tavg(i,j,k) % dwdy = tavg(i,j,k) % dwdy / tavg_total_time
     !tavg(i,j,k) % dwdz = tavg(i,j,k) % dwdz / tavg_total_time
+
+#ifdef PPMFM
+    tavg_mfm(i,j,k) % gmu = tavg_mfm(i,j,k) % gmu / tavg_total_time
+    tavg_mfm(i,j,k) % gmv = tavg_mfm(i,j,k) % gmv / tavg_total_time
+    tavg_mfm(i,j,k) % gmw_uv = tavg_mfm(i,j,k) % gmw_uv / tavg_total_time
+
+    tavg_mfm(i,j,k) % u1v1 = tavg_mfm(i,j,k) % u1v1 / tavg_total_time
+    tavg_mfm(i,j,k) % u1v2 = tavg_mfm(i,j,k) % u1v2 / tavg_total_time
+    tavg_mfm(i,j,k) % u1v3 = tavg_mfm(i,j,k) % u1v3 / tavg_total_time
+    tavg_mfm(i,j,k) % u2v1 = tavg_mfm(i,j,k) % u2v1 / tavg_total_time
+    tavg_mfm(i,j,k) % u2v2 = tavg_mfm(i,j,k) % u2v2 / tavg_total_time
+    tavg_mfm(i,j,k) % u2v3 = tavg_mfm(i,j,k) % u2v3 / tavg_total_time
+    tavg_mfm(i,j,k) % u3v1 = tavg_mfm(i,j,k) % u3v1 / tavg_total_time
+    tavg_mfm(i,j,k) % u3v2 = tavg_mfm(i,j,k) % u3v2 / tavg_total_time
+    tavg_mfm(i,j,k) % u3v3 = tavg_mfm(i,j,k) % u3v3 / tavg_total_time
+#endif
+
 end do
 end do
 end do
@@ -3996,6 +4119,20 @@ call mpi_sync_real_array( tavg(1:nx,1:ny,lbz:nz)%vw, 0, MPI_SYNC_DOWNUP )
 call mpi_sync_real_array( tavg(1:nx,1:ny,lbz:nz)%uv, 0, MPI_SYNC_DOWNUP )
 call mpi_sync_real_array( tavg(1:nx,1:ny,lbz:nz)%p, 0, MPI_SYNC_DOWNUP )
 call mpi_sync_real_array( tavg(1:nx,1:ny,lbz:nz)%fx, 0, MPI_SYNC_DOWNUP )
+#ifdef PPMFM
+call mpi_sync_real_array( tavg_mfm(1:nx,1:ny,lbz:nz)%gmu, 0, MPI_SYNC_DOWNUP )
+call mpi_sync_real_array( tavg_mfm(1:nx,1:ny,lbz:nz)%gmv, 0, MPI_SYNC_DOWNUP )
+call mpi_sync_real_array( tavg_mfm(1:nx,1:ny,lbz:nz)%gmw_uv, 0, MPI_SYNC_DOWNUP )
+call mpi_sync_real_array( tavg_mfm(1:nx,1:ny,lbz:nz)%u1v1, 0, MPI_SYNC_DOWNUP )
+call mpi_sync_real_array( tavg_mfm(1:nx,1:ny,lbz:nz)%u1v2, 0, MPI_SYNC_DOWNUP )
+call mpi_sync_real_array( tavg_mfm(1:nx,1:ny,lbz:nz)%u1v3, 0, MPI_SYNC_DOWNUP )
+call mpi_sync_real_array( tavg_mfm(1:nx,1:ny,lbz:nz)%u2v1, 0, MPI_SYNC_DOWNUP )
+call mpi_sync_real_array( tavg_mfm(1:nx,1:ny,lbz:nz)%u2v2, 0, MPI_SYNC_DOWNUP )
+call mpi_sync_real_array( tavg_mfm(1:nx,1:ny,lbz:nz)%u2v3, 0, MPI_SYNC_DOWNUP )
+call mpi_sync_real_array( tavg_mfm(1:nx,1:ny,lbz:nz)%u3v1, 0, MPI_SYNC_DOWNUP )
+call mpi_sync_real_array( tavg_mfm(1:nx,1:ny,lbz:nz)%u3v2, 0, MPI_SYNC_DOWNUP )
+call mpi_sync_real_array( tavg_mfm(1:nx,1:ny,lbz:nz)%u3v3, 0, MPI_SYNC_DOWNUP )
+#endif
 #ifdef PPOUTPUT_SGS
 call mpi_sync_real_array( tavg_sgs(1:nx,1:ny,lbz:nz)%cs_opt2, 0, MPI_SYNC_DOWNUP )
 ! call mpi_sync_real_array( tavg_sgs(1:nx,1:ny,lbz:nz)%Tn, 0, MPI_SYNC_DOWNUP )
@@ -4343,6 +4480,45 @@ close(13)
 
 deallocate(rs)
 
+#ifdef PPMFM
+allocate(rs_mfm(nx,ny,lbz:nz))
+rs_mfm = rs_mfm_compute(tavg_mfm, tavg, lbz)
+
+#ifdef PPCGNS
+! Write CGNS data
+call write_parallel_cgns(fname_mfm,nx,ny,nz- nz_end,nz_tot,                    &
+    (/ 1, 1,   (nz-1)*coord + 1 /),                                            &
+    (/ nx, ny, (nz-1)*(coord+1) + 1 - nz_end /),                               &
+    x(1:nx) , y(1:ny) , z(1:(nz-nz_end) ), 9,                                  &
+    (/ 'u1v1', 'u1v2', 'u1v3','u2v1','u2v2','u2v3','u3v1','u3v2','u3v3'/),     &
+    (/ rs_mfm(1:nx,1:ny,1:nz- nz_end) % u1v1,                                  &
+    rs_mfm(1:nx,1:ny,1:nz- nz_end) % u1v2,                                     &
+    rs_mfm(1:nx,1:ny,1:nz- nz_end) % u1v3,                                     &
+    rs_mfm(1:nx,1:ny,1:nz- nz_end) % u2v1,                                     &
+    rs_mfm(1:nx,1:ny,1:nz- nz_end) % u2v2,                                     &
+    rs_mfm(1:nx,1:ny,1:nz- nz_end) % u2v3,                                     &
+    rs_mfm(1:nx,1:ny,1:nz- nz_end) % u3v1,                                     &
+    rs_mfm(1:nx,1:ny,1:nz- nz_end) % u3v2,                                     &
+    rs_mfm(1:nx,1:ny,1:nz- nz_end) % u3v3 /) )
+#else
+! Write binary data
+open(unit=13, file=fname_mfm, form='unformatted', convert=write_endian,        &
+    access='direct',recl=nx*ny*nz*rprec)
+write(13,rec=1) rs_mfm(:nx,:ny,1:nz)%u1v1
+write(13,rec=2) rs_mfm(:nx,:ny,1:nz)%u1v2
+write(13,rec=3) rs_mfm(:nx,:ny,1:nz)%u1v3
+write(13,rec=4) rs_mfm(:nx,:ny,1:nz)%u2v1
+write(13,rec=5) rs_mfm(:nx,:ny,1:nz)%u2v2
+write(13,rec=6) rs_mfm(:nx,:ny,1:nz)%u2v3
+write(13,rec=7) rs_mfm(:nx,:ny,1:nz)%u3v1
+write(13,rec=8) rs_mfm(:nx,:ny,1:nz)%u3v2
+write(13,rec=9) rs_mfm(:nx,:ny,1:nz)%u3v3
+close(13)
+#endif
+
+deallocate(rs_mfm)
+#endif
+
 #ifdef PPOUTPUT_SGS
 #ifdef PPCGNS
 call write_parallel_cgns(fname_cs,nx,ny,nz- nz_end,nz_tot,                     &
@@ -4675,6 +4851,10 @@ use stat_defs, only : tavg_budget
 use param, only : checkpoint_tavg_turbspec_file
 use stat_defs, only : tavg_turbspecx, tavg_turbspecy
 #endif
+#ifdef PPMFM
+use param, only : checkpoint_tavg_mfm_file
+use stat_defs, only : tavg_mfm
+#endif
 
 implicit none
 
@@ -4729,6 +4909,19 @@ open(1, file=fname, action='write', position='rewind',form='unformatted',      &
 write(1) tavg_total_time
 write(1) tavg_turbspecx
 write(1) tavg_turbspecy
+close(1)
+#endif
+
+#ifdef PPMFM
+fname = checkpoint_tavg_mfm_file
+#ifdef PPMPI
+call string_concat( fname, '.c', coord)
+#endif
+!  Write data to tavg_mfm.out
+open(1, file=fname, action='write', position='rewind',form='unformatted',      &
+    convert=write_endian)
+write(1) tavg_total_time
+write(1) tavg_mfm
 close(1)
 #endif
 
