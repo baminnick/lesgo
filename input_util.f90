@@ -357,6 +357,8 @@ do
                 ld_big = 2 * lh_big
             endif
 
+        else !! not fourier
+            nxp = nx !! reset physical streamwise grid
         endif !! end of fourier setting check
 
         return
