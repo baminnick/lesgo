@@ -396,14 +396,14 @@ allocate(c(ubx,uby,lbz2:ubz))
 
 !! All on the uv grid
 c % u1v1 = a % u1v1 - b % u * a % gmu
-c % u1v1 = a % u1v1 - b % u * a % gmv
-c % u1v1 = a % u1v1 - b % u * a % gmw_uv
-c % u1v1 = a % u1v1 - b % v * a % gmu
-c % u1v1 = a % u1v1 - b % v * a % gmv
-c % u1v1 = a % u1v1 - b % v * a % gmw_uv
-c % u1v1 = a % u1v1 - b % w_uv * a % gmu
-c % u1v1 = a % u1v1 - b % w_uv * a % gmv
-c % u1v1 = a % u1v1 - b % w_uv * a % gmw_uv
+c % u1v2 = a % u1v2 - b % u * a % gmv
+c % u1v3 = a % u1v3 - b % u * a % gmw_uv
+c % u2v1 = a % u2v1 - b % v * a % gmu
+c % u2v2 = a % u2v2 - b % v * a % gmv
+c % u2v3 = a % u2v3 - b % v * a % gmw_uv
+c % u3v1 = a % u3v1 - b % w_uv * a % gmu
+c % u3v2 = a % u3v2 - b % w_uv * a % gmv
+c % u3v3 = a % u3v3 - b % w_uv * a % gmw_uv
 
 end function rs_mfm_compute
 #endif
