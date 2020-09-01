@@ -850,6 +850,8 @@ do
 
         select case (uppercase(buff(1:equal_pos-1)))
 
+            case ('IC_MFM')
+                read (buff(equal_pos+1:), *) ic_mfm
             case ('GMU_BOT')
                 read (buff(equal_pos+1:), *) gmu_bot
             case ('GMU_TOP')
@@ -858,8 +860,8 @@ do
                 read (buff(equal_pos+1:), *) gmv_bot
             case ('GMV_TOP')
                 read (buff(equal_pos+1:), *) gmv_top
-            case ('IC_MFM')
-                read (buff(equal_pos+1:), *) ic_mfm
+            case ('BF_LOC')
+                read (buff(equal_pos+1:), *) bf_loc
             case ('INITIAL_NOISE_GMT')
                 read (buff(equal_pos+1:), *) initial_noise_gmt
             case default

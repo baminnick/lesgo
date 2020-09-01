@@ -58,14 +58,19 @@ logical, public :: init_gmt = .true.
 ! Name of file for restarting
 character(64) :: fname
 
-! Boundary conditions
+! Initial Condition / Forcing Method
+integer, public :: ic_mfm = 1
+
+! Boundary conditions for ic_mfm = 1
 real(rprec), public :: gmu_bot = 0._rprec
 real(rprec), public :: gmu_top = 0._rprec
 real(rprec), public :: gmv_bot = 0._rprec
 real(rprec), public :: gmv_top = 0._rprec
 
-! Initial condition
-integer, public :: ic_mfm = 1
+! Step location for ic_mfm = 2 brute force method
+real(rprec), public :: bf_loc = 1._rprec
+
+! Initial noise
 real(rprec), public :: initial_noise_gmt = 0._rprec
 
 ! Target Macroscopic field
@@ -184,6 +189,16 @@ do jz = 1, nz
         ! Linear profile in u, zero for v and w
         case (1)
         gmu_bar(jz) = z
+        gmv_bar(jz) = 0.0_rprec
+        gmw_bar(jz) = 0.0_rprec
+
+        ! Heaviside profile in u, zero for v and w
+        case (2)
+        if (z < bf_loc) then
+            gmu_bar(jz) = 0.0_rprec
+        else
+            gmu_bar(jz) = 1.0_rprec
+        endif
         gmv_bar(jz) = 0.0_rprec
         gmw_bar(jz) = 0.0_rprec
 
@@ -664,9 +679,6 @@ call ddz_uv(gmv, dgmvdz, lbz)
 ! except bottom coord, only 1:nz-1
 call ddz_w(gmw, dgmwdz, lbz)
 
-!debug
-write(*,*) coord, dgmudx(1,1,:)
-
 ! Wall stress and derivatives at the wall
 ! (txz, tyz, dgmudz, dgmvdz at jz=1)
 if (coord == 0) then
@@ -826,10 +838,6 @@ if (fourier) then
                 v_big(1,jy,jz)*dgmudy_big(:,jy,jz) +                         &
                 0.5_rprec*(w_big(1,jy,jz+1)*dgmudz_big(:,jy,jz+1) +          &
                 w_big(1,jy,jz)*dgmudz_big(:,jy,jz)))
-!debug - shows NaN for all jx positions except for the last two
-!if ((coord==0) .and. (jy == 1)) write(*,*) jz, temp_big(:,jy,jz)
-!debug - filled with numbers and zeros in the wrong places
-!if ((coord==0) .and. (jy == 1)) write(*,*) jz, dgmudx_big(:,jy,jz)
         enddo
     enddo
 else
@@ -864,9 +872,6 @@ endif
 
 ! Move temp_big into RHSx for GMT and make small
 call to_small(temp_big, rhs_gmx)
-
-!debug -- shows zeroes on some z-levels, but others are filled
-!if ((coord == 0)) write(*,*) rhs_gmx(1,1,:)
 
 ! Compute advective term in y-GMT
 ! Interpolate w and dvdz onto uv-grid
