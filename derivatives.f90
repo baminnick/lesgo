@@ -256,7 +256,7 @@ implicit none
 integer, intent(in) :: lbz
 real(rprec), dimension(:,:,lbz:), intent(in) :: f
 real(rprec), dimension(:,:,lbz:), intent(inout) :: dfdz
-integer :: jx, jy, jz
+integer :: jz
 real(rprec) :: const
 
 const = 1._rprec/dz
@@ -269,15 +269,11 @@ dfdz(:,:,0) = BOGUS
 ! The ghost node information is available here
 ! if coord == 0, dudz(1) will be set in wallstress
 do jz = lbz+1, nz
-do jy = 1, ny
-do jx = 1, nx !! jb has ld instead of nx fourier
 #ifdef PPMAPPING
-    dfdz(jx,jy,jz) = (1/jaco_w(jz))*const*(f(jx,jy,jz)-f(jx,jy,jz-1))
+    dfdz(:,:,jz) = (1/jaco_w(jz))*const*(f(:,:,jz)-f(:,:,jz-1))
 #else
-    dfdz(jx,jy,jz) = const*(f(jx,jy,jz)-f(jx,jy,jz-1))
+    dfdz(:,:,jz) = const*(f(:,:,jz)-f(:,:,jz-1))
 #endif
-end do
-end do
 end do
 
 ! Not necessarily accurate at top and bottom boundary
@@ -319,19 +315,15 @@ real(rprec), dimension(:,:,lbz:), intent(in) :: f
 real(rprec), dimension(:,:,lbz:), intent(inout) :: dfdz
 integer, intent(in) :: lbz
 real(rprec)::const
-integer :: jx, jy, jz
+integer :: jz
 
 const = 1._rprec/dz
 do jz = lbz, nz-1
-do jy = 1, ny
-do jx = 1, ld !! nx fourier
 #ifdef PPMAPPING
-    dfdz(jx,jy,jz) = (1/jaco_uv(jz))*const*(f(jx,jy,jz+1)-f(jx,jy,jz))
+    dfdz(:,:,jz) = (1/jaco_uv(jz))*const*(f(:,:,jz+1)-f(:,:,jz))
 #else
-    dfdz(jx,jy,jz) = const*(f(jx,jy,jz+1)-f(jx,jy,jz))
+    dfdz(:,:,jz) = const*(f(:,:,jz+1)-f(:,:,jz))
 #endif
-end do
-end do
 end do
 
 #ifdef PPSAFETYMODE

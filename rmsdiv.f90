@@ -17,19 +17,21 @@
 !!  along with lesgo.  If not, see <http://www.gnu.org/licenses/>.
 !!
 
-!*******************************************************************************
-subroutine rmsdiv(dudx,dvdy,dwdz,rms)
-!*******************************************************************************
+!******************************************************************************
+subroutine rmsdiv(dudx,dvdy,dwdz,rms,nx)
+!******************************************************************************
 !
-! This subroutine calculates the velocity divergence metric. Currently using the
-! L_1 norm ov the velocity divergence.
+! This subroutine calculates the velocity divergence metric. Currently using
+! the L_1 norm ov the velocity divergence.
 !
 use types, only : rprec
-use param
+use param, only : ny, lbz, nz, nproc
+use param, only : comm, ierr, MPI_RPREC, MPI_SUM, rank
 
 implicit none
 integer :: jx, jy, jz, jz_max
-real(rprec), dimension(ld,ny,lbz:nz), intent(in) :: dudx, dvdy, dwdz
+integer, intent(in) :: nx
+real(rprec), dimension(nx+2,ny,lbz:nz), intent(in) :: dudx, dvdy, dwdz
 real(rprec), intent(out) :: rms
 #ifdef PPMPI
 real(rprec) :: rms_global

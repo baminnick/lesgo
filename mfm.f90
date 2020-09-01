@@ -1092,7 +1092,7 @@ call project(gmu,gmv,gmw,dgmpdx,dgmpdy,dgmpdz)
 
 ! Output updated information on GMT to screen
 if (modulo (jt_total, wbase) == 0) then
-    call rmsdiv(dgmudx,dgmvdy,dgmwdz,rmsdivvel)
+    call rmsdiv(dgmudx,dgmvdy,dgmwdz,rmsdivvel,nxp)
 
     if(coord == 0) then
         write(*,*)

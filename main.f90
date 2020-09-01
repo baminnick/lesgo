@@ -587,7 +587,7 @@ call clock_convec%stop
 
         ! Calculate rms divergence of velocity
         ! only written to screen, not used otherwise
-        call rmsdiv(dudx,dvdy,dwdz,rmsdivvel)
+        call rmsdiv(dudx,dvdy,dwdz,rmsdivvel,nx)
         maxcfl = get_max_cfl()
         maxvisc = get_max_visc()
 

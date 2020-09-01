@@ -17,9 +17,9 @@
 !!  along with lesgo.  If not, see <http://www.gnu.org/licenses/>.
 !!
 
-!*******************************************************************************
+!******************************************************************************
 subroutine divstress_uv (divtx, divty, txx, txy, txz, tyy, tyz)
-!*******************************************************************************
+!******************************************************************************
 !
 ! This subroutine provides divt for 1:nz. MPI provides 1:nz-1,
 ! except at top, where 1:nz is provided
@@ -30,7 +30,7 @@ use derivatives, only : ddx, ddy, ddz_w, ddxy
 implicit none
 
 real(rprec), dimension(ld,ny,lbz:nz), intent(out) :: divtx, divty
-real(rprec), dimension(ld, ny, lbz:nz), intent (in) :: txx, txy, txz, tyy, tyz
+real(rprec), dimension(ld,ny,lbz:nz), intent (in) :: txx, txy, txz, tyy, tyz
 real(rprec), dimension(ld,ny,lbz:nz) :: dtxdx, dtydy, dtzdz
 real(rprec), dimension(ld,ny,lbz:nz) :: dtxdx2, dtydy2, dtzdz2
 
@@ -56,7 +56,7 @@ call ddz_w(tyz, dtzdz2, lbz)
 divtx(:,:,1:nz-1) = dtxdx(:,:,1:nz-1) + dtydy(:,:,1:nz-1) + dtzdz(:,:,1:nz-1)
 
 ! Set ld-1, ld to 0 (or could do BOGUS)
-divtx(ld-1:ld, :, 1:nz-1) = 0._rprec
+divtx(ld-1:ld,:,1:nz-1) = 0._rprec
 
 #ifdef PPSAFETYMODE
 #ifdef PPMPI

@@ -65,13 +65,13 @@ do jz = 2, nz-1 ! don't force too close to the wall
 do jy = 1, ny
 do jx = 1, nx
     call random_number(dummy_rand)
-    RHSx(jx,jy,jz) = RHSx(jx,jy,jz) +                                          &
+    RHSx(jx,jy,jz) = RHSx(jx,jy,jz) +                                     &
         (rms_random_force)*(dummy_rand-.5_rprec)
     call random_number(dummy_rand)
-    RHSy(jx,jy,jz) = RHSy(jx,jy,jz) +                                          &
+    RHSy(jx,jy,jz) = RHSy(jx,jy,jz) +                                     &
         (rms_random_force)*(dummy_rand-.5_rprec)
     call random_number(dummy_rand)
-    RHSz(jx,jy,jz) = RHSz(jx,jy,jz) +                                          &
+    RHSz(jx,jy,jz) = RHSz(jx,jy,jz) +                                     &
         (rms_random_force)*(dummy_rand-.5_rprec)
 end do
 end do
@@ -215,36 +215,24 @@ implicit none
 
 integer :: jx, jy, jz
 integer :: jz_min
-real(rprec) :: RHS, tconst
-real(rprec), dimension(ld, ny, lbz:nz), intent(inout) :: u, v, w
-real(rprec), dimension(ld, ny, nz), intent(in) :: dpdx, dpdy, dpdz
+real(rprec) :: tconst
+real(rprec), dimension(:,:,lbz:), intent(inout) :: u, v, w
+real(rprec), dimension(:,:,1:), intent(in) :: dpdx, dpdy, dpdz
 
 ! Caching
 tconst = tadv1 * dt
 
 do jz = 1, nz
-do jy = 1, ny
-do jx = 1, nx
 #ifdef PPLVLSET
-    RHS = -tadv1 * dpdx(jx, jy, jz)
-    u(jx, jy, jz) = (u(jx, jy, jz) + dt * (RHS + fx(jx, jy, jz)))
-    RHS = -tadv1 * dpdy(jx, jy, jz)
-    v(jx, jy, jz) = (v(jx, jy, jz) + dt * (RHS + fy(jx, jy, jz)))
+    u(:,:,jz) = (u(:,:,jz) + dt * (-tadv1 * dpdx(:,:,jz) + fx(:,:,jz)))
+    v(:,:,jz) = (v(:,:,jz) + dt * (-tadv1 * dpdy(:,:,jz) + fy(:,:,jz)))
 #elif PPLVLSET_STRETCH
-    RHS = -tadv1 * dpdx(jx, jy, jz)
-    u(jx, jy, jz) = (u(jx, jy, jz) + dt * (RHS + IBFx(jx, jy, jz)))
-    !u(jx, jy, jz) = (u(jx, jy, jz) + dt * (RHS                 ))
-    RHS = -tadv1 * dpdy(jx, jy, jz)
-    v(jx, jy, jz) = (v(jx, jy, jz) + dt * (RHS + IBFy(jx, jy, jz)))
-    !v(jx, jy, jz) = (v(jx, jy, jz) + dt * (RHS                 ))
+    u(:,:,jz) = (u(:,:,jz) + dt * (-tadv1 * dpdx(:,:,jz) + IBFx(:,:,jz)))
+    v(:,:,jz) = (v(:,:,jz) + dt * (-tadv1 * dpdy(:,:,jz) + IBFy(:,:,jz)))
 #else
-    RHS = -tadv1 * dpdx(jx, jy, jz)
-    u(jx, jy, jz) = (u(jx, jy, jz) + dt * (RHS                 ))
-    RHS = -tadv1 * dpdy(jx, jy, jz)
-    v(jx, jy, jz) = (v(jx, jy, jz) + dt * (RHS                 ))
+    u(:,:,jz) = (u(:,:,jz) + dt * (-tadv1 * dpdx(:,:,jz)))
+    v(:,:,jz) = (v(:,:,jz) + dt * (-tadv1 * dpdy(:,:,jz)))
 #endif
-end do
-end do
 end do
 
 if (coord == 0) then
@@ -254,21 +242,13 @@ else
 end if
 
 do jz = jz_min, nz - 1
-do jy = 1, ny
-do jx = 1, nx
 #ifdef PPLVLSET
-    RHS = -tadv1 * dpdz(jx, jy, jz)
-    w(jx, jy, jz) = (w(jx, jy, jz) + dt * (RHS + fz(jx, jy, jz)))
+    w(:,:,jz) = (w(:,:,jz) + dt * (-tadv1 * dpdz(:,:,jz) + fz(:,:,jz)))
 #elif PPLVLSET_STRETCH
-    RHS = -tadv1 * dpdz(jx, jy, jz)
-    w(jx, jy, jz) = (w(jx, jy, jz) + dt * (RHS + IBFz(jx, jy, jz)))
-    !w(jx, jy, jz) = (w(jx, jy, jz) + dt * (RHS                 ))
+    w(:,:,jz) = (w(:,:,jz) + dt * (-tadv1 * dpdz(:,:,jz) + IBFz(:,:,jz)))
 #else
-    RHS = -tadv1 * dpdz(jx, jy, jz)
-    w(jx, jy, jz) = (w(jx, jy, jz) + dt * (RHS                 ))
+    w(:,:,jz) = (w(:,:,jz) + dt * (-tadv1 * dpdz(:,:,jz)))
 #endif
-end do
-end do
 end do
 
 ! Cases for CPS, Isotropic Turbulence and Uniform inflow
