@@ -825,7 +825,7 @@ if (fourier) then
         if (coord == nproc-1) then
             ! Top wall take w(jz=nz) = 0
             temp_big(:,jy,nz-1) = const*(u_big(1,jy,nz-1)*dgmudx_big(:,jy,nz-1) +   &
-                v_big(1,jy,nz-1)*dgmudy_big(:,jy,nz-1) +                            &
+                v_big(1,jy,nz-1)*dgmudy_big(:,jy,nz-1) +                    &
                 0.5_rprec*w_big(1,jy,nz-1)*dgmudz_big(:,jy,nz-1))
             jz_max = nz-2
         else
@@ -892,7 +892,7 @@ if (fourier) then
         if (coord == nproc-1) then
             ! Top wall take w(jz=nz) = 0
             temp_big(:,jy,nz-1) = const*(u_big(1,jy,nz-1)*dgmvdx_big(:,jy,nz-1) +   &
-                v_big(1,jy,nz-1)*dgmvdy_big(:,jy,nz-1) +                            &
+                v_big(1,jy,nz-1)*dgmvdy_big(:,jy,nz-1) +                  &
                 0.5_rprec*w_big(1,jy,nz-1)*dgmvdz_big(:,jy,nz-1))
             jz_max = nz-2
         else
@@ -901,9 +901,9 @@ if (fourier) then
 
         ! For entire domain
         do jz = jz_min, jz_max
-            temp_big(:,jy,jz) = const*(u_big(1,jy,jz)*dgmvdx_big(:,jy,jz) +      &
-                v_big(1,jy,jz)*dgmvdy_big(:,jy,jz) +                             &
-                0.5_rprec*(w_big(1,jy,jz+1)*dgmvdz_big(:,jy,jz+1) +              &
+            temp_big(:,jy,jz) = const*(u_big(1,jy,jz)*dgmvdx_big(:,jy,jz) + &
+                v_big(1,jy,jz)*dgmvdy_big(:,jy,jz) +                        &
+                0.5_rprec*(w_big(1,jy,jz+1)*dgmvdz_big(:,jy,jz+1) +         &
                 w_big(1,jy,jz)*dgmvdz_big(:,jy,jz)))
         enddo
     enddo
@@ -1092,9 +1092,11 @@ call project(gmu,gmv,gmw,dgmpdx,dgmpdy,dgmpdz)
 
 ! Output updated information on GMT to screen
 if (modulo (jt_total, wbase) == 0) then
+    call gmt_total_diff(du,dv,dw)
     call rmsdiv(dgmudx,dgmvdy,dgmwdz,rmsdivvel,nxp)
 
     if(coord == 0) then
+        call write_gmt_tau_wall_bot()
         write(*,*)
         write(*,'(a,E15.7)') ' GM  Velocity divergence metric: ', rmsdivvel
         write(*,'(a)') '===================== GMT BOTTOM ======================='
@@ -1105,6 +1107,7 @@ if (modulo (jt_total, wbase) == 0) then
     end if
     call mpi_barrier(comm, ierr)
     if(coord == nproc-1) then
+        call write_gmt_tau_wall_top()
         write(*,'(a)') '====================== GMT TOP ========================='
         write(*,*) 'u: ', gmu(nxp/2,ny/2,nz-2:nz-1)
         write(*,*) 'v: ', gmv(nxp/2,ny/2,nz-2:nz-1)
@@ -1115,5 +1118,140 @@ if (modulo (jt_total, wbase) == 0) then
 end if
 
 end subroutine gm_transport
+
+!*****************************************************************************
+subroutine write_gmt_tau_wall_bot()
+!*****************************************************************************
+!
+! Measure and write spatially average bottom wall stress
+! 
+use types, only : rprec
+use param, only : jt_total, wbase, nxp, ny
+implicit none
+real(rprec) :: twall, txavg, tyavg
+integer :: jx, jy
+
+! -------------------------- Wall Stress Statistics --------------------------
+txavg = 0._rprec
+tyavg = 0._rprec
+do jx = 1, nxp
+do jy = 1, ny
+    txavg = txavg + gmtxz(jx,jy,1)
+    tyavg = tyavg + gmtyz(jx,jy,1)
+end do
+end do
+txavg = txavg / (nxp*ny)
+tyavg = tyavg / (nxp*ny)
+twall = sqrt( (txavg)**2 + (tyavg)**2 )
+
+! ------------------------------ Write to file -------------------------------
+open(2,file=path // 'output/gmt_tau_wall_bot.dat', status='unknown',        &
+    form='formatted', position='append')
+
+! one time header output
+if (jt_total==wbase) write(2,*) 'jt_total, txavg, tyavg, twall'
+
+! continual time-related output
+write(2,*) jt_total, txavg, tyavg, twall
+close(2)
+
+end subroutine write_gmt_tau_wall_bot
+
+!*****************************************************************************
+subroutine write_gmt_tau_wall_top()
+!*****************************************************************************
+!
+! Measure and write spatially average top wall stress
+! 
+use types, only : rprec
+use param, only : jt_total, wbase, nxp, ny, nz
+implicit none
+real(rprec) :: twall, txavg, tyavg
+integer :: jx, jy
+
+! -------------------------- Wall Stress Statistics --------------------------
+txavg = 0._rprec
+tyavg = 0._rprec
+do jx = 1, nxp
+do jy = 1, ny
+    txavg = txavg + gmtxz(jx,jy,nz)
+    tyavg = tyavg + gmtyz(jx,jy,nz)
+end do
+end do
+txavg = txavg / (nxp*ny)
+tyavg = tyavg / (nxp*ny)
+twall = sqrt( (txavg)**2 + (tyavg)**2 )
+
+! ------------------------------ Write to file -------------------------------
+open(2,file=path // 'output/gmt_tau_wall_top.dat', status='unknown',        &
+    form='formatted', position='append')
+
+! one time header output
+if (jt_total==wbase) write(2,*) 'jt_total, txavg, tyavg, twall'
+
+! continual time-related output
+write(2,*) jt_total, txavg, tyavg, twall
+close(2)
+
+end subroutine write_gmt_tau_wall_top
+
+!*****************************************************************************
+subroutine gmt_total_diff(du,dv,dw)
+!*****************************************************************************
+! 
+! Measure and write the average difference from the target macroscopic value.
+! Remember, these differences were measured in the main gm_transport routine
+! and were found by averaging in the x & y directions. Therefore, only 
+! averaging in the z direction here to get a global estimate.
+! 
+use types, only : rprec
+use param
+use messages
+implicit none
+integer :: jz
+real(rprec), dimension(nz), intent(in) :: du, dv, dw
+real(rprec) :: du_avg, dv_avg, dw_avg
+#ifdef PPMPI
+real(rprec) :: du_global, dv_global, dw_global
+#endif
+
+! Initialize variables
+du_avg = 0._rprec
+dv_avg = 0._rprec
+dw_avg = 0._rprec
+
+! Perform spatial averaging
+do jz = 1, nz-1
+    du_avg = du_avg + du(jz)
+    dv_avg = dv_avg + dv(jz)
+    dw_avg = dw_avg + dw(jz)
+enddo
+du_avg = du_avg / (nz-1)
+dv_avg = dv_avg / (nz-1)
+dw_avg = dw_avg / (nz-1)
+
+#ifdef PPMPI
+call mpi_reduce (du_avg, du_global, 1, MPI_RPREC, MPI_SUM, 0, comm, ierr)
+call mpi_reduce (dv_avg, dv_global, 1, MPI_RPREC, MPI_SUM, 0, comm, ierr)
+call mpi_reduce (dw_avg, dw_global, 1, MPI_RPREC, MPI_SUM, 0, comm, ierr)
+if (rank == 0) then ! note that it's rank here, not coord
+    du_avg = du_global/nproc
+    dv_avg = dv_global/nproc
+    dw_avg = dw_global/nproc
+#endif
+    open(2,file=path // 'output/check_gmt_diff.dat', status='unknown',      &
+        form='formatted', position='append')
+
+    ! one time header output
+    if (jt_total==wbase) write(2,*) 'jt_total, du_avg, dv_avg, dw_avg'
+
+    ! continual time-related output
+    write(2,*) jt_total, du_avg, dv_avg, dw_avg
+    close(2)
+#ifdef PPMPI
+endif
+#endif
+
+end subroutine gmt_total_diff
 
 end module mfm
