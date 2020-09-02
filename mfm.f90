@@ -583,9 +583,9 @@ const = 1._rprec/(nxp*ny)
 
 do jz = lbz, nz
     temp(:,:) = const*a(:,:,jz)
-    call dfftw_execute_dft_r2c(forw, temp, temp)
+    call dfftw_execute_dft_r2c(gmt_forw, temp, temp)
     call padd(a_big(:,:,jz), temp)
-    call dfftw_execute_dft_c2r(back_big, a_big(:,:,jz), a_big(:,:,jz))
+    call dfftw_execute_dft_c2r(gmt_back_big, a_big(:,:,jz), a_big(:,:,jz))
 enddo
 
 end subroutine to_big
@@ -609,9 +609,9 @@ integer :: jz
 ! this routine
 
 do jz = 1, nz-1
-    call dfftw_execute_dft_r2c(forw_big, a_big(:,:,jz), a_big(:,:,jz))
+    call dfftw_execute_dft_r2c(gmt_forw_big, a_big(:,:,jz), a_big(:,:,jz))
     call unpadd(a(:,:,jz), a_big(:,:,jz))
-    call dfftw_execute_dft_c2r(back, a(:,:,jz), a(:,:,jz))
+    call dfftw_execute_dft_c2r(gmt_back, a(:,:,jz), a(:,:,jz))
 enddo
 
 end subroutine to_small

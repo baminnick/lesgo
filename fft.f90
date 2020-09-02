@@ -37,7 +37,7 @@ public :: forw_fourier, back_fourier
 public :: ycomp_forw_big, ycomp_back_big
 public :: ycomp_forw, ycomp_back
 #ifdef PPMFM
-public :: gmt_forw, gmt_back
+public :: gmt_forw, gmt_back, gmt_forw_big, gmt_back_big
 #endif
 
 real(rprec), allocatable, dimension(:,:) :: kx, ky, k2
@@ -51,7 +51,7 @@ integer*8 :: forw_fourier, back_fourier
 integer*8 :: ycomp_forw_big, ycomp_back_big
 integer*8 :: ycomp_forw, ycomp_back
 #ifdef PPMFM
-integer*8 :: gmt_forw, gmt_back
+integer*8 :: gmt_forw, gmt_back, gmt_forw_big, gmt_back_big
 #endif
 
 real (rprec), dimension (:, :), allocatable :: data, data_big
@@ -66,7 +66,7 @@ complex (rprec), dimension(:), allocatable :: ycomp_data_big
 complex (rprec), dimension(:), allocatable :: ycomp_data
 
 #ifdef PPMFM
-real(rprec), dimension(:,:), allocatable :: gmt_data
+real(rprec), dimension(:,:), allocatable :: gmt_data, gmt_data_big
 #endif
 
 contains
@@ -155,6 +155,7 @@ allocate( ycomp_data(ny) ) !! complex stored as real
 
 #ifdef PPMFM
 allocate( gmt_data(nxp+2,ny) )
+allocate( gmt_data_big(3*nxp/2+2, ny2) )
 #endif
 
 ! Create the forward and backward plans for the unpadded and padded
@@ -198,6 +199,10 @@ call dfftw_plan_dft_r2c_2d(gmt_forw, nxp, ny, gmt_data,                      &
     gmt_data, FFTW_PATIENT, FFTW_UNALIGNED)
 call dfftw_plan_dft_c2r_2d(gmt_back, nxp, ny, gmt_data,                      &
     gmt_data, FFTW_PATIENT, FFTW_UNALIGNED)
+call dfftw_plan_dft_r2c_2d(gmt_forw_big, 3*nxp/2, ny2, gmt_data_big,         &
+    gmt_data_big, FFTW_PATIENT, FFTW_UNALIGNED)
+call dfftw_plan_dft_c2r_2d(gmt_back_big, 3*nxp/2, ny2, gmt_data_big,         &
+    gmt_data_big, FFTW_PATIENT, FFTW_UNALIGNED)
 #endif
 
 deallocate(data)
@@ -218,6 +223,7 @@ deallocate(ycomp_data)
 
 #ifdef PPMFM
 deallocate(gmt_data)
+deallocate(gmt_data_big)
 #endif
 
 call init_wavenumber()
