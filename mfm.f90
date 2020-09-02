@@ -244,6 +244,7 @@ use grid_m
 open(12, file=fname, form='unformatted', convert=read_endian)
 read(12) gmu(:,:,1:nz), gmv(:,:,1:nz), gmw(:,:,1:nz),                 &
     rhs_gmx(:,:,1:nz), rhs_gmy(:,:,1:nz), rhs_gmz(:,:,1:nz)
+close(12)
 
 #ifdef PPMPI
 call mpi_sync_real_array(gmu, 0, MPI_SYNC_DOWNUP)
@@ -497,26 +498,16 @@ if (coord == 0) then
     denom = 0.5_rprec*dz
 #endif
 
-    select case (lbc_mom)
-        ! Stress free
-        case (0)
-            dgmudz(:,:,1) = 0.0_rprec
-            dgmvdz(:,:,1) = 0.0_rprec
-            gmtxz(:,:,1) = 0.0_rprec
-            gmtyz(:,:,1) = 0.0_rprec
+        ! Dirichlet BCs
+        do j = 1, ny
+        do i = 1, nxp
+            dgmudz(i,j,1) = ( gmu(i,j,1) - gmu_bot ) / denom
+            dgmvdz(i,j,1) = ( gmv(i,j,1) - gmv_bot ) / denom
+            gmtxz(i,j,1) = -nu_molec/(z_i*u_star)*dgmudz(i,j,1)
+            gmtyz(i,j,1) = -nu_molec/(z_i*u_star)*dgmvdz(i,j,1)
+        enddo
+        enddo
 
-        ! DNS wall
-        case (1)
-            do j = 1, ny
-            do i = 1, nxp
-                dgmudz(i,j,1) = ( gmu(i,j,1) - gmu_bot ) / denom
-                dgmvdz(i,j,1) = ( gmv(i,j,1) - gmv_bot ) / denom
-                gmtxz(i,j,1) = -nu_molec/(z_i*u_star)*dgmudz(i,j,1)
-                gmtyz(i,j,1) = -nu_molec/(z_i*u_star)*dgmvdz(i,j,1)
-            enddo
-            enddo
-
-    end select
 endif
 
 ! Upper boundary condition
@@ -528,26 +519,15 @@ if (coord == nproc-1) then
     denom = 0.5_rprec*dz
 #endif
 
-    select case (ubc_mom)
-        ! Stress free
-        case (0)
-            dgmudz(:,:,nz) = 0.0_rprec
-            dgmvdz(:,:,nz) = 0.0_rprec
-            gmtxz(:,:,nz) = 0.0_rprec
-            gmtyz(:,:,nz) = 0.0_rprec
-
-        ! DNS wall
-        case (1)
-            do j = 1, ny
-            do i = 1, nxp
-                dgmudz(i,j,nz) = ( gmu_top - gmu(i,j,nz-1) ) / denom
-                dgmvdz(i,j,nz) = ( gmv_top - gmv(i,j,nz-1) ) / denom
-                gmtxz(i,j,nz) = -nu_molec/(z_i*u_star)*dgmudz(i,j,nz)
-                gmtyz(i,j,nz) = -nu_molec/(z_i*u_star)*dgmvdz(i,j,nz)
-            enddo
-            enddo
-
-    end select
+        ! Dirichlet BCs
+        do j = 1, ny
+        do i = 1, nxp
+            dgmudz(i,j,nz) = ( gmu_top - gmu(i,j,nz-1) ) / denom
+            dgmvdz(i,j,nz) = ( gmv_top - gmv(i,j,nz-1) ) / denom
+            gmtxz(i,j,nz) = -nu_molec/(z_i*u_star)*dgmudz(i,j,nz)
+            gmtyz(i,j,nz) = -nu_molec/(z_i*u_star)*dgmvdz(i,j,nz)
+        enddo
+        enddo
 endif
 
 end subroutine gmt_wallstress
@@ -645,7 +625,7 @@ subroutine gm_transport
 !
 use param
 use sim_param
-use derivatives, only : filt_da, ddx, ddy, ddz_uv, ddz_w
+use derivatives, only : ddz_uv, ddz_w
 #ifdef PPMPI
 use mpi
 use mpi_defs, only : mpi_sync_real_array, MPI_SYNC_DOWN
@@ -657,6 +637,9 @@ integer :: jx, jy, jz, jz_min, jz_max, nxp2
 
 real(rprec), dimension(nz) :: gmu_avg, gmv_avg, gmw_avg, du, dv, dw
 
+real(rprec), dimension(nxp+2,ny,lbz:nz) :: dtxdx, dtydy, dtzdz,         &
+    dtxdx2, dtydy2, dtzdz2, dtxdx3, dtydy3, dtzdz3
+
 ! Save previous timestep's RHS
 rhs_gmx_f = rhs_gmx
 rhs_gmy_f = rhs_gmy
@@ -666,9 +649,9 @@ rhs_gmz_f = rhs_gmz
 ! Calculate derivatives of generalized momentum
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! dudx, dudy, dvdx, dvdy, dwdx, dwdy derivatives (in Fourier space)
-call filt_da(gmu, dgmudx, dgmudy, lbz)
-call filt_da(gmv, dgmvdx, dgmvdy, lbz)
-call filt_da(gmw, dgmwdx, dgmwdy, lbz)
+call gmt_filt_da(gmu, dgmudx, dgmudy, lbz)
+call gmt_filt_da(gmv, dgmvdx, dgmvdy, lbz)
+call gmt_filt_da(gmw, dgmwdx, dgmwdy, lbz)
 
 ! dudz, dvdz using finite differences (for 1:nz on uv-nodes)
 ! except bottom coord, only 2:nz
@@ -766,13 +749,53 @@ call mpi_sync_real_array( gmtyz, 0, MPI_SYNC_DOWN )
 ! Diffusive term
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Calculate divergence of Stress for GMT
-! Using the same divstress routines used in the main loop
+! Compute stress gradients
+call gmt_ddx(gmtxx, dtxdx, lbz)
+call gmt_ddy(gmtyy, dtydy2, lbz)
+call gmt_ddxy(gmtxy, dtxdx2, dtydy, lbz)
+call gmt_ddx(gmtxz, dtxdx3, lbz)
+call gmt_ddy(gmtyz, dtydy3, lbz)
 #ifdef PPCNDIFF
-call divstress_uv(div_gmtx, div_gmty, gmtxx, gmtxy, gmtxz_half1, gmtyy, gmtyz_half1)
-call divstress_w_cndiff(div_gmtz, gmtxz, gmtyz, gmtzz)
+call ddz_w(gmtxz_half1, dtzdz, lbz)
+call ddz_w(gmtyz_half1, dtzdz2, lbz)
 #else
-call divstress_uv(div_gmtx, div_gmty, gmtxx, gmtxy, gmtxz, gmtyy, gmtyz)
-call divstress_w(div_gmtz, gmtxz, gmtyz, gmtzz)
+call ddz_w(gmtxz, dtzdz, lbz)
+call ddz_w(gmtyz, dtzdz2, lbz)
+call ddz_uv(gmtzz, dtzdz3, lbz)
+#endif
+
+! Take sum, remember only 1:nz-1 are valid
+div_gmtx(:,:,1:nz-1) = dtxdx(:,:,1:nz-1) + dtydy(:,:,1:nz-1) + dtzdz(:,:,1:nz-1)
+div_gmty(:,:,1:nz-1) = dtxdx2(:,:,1:nz-1) + dtydy2(:,:,1:nz-1) + dtzdz2(:,:,1:nz-1)
+#ifdef PPCNDIFF
+div_gmtz(:,:,1:nz) = dtxdx3(:,:,1:nz) + dtydy3(:,:,1:nz)
+#else
+! As in divstress_w, assume that dz(tzz)=0.0 at walls
+if (coord == 0) dtzdz3(:,:,1) = 0._rprec
+if (coord == nproc-1) dtzdz3(:,:,nz) = 0._rprec
+div_gmtz(:,:,1:nz) = dtxdx3(:,:,1:nz) + dtydy3(:,:,1:nz) + dtzdz3(:,:,1:nz)
+#endif
+
+! Set ld-1 and ld oddballs to 0
+div_gmtx(nxp+1:nxp+2,:,1:nz-1) = 0._rprec
+div_gmty(nxp+1:nxp+2,:,1:nz-1) = 0._rprec
+div_gmtz(nxp+1:nxp+2,:,1:nz-1) = 0._rprec
+
+! Set boundary points to BOGUS
+#ifdef PPSAFETYMODE
+#ifdef PPMPI
+div_gmtx(:,:,0) = BOGUS
+div_gmty(:,:,0) = BOGUS
+div_gmtz(:,:,0) = BOGUS
+#endif
+div_gmtx(:,:,nz) = BOGUS
+div_gmty(:,:,nz) = BOGUS
+#endif
+
+#ifdef PPCNDIFF
+!call divstress_w_cndiff(div_gmtz, gmtxz, gmtyz)
+#else
+!call divstress_w(div_gmtz, gmtxz, gmtyz, gmtzz)
 #endif
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -1253,5 +1276,169 @@ endif
 #endif
 
 end subroutine gmt_total_diff
+
+!*****************************************************************************
+subroutine gmt_ddx(f, dfdx, lbz)
+!*****************************************************************************
+!
+! This subroutine computes the partial derivative of f with respect to
+! x using spectral decomposition.
+!
+use types, only : rprec
+use param, only : nxp, ny, nz
+use fft
+use emul_complex, only : OPERATOR(.GMTMULI.)
+implicit none
+
+integer, intent(in) :: lbz
+real(rprec), dimension(:,:,lbz:), intent(in) :: f
+real(rprec), dimension(:,:,lbz:), intent(inout) :: dfdx
+integer :: jz
+
+! Loop through horizontal slices
+do jz = lbz, nz
+    !  Use dfdx to hold f; since we are doing in place FFTs this is required
+    dfdx(:,:,jz) = f(:,:,jz) / (nxp*ny)
+    call dfftw_execute_dft_r2c(gmt_forw, dfdx(:,:,jz), dfdx(:,:,jz))
+
+    ! Zero padded region and Nyquist frequency
+    dfdx(nxp+1:nxp+2,:,jz) = 0._rprec
+    dfdx(:,ny/2+1,jz) = 0._rprec
+
+    ! Use complex emulation of dfdx to perform complex multiplication
+    ! Optimized version for real(eye*kx)=0
+    ! only passing imaginary part of eye*kx
+    dfdx(:,:,jz) = dfdx(:,:,jz) .GMTMULI. gmt_kx
+
+    ! Perform inverse transform to get pseudospectral derivative
+    call dfftw_execute_dft_c2r(gmt_back, dfdx(:,:,jz), dfdx(:,:,jz))
+enddo
+
+end subroutine gmt_ddx
+
+!*****************************************************************************
+subroutine gmt_ddy(f, dfdy, lbz)
+!*****************************************************************************
+!
+! This subroutine computes the partial derivative of f with respect to
+! y using spectral decomposition.
+!
+use types, only : rprec
+use param, only : nxp, ny, nz
+use fft
+use emul_complex, only : OPERATOR(.GMTMULI.)
+implicit none
+
+integer, intent(in) :: lbz
+real(rprec), dimension(:,:,lbz:), intent(in) :: f
+real(rprec), dimension(:,:,lbz:), intent(inout) :: dfdy
+integer :: jz
+
+! Loop through horizontal slices
+do jz = lbz, nz
+    !  Use dfdy to hold f; since we are doing in place FFTs this is required
+    dfdy(:,:,jz) = f(:,:,jz) / (nxp*ny)
+    call dfftw_execute_dft_r2c(gmt_forw, dfdy(:,:,jz), dfdy(:,:,jz))
+
+    ! Zero padded region and Nyquist frequency
+    dfdy(nxp+1:nxp+2,:,jz) = 0._rprec
+    dfdy(:,ny/2+1,jz) = 0._rprec
+
+    ! Use complex emulation of dfdy to perform complex multiplication
+    ! Optimized version for real(eye*ky)=0
+    ! only passing imaginary part of eye*ky
+    dfdy(:,:,jz) = dfdy(:,:,jz) .GMTMULI. gmt_ky
+
+    ! Perform inverse transform to get pseudospectral derivative
+    call dfftw_execute_dft_c2r(gmt_back, dfdy(:,:,jz), dfdy(:,:,jz))
+end do
+
+end subroutine gmt_ddy
+
+!*****************************************************************************
+subroutine gmt_ddxy (f, dfdx, dfdy, lbz)
+!*****************************************************************************
+!
+! This subroutine computes the partial derivative of f with respect to
+! x and y using spectral decomposition.
+!
+use types, only : rprec
+use param, only : nxp, ny, nz
+use fft
+use emul_complex, only : OPERATOR(.GMTMULI.)
+implicit none
+
+integer, intent(in) :: lbz
+real(rprec), dimension(:,:,lbz:), intent(in) :: f
+real(rprec), dimension(:,:,lbz:), intent(inout) :: dfdx, dfdy
+integer :: jz
+
+! Loop through horizontal slices
+do jz = lbz, nz
+    ! Use dfdy to hold f; since we are doing in place FFTs this is required
+    dfdx(:,:,jz) = f(:,:,jz) / (nxp * ny)
+    call dfftw_execute_dft_r2c(gmt_forw, dfdx(:,:,jz), dfdx(:,:,jz))
+
+    ! Zero padded region and Nyquist frequency
+    dfdx(nxp+1:nxp+2,:,jz) = 0._rprec
+    dfdx(:,ny/2+1,jz) = 0._rprec
+
+    ! Derivatives: must to y's first here, because we're using dfdx as storage
+    ! Use complex emulation of dfdy to perform complex multiplication
+    ! Optimized version for real(eye*ky)=0
+    ! only passing imaginary part of eye*ky
+    dfdy(:,:,jz) = dfdx(:,:,jz) .GMTMULI. gmt_ky
+    dfdx(:,:,jz) = dfdx(:,:,jz) .GMTMULI. gmt_kx
+
+    ! Perform inverse transform to get pseudospectral derivative
+    call dfftw_execute_dft_c2r(gmt_back, dfdx(:,:,jz), dfdx(:,:,jz))
+    call dfftw_execute_dft_c2r(gmt_back, dfdy(:,:,jz), dfdy(:,:,jz))
+end do
+
+end subroutine gmt_ddxy
+
+!*****************************************************************************
+subroutine gmt_filt_da(f, dfdx, dfdy, lbz)
+!*****************************************************************************
+!
+! This subroutine kills the oddball components in f and computes the partial
+! derivative of f with respect to x and y using spectral decomposition.
+!
+use types, only : rprec
+use param, only : nxp, ny, nz
+use fft
+use emul_complex, only : OPERATOR(.GMTMULI.)
+implicit none
+
+integer, intent(in) :: lbz
+real(rprec), dimension(:,:,lbz:), intent(inout) :: f
+real(rprec), dimension(:,:,lbz:), intent(inout) :: dfdx, dfdy
+integer :: jz
+
+! loop through horizontal slices
+do jz = lbz, nz
+    ! Calculate FFT in place
+    f(:,:,jz) = f(:,:,jz) / (nxp*ny)
+    call dfftw_execute_dft_r2c(gmt_forw, f(:,:,jz), f(:,:,jz))
+
+    ! Kill oddballs in zero padded region and Nyquist frequency
+    f(nxp+1:nxp+2,:,jz) = 0._rprec
+    f(:,ny/2+1,jz) = 0._rprec
+
+    ! Use complex emulation of dfdy to perform complex multiplication
+    ! Optimized version for real(eye*ky)=0
+    ! only passing imaginary part of eye*ky
+    dfdx(:,:,jz) = f(:,:,jz) .GMTMULI. gmt_kx
+    dfdy(:,:,jz) = f(:,:,jz) .GMTMULI. gmt_ky
+
+    ! Perform inverse transform to get pseudospectral derivative
+    ! The oddballs for derivatives should already be dead, since they are for f
+    ! inverse transform
+    call dfftw_execute_dft_c2r(gmt_back, f(:,:,jz), f(:,:,jz))
+    call dfftw_execute_dft_c2r(gmt_back, dfdx(:,:,jz), dfdx(:,:,jz))
+    call dfftw_execute_dft_c2r(gmt_back, dfdy(:,:,jz), dfdy(:,:,jz))
+end do
+
+end subroutine gmt_filt_da
 
 end module mfm

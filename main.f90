@@ -108,9 +108,6 @@ real(rprec) :: maxdummy ! Used to calculate maximum with mpi_allreduce
 real(rprec) :: tau_top   ! Used to write top wall stress at first proc
 #endif
 
-real(rprec), dimension(:,:,:), allocatable :: tempRHS
-allocate( tempRHS (ld, ny, lbz:nz) )
-
 ! Initialize MPI
 #ifdef PPMPI
 call mpi_init (ierr)

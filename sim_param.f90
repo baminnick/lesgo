@@ -16,9 +16,9 @@
 !!  You should have received a copy of the GNU General Public License
 !!  along with lesgo.  If not, see <http://www.gnu.org/licenses/>.
 
-!*******************************************************************************
+!******************************************************************************
 module sim_param
-!*******************************************************************************
+!******************************************************************************
 use types, only : rprec
 use param, only : ld, ny, nz, lbz, nxp, BOGUS
 implicit none
@@ -28,25 +28,25 @@ public
 
 logical :: sim_param_initialized = .false.
 
-real(rprec), dimension(:,:,:), allocatable :: u, v, w,                         &
-    dudx, dudy, dudz, dvdx, dvdy, dvdz,  dwdx, dwdy, dwdz,                     &
-    RHSx, RHSy, RHSz, RHSx_f, RHSy_f, RHSz_f,                                  &
-    dpdx, dpdy, dpdz, txx, txy, tyy,                                           &
-    txz, tyz, tzz, divtx, divty, divtz,                                        &
+real(rprec), dimension(:,:,:), allocatable :: u, v, w,                      &
+    dudx, dudy, dudz, dvdx, dvdy, dvdz,  dwdx, dwdy, dwdz,                  &
+    RHSx, RHSy, RHSz, RHSx_f, RHSy_f, RHSz_f,                               &
+    dpdx, dpdy, dpdz, txx, txy, tyy,                                        &
+    txz, tyz, tzz, divtx, divty, divtz,                                     &
     fx, fy, fz, fxa, fya, fza
 
 #ifdef PPRNL
-real(rprec), dimension(:,:,:), allocatable :: u_pert, v_pert, w_pert,          &
-    dudy_pert, dudz_pert, dvdx_pert, dvdz_pert, dwdx_pert, dwdy_pert,          &
+real(rprec), dimension(:,:,:), allocatable :: u_pert, v_pert, w_pert,       &
+    dudy_pert, dudz_pert, dvdx_pert, dvdz_pert, dwdx_pert, dwdy_pert,       &
     RHSx_pert, RHSy_pert, RHSz_pert
 #endif
 
 #ifdef PPGQL
-real(rprec), dimension(:,:,:), allocatable :: u_low, v_low, w_low,             &
-    dudy_low, dudz_low, dvdx_low, dvdz_low, dwdx_low, dwdy_low,                &
-    RHSx_low, RHSy_low, RHSz_low,                                              &
-    u_high, v_high, w_high,                                                    &
-    dudy_high, dudz_high, dvdx_high, dvdz_high, dwdx_high, dwdy_high,          &
+real(rprec), dimension(:,:,:), allocatable :: u_low, v_low, w_low,          &
+    dudy_low, dudz_low, dvdx_low, dvdz_low, dwdx_low, dwdy_low,             &
+    RHSx_low, RHSy_low, RHSz_low,                                           &
+    u_high, v_high, w_high,                                                 &
+    dudy_high, dudz_high, dvdx_high, dvdz_high, dwdx_high, dwdy_high,       &
     RHSx_high, RHSy_high, RHSz_high
 #endif
 
@@ -68,7 +68,7 @@ real(rprec), dimension(:,:,:), allocatable :: IBFx, IBFy, IBFz
 
 real(rprec), dimension(:,:,:), allocatable :: uF, vF, wF
 real(rprec), target, dimension(:,:,:), allocatable :: pF
-real(rprec), dimension(:,:,:), allocatable :: dudyF, dudzF,                    &
+real(rprec), dimension(:,:,:), allocatable :: dudyF, dudzF,                &
     dvdxF, dvdzF, dwdxF, dwdyF
 real(rprec), dimension(:,:,:), allocatable :: txzF, tyzF
 
@@ -79,9 +79,9 @@ real(rprec), dimension(:,:,:), allocatable :: tyz_half1, tyz_half2
 
 contains
 
-!*******************************************************************************
+!******************************************************************************
 subroutine sim_param_init ()
-!*******************************************************************************
+!******************************************************************************
 !
 ! This subroutine initilizes all global arrays defined in the sim_param
 ! module. Here they are allocated and initialized to zero.
