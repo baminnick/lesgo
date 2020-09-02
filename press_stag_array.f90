@@ -17,9 +17,9 @@
 !!  along with lesgo.  If not, see <http://www.gnu.org/licenses/>.
 !!
 
-!*******************************************************************************
+!******************************************************************************
 subroutine press_stag_array(u,v,w,divtz,p,dpdx,dpdy,dpdz)
-!*******************************************************************************
+!******************************************************************************
 !
 ! Calculate the pressure and its derivatives on exit. Everything is in physical
 ! space on exit.
@@ -270,7 +270,7 @@ end do
 end do
 
 ! this skips zero wavenumber solution, nyquist freqs
-call tridag_array (a, b, c, RHS_col, p)
+call tridag_array (a, b, c, RHS_col, p, nx)
 
 ! zero-wavenumber solution
 #ifdef PPMPI
