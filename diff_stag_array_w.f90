@@ -382,7 +382,7 @@ if ((fourier) .and. (sgs)) then
 endif
 
 ! Find intermediate velocity in TDMA
-call tridag_array_diff_w (a, b, c, Rz, wsol)
+call tridag_array_diff_w (a, b, c, Rz, wsol, nx)
 
 ! Since a,b,c(y,z) and Rz(kx,y,z) we have wsol(kx,y,z) therefore transform
 ! No need to change Rz back, will be overwritten in next time-step

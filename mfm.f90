@@ -741,8 +741,8 @@ call mpi_sync_real_array( gmtyz, 0, MPI_SYNC_DOWN )
 ! Exchange ghost node information for tzz
 ! send info up (from nz-1 below to 0 above)
 #ifdef PPMPI
-    call mpi_sendrecv (gmtzz(:,:,nz-1), (nxp+2)*ny, MPI_RPREC, up, 6,       &
-        gmtzz(:,:,0), (nxp+2)*ny, MPI_RPREC, down, 6, comm, status, ierr)
+call mpi_sendrecv (gmtzz(:,:,nz-1), (nxp+2)*ny, MPI_RPREC, up, 6,       &
+    gmtzz(:,:,0), (nxp+2)*ny, MPI_RPREC, down, 6, comm, status, ierr)
 #endif
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -790,12 +790,6 @@ div_gmtz(:,:,0) = BOGUS
 #endif
 div_gmtx(:,:,nz) = BOGUS
 div_gmty(:,:,nz) = BOGUS
-#endif
-
-#ifdef PPCNDIFF
-!call divstress_w_cndiff(div_gmtz, gmtxz, gmtyz)
-#else
-!call divstress_w(div_gmtz, gmtxz, gmtyz, gmtzz)
 #endif
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -1038,9 +1032,9 @@ if (coord == nproc-1) rhs_gmz(:,:,nz) = -rhs_gmz(:,:,nz) - div_gmtz(:,:,nz)
 ! Calculate Intermediate Velocity
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 #ifdef PPCNDIFF
-call diff_stag_array_uv(gmu,gmv,rhs_gmx,rhs_gmy,rhs_gmx_f,rhs_gmy_f,        &
+call gmt_diff_stag_array_uv(gmu,gmv,rhs_gmx,rhs_gmy,rhs_gmx_f,rhs_gmy_f,    &
     gmtxz_half2,gmtyz_half2,gmtxz,gmtyz)
-call diff_stag_array_w(gmw,rhs_gmz,rhs_gmz_f,gmtzz)
+call gmt_diff_stag_array_w(gmw,rhs_gmz,rhs_gmz_f,gmtzz)
 #else
 gmu(:,:,1:nz-1) = gmu(:,:,1:nz-1) +                                         &
     dt * ( tadv1 * rhs_gmx(:,:,1:nz-1) + tadv2 * rhs_gmx_f(:,:,1:nz-1) )
@@ -1440,5 +1434,333 @@ do jz = lbz, nz
 end do
 
 end subroutine gmt_filt_da
+
+!*****************************************************************************
+subroutine gmt_diff_stag_array_uv(u,v,RHSx,RHSy,RHSx_f,RHSy_f,txz_half2,tyz_half2,txz,tyz)
+!*****************************************************************************
+!
+! Calculate the intermediate xy-velocity from implicit CN scheme on exit.
+!
+use types, only : rprec
+use param
+use messages
+use sgs_param, only : nu
+use derivatives, only : ddz_w
+use fft
+#ifdef PPMAPPING
+use sim_param, only : jaco_w, jaco_uv, mesh_stretch
+#endif
+
+implicit none
+
+real(rprec), dimension(nxp+2,ny,lbz:nz), intent(inout) :: u, v
+real(rprec), dimension(nxp+2,ny,lbz:nz), intent(in) :: RHSx, RHSy, RHSx_f, RHSy_f
+real(rprec), dimension(nxp+2,ny,lbz:nz), intent(in) :: txz_half2, tyz_half2, txz, tyz
+
+real(rprec), dimension(nxp+2,ny,0:nz) :: Rx, usol, Ry, vsol
+real(rprec), dimension(nxp,ny,0:nz) :: a, b, c
+real(rprec), dimension(nxp+2,ny,lbz:nz) :: dtxzdz_rhs, dtyzdz_rhs
+real(rprec) :: nu_a, nu_b, nu_c, nu_r, const1, const2, const3
+integer :: jx, jy, jz, jz_min, jz_max
+
+! Set constants
+const1 = (dt/(2._rprec*dz))
+const2 = (1._rprec/dz)
+const3 = (1._rprec/(0.5_rprec*dz))
+
+! Get the RHS ready
+! Initialize with the explicit terms
+Rx(:,:,1:nz-1) = u(:,:,1:nz-1) +                                     &
+    dt * ( tadv1 * RHSx(:,:,1:nz-1) + tadv2 * RHSx_f(:,:,1:nz-1) )
+Ry(:,:,1:nz-1) = v(:,:,1:nz-1) +                                     &
+    dt * ( tadv1 * RHSy(:,:,1:nz-1) + tadv2 * RHSy_f(:,:,1:nz-1) )
+
+! Add explicit portion of Crank-Nicolson
+call ddz_w(txz_half2, dtxzdz_rhs, lbz)
+call ddz_w(tyz_half2, dtyzdz_rhs, lbz)
+dtxzdz_rhs(nxp+1:nxp+2, :, 1:nz-1) = 0._rprec
+dtyzdz_rhs(nxp+1:nxp+2, :, 1:nz-1) = 0._rprec
+#ifdef PPSAFETYMODE
+#ifdef PPMPI
+dtxzdz_rhs(:,:,0) = BOGUS
+dtyzdz_rhs(:,:,0) = BOGUS
+#endif
+dtxzdz_rhs(:,:,nz) = BOGUS
+dtyzdz_rhs(:,:,nz) = BOGUS
+#endif
+! Assuming fixed dt here!
+Rx(:,:,1:nz-1) = Rx(:,:,1:nz-1) - dt * 0.5_rprec * dtxzdz_rhs(:,:,1:nz-1)
+Ry(:,:,1:nz-1) = Ry(:,:,1:nz-1) - dt * 0.5_rprec * dtyzdz_rhs(:,:,1:nz-1)
+
+! Get bottom row 
+if (coord == 0) then
+#ifdef PPSAFETYMODE
+    a(:,:,1) = BOGUS
+#endif
+    ! Dirichlet BCs
+    do jy = 1, ny
+    do jx = 1, nxp
+        nu_c = nu
+        ! Discretized txz(jx,jy,1) as in wallstress,
+        ! Therefore BC treated implicitly
+        ! vbot = 0 so no changes to Ry
+#ifdef PPMAPPING
+        b(jx,jy,1) = 1._rprec + const1*(1._rprec/jaco_uv(1))*        &
+            (const2*(1._rprec/jaco_w(2))*nu_c + (nu/mesh_stretch(1)))
+        c(jx,jy,1) = -const1*(1._rprec/jaco_uv(1))*const2*(1._rprec/jaco_w(2))*nu_c
+        Rx(jx,jy,1) = Rx(jx,jy,1) + const1*(1._rprec/jaco_uv(1))*   &
+            (nu/mesh_stretch(1))*ubot
+#else
+        b(jx,jy,1) = 1._rprec + const1*(const2*nu_c + const3*nu)
+        c(jx,jy,1) = -const1*const2*nu_c
+        Rx(jx,jy,1) = Rx(jx,jy,1) + const1*const3*nu*ubot
+#endif
+    end do
+    end do
+
+    jz_min = 2
+else
+    jz_min = 1
+endif
+
+! Get top row
+#ifdef PPMPI
+if (coord == nproc-1) then
+#endif
+#ifdef PPSAFETYMODE
+    c(:,:,nz-1) = BOGUS
+#endif
+    ! Dirichlet BCs
+    do jy = 1, ny
+    do jx = 1, nxp
+        nu_a = nu
+        ! Discretized txz(jx,jy,nz) as in wallstress,
+        ! Therefore BC treated implicitly
+        ! vtop = 0 so no changes to Ry
+#ifdef PPMAPPING
+        a(jx,jy,nz-1) = -const1*(1._rprec/jaco_uv(nz-1))*const2*(1._rprec/jaco_w(nz-1))*nu_a
+        b(jx,jy,nz-1) = 1._rprec + const1*(1._rprec/jaco_uv(nz-1))*        &
+            (const2*(1._rprec/jaco_w(nz-1))*nu_a + (nu/(L_z-mesh_stretch(nz-1))))
+        Rx(jx,jy,nz-1) = Rx(jx,jy,nz-1) + const1*(1._rprec/jaco_uv(nz-1))* &
+            (nu/(L_z-mesh_stretch(nz-1)))*utop
+#else
+        a(jx,jy,nz-1) = -const1*const2*nu_a
+        b(jx,jy,nz-1) = 1._rprec + const1*(const2*nu_a + const3*nu)
+        Rx(jx,jy,nz-1) = Rx(jx,jy,nz-1) + const1*const3*nu*utop
+#endif
+    end do
+    end do
+
+    jz_max = nz-2
+#ifdef PPMPI
+else
+    jz_max = nz-1
+endif
+#endif
+
+! Compute coefficients in domain
+! Treating SGS viscosity explicitly!
+do jz = jz_min, jz_max
+do jy = 1, ny
+do jx = 1, nxp
+    nu_a = nu
+#ifdef PPMAPPING
+    nu_b = (nu/jaco_w(jz+1)) + (nu/jaco_w(jz))
+#else
+    nu_b = 2._rprec*nu
+#endif
+    nu_c = nu
+
+#ifdef PPMAPPING
+    a(jx, jy, jz) = -const1*(1._rprec/jaco_uv(jz))*const2*(1._rprec/jaco_w(jz))*nu_a
+    b(jx, jy, jz) = 1._rprec + const1*(1._rprec/jaco_uv(jz))*const2*nu_b
+    c(jx, jy, jz) = -const1*(1._rprec/jaco_uv(jz))*const2*(1._rprec/jaco_w(jz+1))*nu_c
+#else
+    a(jx, jy, jz) = -const1*const2*nu_a
+    b(jx, jy, jz) = 1._rprec + const1*const2*nu_b
+    c(jx, jy, jz) = -const1*const2*nu_c
+#endif
+end do
+end do
+end do
+
+! Find intermediate velocity in TDMA
+call tridag_array_diff_uv (a, b, c, Rx, usol, nxp)
+call tridag_array_diff_uv (a, b, c, Ry, vsol, nxp)
+
+! Fill velocity solution
+u(:nxp,:ny,1:nz-1) = usol(:nxp,:ny,1:nz-1)
+v(:nxp,:ny,1:nz-1) = vsol(:nxp,:ny,1:nz-1)
+
+end subroutine gmt_diff_stag_array_uv
+
+!*****************************************************************************
+subroutine gmt_diff_stag_array_w(w,RHSz,RHSz_f,tzz)
+!*****************************************************************************
+!
+! Calculate the intermediate z-velocity from implicit CN scheme on exit.
+!
+use types, only : rprec
+use param
+use messages
+use sgs_param, only : nu
+use derivatives, only : ddz_uv
+use fft
+#ifdef PPMAPPING
+use sim_param, only : jaco_w, jaco_uv, mesh_stretch
+#endif
+
+implicit none
+
+real(rprec), dimension(nxp+2,ny,lbz:nz), intent(inout) :: w
+real(rprec), dimension(nxp+2,ny,lbz:nz), intent(in) :: RHSz, RHSz_f, tzz
+
+real(rprec), dimension(nxp+2,ny,0:nz) :: Rz, wsol
+real(rprec), dimension(nxp,ny,0:nz) :: a, b, c
+real(rprec), dimension(nxp+2,ny,lbz:nz) :: dtzzdz_rhs
+real(rprec) :: nu_a, nu_b, nu_c, nu_r, const1, const2
+integer :: jx, jy, jz, jz_min, jz_max
+
+! Set constants
+const1 = (dt/dz)
+const2 = (1._rprec/dz)
+
+! Get the RHS ready
+! Initialize with the explicit terms
+Rz(:,:,1:nz-1) = w(:,:,1:nz-1) +                                     &
+    dt * ( tadv1 * RHSz(:,:,1:nz-1) + tadv2 * RHSz_f(:,:,1:nz-1) )
+if (coord == nproc-1) then
+    Rz(:,:,nz) = w(:,:,nz) +                                         &
+        dt * ( tadv1 * RHSz(:,:,nz) + tadv2 * RHSz_f(:,:,nz) )
+endif
+
+! Add explicit portion of Crank-Nicolson
+call ddz_uv(tzz, dtzzdz_rhs, lbz)
+dtzzdz_rhs(nxp+1:nxp+2, :, 1:nz-1) = 0._rprec
+#ifdef PPSAFETYMODE
+#ifdef PPMPI
+dtzzdz_rhs(:,:,0) = BOGUS
+#endif
+#endif
+! Assuming fixed dt here!
+Rz(:,:,1:nz-1) = Rz(:,:,1:nz-1) - dt * 0.5_rprec * dtzzdz_rhs(:,:,1:nz-1)
+! Not adding dtzzdz to Rz at top wall, assumed zero as done in divstress_w.f90
+
+! Unlike uv, w has one less equation on bottom coord
+#ifdef PPSAFETYMODE
+if (coord == 0) then
+    a(:,:,1) = BOGUS
+    b(:,:,1) = BOGUS
+    c(:,:,1) = BOGUS
+endif
+#endif
+
+! Imposing no-penetration BC regardless of whether or not
+! it is stress-free or a wall. However still need to select
+! case lbc_mom/ubc_mom because the eddy viscosity is in 
+! different locations otherwise.
+
+! Get bottom row, at jz = 2 instead of jz = 1
+if (coord == 0) then
+#ifdef PPSAFETYMODE
+    a(:,:,2) = BOGUS
+#endif
+    ! Dirichlet BC, wbot = 0
+    do jy = 1, ny
+    do jx = 1, nxp
+#ifdef PPMAPPING
+        nu_b = (nu/jaco_uv(2)) + (nu/jaco_uv(1))
+#else
+        nu_b = 2.0_rprec*nu
+#endif
+        nu_c = nu
+#ifdef PPMAPPING
+        b(jx,jy,2) = 1._rprec + const1*(1._rprec/jaco_w(2))*const2*nu_b
+        c(jx,jy,2) = -const1*(1._rprec/jaco_w(2))*const2*(1._rprec/jaco_uv(2))*nu_c
+#else
+        b(jx,jy,2) = 1._rprec + const1*const2*nu_b
+        c(jx,jy,2) = -const1*const2*nu_c
+#endif
+    end do
+    end do
+    jz_min = 3
+else
+    jz_min = 1
+endif
+
+! Get top row
+#ifdef PPMPI
+if (coord == nproc-1) then
+#endif
+#ifdef PPSAFETYMODE
+    c(:,:,nz-1) = BOGUS
+#endif
+    ! Dirichlet BC, wtop = 0
+    do jy = 1, ny
+    do jx = 1, nxp
+        nu_a = nu
+#ifdef PPMAPPING
+        nu_b = (nu/jaco_uv(nz-2)) + (nu/jaco_uv(nz-1))
+#else
+        nu_b = 2.0_rprec*nu
+#endif
+#ifdef PPMAPPING
+        a(jx,jy,nz-1) = -const1*(1._rprec/jaco_w(nz-1))*const2*(1._rprec/jaco_uv(nz-2))*nu_a
+        b(jx,jy,nz-1) = 1._rprec + const1*(1._rprec/jaco_w(nz-1))*const2*nu_b
+#else
+        a(jx,jy,nz-1) = -const1*const2*nu_a
+        b(jx,jy,nz-1) = 1._rprec + const1*const2*nu_b
+#endif
+    end do
+    end do
+    jz_max = nz-2
+#ifdef PPMPI
+else
+    jz_max = nz-1
+endif
+#endif
+
+! Compute coefficients in domain
+! Treating SGS viscosity explicitly!
+do jz = jz_min, jz_max
+do jy = 1, ny
+do jx = 1, nxp
+    nu_a = nu
+#ifdef PPMAPPING
+    nu_b = (nu/jaco_uv(jz)) + (nu/jaco_uv(jz-1))
+#else
+    nu_b = 2._rprec*nu
+#endif
+    nu_c = nu
+
+#ifdef PPMAPPING
+    a(jx,jy,jz) = -const1*(1._rprec/jaco_w(jz))*const2*(1._rprec/jaco_uv(jz-1))*nu_a
+    b(jx,jy,jz) = 1._rprec + const1*(1._rprec/jaco_w(jz))*const2*nu_b
+    c(jx,jy,jz) = -const1*(1._rprec/jaco_w(jz))*const2*(1._rprec/jaco_uv(jz))*nu_a
+#else
+    a(jx,jy,jz) = -const1*const2*nu_a
+    b(jx,jy,jz) = 1._rprec + const1*const2*nu_b
+    c(jx,jy,jz) = -const1*const2*nu_c
+#endif
+end do
+end do
+end do
+
+! Find intermediate velocity in TDMA
+call tridag_array_diff_w (a, b, c, Rz, wsol, nx)
+
+! Fill velocity solution
+if (coord == 0) then
+    w(:,:,1) = w(:,:,1) + dt * ( tadv1 * RHSz(:,:,1) + tadv2 * RHSz_f(:,:,1) )
+    w(:nxp,:ny,2:nz-1) = wsol(:nxp,:ny,2:nz-1)
+else
+    w(:nxp,:ny,1:nz-1) = wsol(:nxp,:ny,1:nz-1)
+endif
+
+if (coord == nproc-1) then
+    w(:,:,nz) = w(:,:,nz) + dt * ( tadv1 * RHSz(:,:,nz) + tadv2 * RHSz_f(:,:,nz) )
+endif
+
+end subroutine gmt_diff_stag_array_w
 
 end module mfm
