@@ -1503,17 +1503,19 @@ if (coord == 0) then
         nu_c = nu
         ! Discretized txz(jx,jy,1) as in wallstress,
         ! Therefore BC treated implicitly
-        ! vbot = 0 so no changes to Ry
 #ifdef PPMAPPING
         b(jx,jy,1) = 1._rprec + const1*(1._rprec/jaco_uv(1))*        &
             (const2*(1._rprec/jaco_w(2))*nu_c + (nu/mesh_stretch(1)))
         c(jx,jy,1) = -const1*(1._rprec/jaco_uv(1))*const2*(1._rprec/jaco_w(2))*nu_c
         Rx(jx,jy,1) = Rx(jx,jy,1) + const1*(1._rprec/jaco_uv(1))*   &
-            (nu/mesh_stretch(1))*ubot
+            (nu/mesh_stretch(1))*gmu_bot
+        Ry(jx,jy,1) = Ry(jx,jy,1) + const1*(1._rprec/jaco_uv(1))*   &
+            (nu/mesh_stretch(1))*gmv_bot
 #else
         b(jx,jy,1) = 1._rprec + const1*(const2*nu_c + const3*nu)
         c(jx,jy,1) = -const1*const2*nu_c
-        Rx(jx,jy,1) = Rx(jx,jy,1) + const1*const3*nu*ubot
+        Rx(jx,jy,1) = Rx(jx,jy,1) + const1*const3*nu*gmu_bot
+        Ry(jx,jy,1) = Ry(jx,jy,1) + const1*const3*nu*gmv_bot
 #endif
     end do
     end do
@@ -1536,17 +1538,19 @@ if (coord == nproc-1) then
         nu_a = nu
         ! Discretized txz(jx,jy,nz) as in wallstress,
         ! Therefore BC treated implicitly
-        ! vtop = 0 so no changes to Ry
 #ifdef PPMAPPING
         a(jx,jy,nz-1) = -const1*(1._rprec/jaco_uv(nz-1))*const2*(1._rprec/jaco_w(nz-1))*nu_a
         b(jx,jy,nz-1) = 1._rprec + const1*(1._rprec/jaco_uv(nz-1))*        &
             (const2*(1._rprec/jaco_w(nz-1))*nu_a + (nu/(L_z-mesh_stretch(nz-1))))
         Rx(jx,jy,nz-1) = Rx(jx,jy,nz-1) + const1*(1._rprec/jaco_uv(nz-1))* &
-            (nu/(L_z-mesh_stretch(nz-1)))*utop
+            (nu/(L_z-mesh_stretch(nz-1)))*gmu_top
+        Ry(jx,jy,nz-1) = Ry(jx,jy,nz-1) + const1*(1._rprec/jaco_uv(nz-1))* &
+            (nu/(L_z-mesh_stretch(nz-1)))*gmv_top
 #else
         a(jx,jy,nz-1) = -const1*const2*nu_a
         b(jx,jy,nz-1) = 1._rprec + const1*(const2*nu_a + const3*nu)
-        Rx(jx,jy,nz-1) = Rx(jx,jy,nz-1) + const1*const3*nu*utop
+        Rx(jx,jy,nz-1) = Rx(jx,jy,nz-1) + const1*const3*nu*gmu_top
+        Ry(jx,jy,nz-1) = Ry(jx,jy,nz-1) + const1*const3*nu*gmv_top
 #endif
     end do
     end do
@@ -1747,7 +1751,7 @@ end do
 end do
 
 ! Find intermediate velocity in TDMA
-call tridag_array_diff_w (a, b, c, Rz, wsol, nx)
+call tridag_array_diff_w (a, b, c, Rz, wsol, nxp)
 
 ! Fill velocity solution
 if (coord == 0) then
