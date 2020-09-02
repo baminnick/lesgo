@@ -584,7 +584,7 @@ const = 1._rprec/(nxp*ny)
 do jz = lbz, nz
     temp(:,:) = const*a(:,:,jz)
     call dfftw_execute_dft_r2c(gmt_forw, temp, temp)
-    call padd(a_big(:,:,jz), temp)
+    call gmt_padd(a_big(:,:,jz), temp)
     call dfftw_execute_dft_c2r(gmt_back_big, a_big(:,:,jz), a_big(:,:,jz))
 enddo
 
@@ -610,7 +610,7 @@ integer :: jz
 
 do jz = 1, nz-1
     call dfftw_execute_dft_r2c(gmt_forw_big, a_big(:,:,jz), a_big(:,:,jz))
-    call unpadd(a(:,:,jz), a_big(:,:,jz))
+    call gmt_unpadd(a(:,:,jz), a_big(:,:,jz))
     call dfftw_execute_dft_c2r(gmt_back, a(:,:,jz), a(:,:,jz))
 enddo
 
@@ -851,9 +851,9 @@ if (fourier) then
 
         ! For entire domain
         do jz = jz_min, jz_max
-            temp_big(:,jy,jz) = const*(u_big(1,jy,jz)*dgmudx_big(:,jy,jz) +  &
-                v_big(1,jy,jz)*dgmudy_big(:,jy,jz) +                         &
-                0.5_rprec*(w_big(1,jy,jz+1)*dgmudz_big(:,jy,jz+1) +          &
+            temp_big(:,jy,jz) = const*(u_big(1,jy,jz)*dgmudx_big(:,jy,jz) + &
+                v_big(1,jy,jz)*dgmudy_big(:,jy,jz) +                        &
+                0.5_rprec*(w_big(1,jy,jz+1)*dgmudz_big(:,jy,jz+1) +         &
                 w_big(1,jy,jz)*dgmudz_big(:,jy,jz)))
         enddo
     enddo
@@ -2093,5 +2093,64 @@ if(coord==nproc-1) dpdz(1:nxp,1:ny,nz) = (p(1:nxp,1:ny,nz)-p(1:nxp,1:ny,nz-1)) /
 #endif
 
 end subroutine gmt_press_stag_array
+
+!*****************************************************************************
+subroutine gmt_padd(u_big,u)
+!*****************************************************************************
+! puts arrays into larger, zero-padded arrays
+! automatically zeroes the oddballs
+use types, only : rprec
+use param, only : nxp,ny,ny2
+implicit none
+
+!  u and u_big are interleaved as complex arrays
+real(rprec), dimension(nxp+2,ny), intent(in) :: u
+real(rprec), dimension(3*nxp/2 + 2,ny2), intent(out) :: u_big
+
+integer :: ny_h, j_s, j_big_s
+
+ny_h = ny/2
+
+! make sure the big array is zeroed!
+u_big(:,:) = 0._rprec
+
+! note: split access in an attempt to maintain locality
+u_big(:nxp,:ny_h) = u(:nxp,:ny_h)
+
+! Compute starting j locations for second transfer
+j_s = ny_h + 2
+j_big_s = ny2 - ny_h + 2
+
+u_big(:nxp,j_big_s:ny2) = u(:nxp,j_s:ny)
+
+end subroutine gmt_padd
+
+!*****************************************************************************
+subroutine gmt_unpadd(cc,cc_big)
+!*****************************************************************************
+use types, only : rprec
+use param, only : nxp,ny,ny2
+implicit none
+
+!  cc and cc_big are interleaved as complex arrays
+real(rprec), dimension( nxp+2, ny ) :: cc
+real(rprec), dimension( 3*nxp/2 + 2, ny2 ) :: cc_big
+
+integer :: ny_h, j_s, j_big_s
+
+ny_h = ny/2
+
+cc(:nxp,:ny_h) = cc_big(:nxp,:ny_h)
+
+! oddballs
+cc(nxp+1:nxp+2,:) = 0._rprec
+cc(:,ny_h+1) = 0._rprec
+
+! Compute starting j locations for second transfer
+j_s = ny_h + 2
+j_big_s = ny2 - ny_h + 2
+cc(:nxp,j_s:ny) = cc_big(:nxp,j_big_s:ny2)
+
+end subroutine gmt_unpadd
 
 end module mfm
