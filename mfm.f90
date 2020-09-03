@@ -491,43 +491,38 @@ integer :: i, j
 
 ! Lower boundary condition
 if (coord == 0) then
-
 #ifdef PPMAPPING
     denom = mesh_stretch(1)
 #else
     denom = 0.5_rprec*dz
 #endif
-
-        ! Dirichlet BCs
-        do j = 1, ny
-        do i = 1, nxp
-            dgmudz(i,j,1) = ( gmu(i,j,1) - gmu_bot ) / denom
-            dgmvdz(i,j,1) = ( gmv(i,j,1) - gmv_bot ) / denom
-            gmtxz(i,j,1) = -nu_molec/(z_i*u_star)*dgmudz(i,j,1)
-            gmtyz(i,j,1) = -nu_molec/(z_i*u_star)*dgmvdz(i,j,1)
-        enddo
-        enddo
-
+    ! Dirichlet BCs
+    do j = 1, ny
+    do i = 1, nxp
+        dgmudz(i,j,1) = ( gmu(i,j,1) - gmu_bot ) / denom
+        dgmvdz(i,j,1) = ( gmv(i,j,1) - gmv_bot ) / denom
+        gmtxz(i,j,1) = -nu_molec/(z_i*u_star)*dgmudz(i,j,1)
+        gmtyz(i,j,1) = -nu_molec/(z_i*u_star)*dgmvdz(i,j,1)
+    enddo
+    enddo
 endif
 
 ! Upper boundary condition
 if (coord == nproc-1) then
-
 #ifdef PPMAPPING
     denom = L_z - mesh_stretch(nz-1)
 #else
     denom = 0.5_rprec*dz
 #endif
-
-        ! Dirichlet BCs
-        do j = 1, ny
-        do i = 1, nxp
-            dgmudz(i,j,nz) = ( gmu_top - gmu(i,j,nz-1) ) / denom
-            dgmvdz(i,j,nz) = ( gmv_top - gmv(i,j,nz-1) ) / denom
-            gmtxz(i,j,nz) = -nu_molec/(z_i*u_star)*dgmudz(i,j,nz)
-            gmtyz(i,j,nz) = -nu_molec/(z_i*u_star)*dgmvdz(i,j,nz)
-        enddo
-        enddo
+    ! Dirichlet BCs
+    do j = 1, ny
+    do i = 1, nxp
+        dgmudz(i,j,nz) = ( gmu_top - gmu(i,j,nz-1) ) / denom
+        dgmvdz(i,j,nz) = ( gmv_top - gmv(i,j,nz-1) ) / denom
+        gmtxz(i,j,nz) = -nu_molec/(z_i*u_star)*dgmudz(i,j,nz)
+        gmtyz(i,j,nz) = -nu_molec/(z_i*u_star)*dgmvdz(i,j,nz)
+    enddo
+    enddo
 endif
 
 end subroutine gmt_wallstress
@@ -1804,11 +1799,7 @@ logical, save :: arrays_allocated = .false.
 real(rprec), dimension(2) :: aH_x, aH_y
 
 ! Specifiy cached constants
-if (fourier) then
-    const = 1._rprec
-else
-    const = 1._rprec/(nx*ny)
-endif
+const = 1._rprec/(nxp*ny)
 const2 = const/tadv1/dt
 const3 = 1._rprec/(dz**2)
 const4 = 1._rprec/(dz)
