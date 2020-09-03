@@ -12,6 +12,9 @@ subroutine load_jacobian()
 use sim_param
 use param
 use types
+#ifdef PPMFM
+use mfm, only : ic_mfm, bf_loc
+#endif
 
 implicit none
 real(kind=rprec),dimension(nz_tot) ::FIELD1
@@ -98,6 +101,19 @@ else
     endif !! half/full channel
 
 endif
+
+#ifdef PPMFM
+if (ic_mfm == 2) then
+do i = 1, (nz_tot-1)
+    if ((FIELD3(i) < bf_loc) .and. (bf_loc < FIELD3(i+1))) then
+        ! Using FIELD3 here since only forcing u velocity
+        ! Overwrite user bf_loc with average between points
+        bf_loc = (FIELD3(i) + FIELD3(i+1))/2
+        if (coord == 0) write(*,*) '--> MFM BF step located at: ', bf_loc
+    endif
+enddo
+endif
+#endif
 
 ! Store variables into what LESGO will use
 do jz=1,nz

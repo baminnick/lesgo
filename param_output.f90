@@ -17,15 +17,18 @@
 !!  along with lesgo.  If not, see <http://www.gnu.org/licenses/>.
 !!
 
-!*******************************************************************************
+!******************************************************************************
 subroutine param_output()
-!*******************************************************************************
+!******************************************************************************
 use param
 #ifdef PPLVLSET
 use level_set_base
 #endif
 #ifdef PPOUTPUT_WMLES
 use tlwmles, only : hwm, nzr
+#endif
+#ifdef PPMFM
+use mfm
 #endif
 
 implicit none
@@ -249,6 +252,20 @@ write(2,c_fmt) '---------------------------------------------------'
 write(2,c_fmt) 'SGS PARAMETERS'
 write(2,c_fmt) '---------------------------------------------------'
 write(2,l_fmt) 'lag_dyn_modify_beta : ', lag_dyn_modify_beta
+#endif
+
+#ifdef PPMFM
+write(2,c_fmt) ''
+write(2,c_fmt) '---------------------------------------------------'
+write(2,c_fmt) 'MFM PARAMETERS'
+write(2,c_fmt) '---------------------------------------------------'
+write(2,i_fmt) 'ic_mfm : ', ic_mfm
+write(2,f_fmt) 'gmu_bot : ', gmu_bot
+write(2,f_fmt) 'gmu_top : ', gmu_top
+write(2,f_fmt) 'gmv_bot : ', gmv_bot
+write(2,f_fmt) 'gmv_top : ', gmv_top
+write(2,f_fmt) 'bf_loc : ', bf_loc
+write(2,f_fmt) 'initial_noise_gmt : ', initial_noise_gmt
 #endif
 
 close(2)
