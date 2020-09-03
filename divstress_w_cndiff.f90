@@ -17,9 +17,9 @@
 !!  along with lesgo.  If not, see <http://www.gnu.org/licenses/>.
 !!
 
-!*******************************************************************************
+!******************************************************************************
 subroutine divstress_w_cndiff(divt, tx, ty)
-!*******************************************************************************
+!******************************************************************************
 !
 ! This subroutine provides divt for 1:nz. MPI provides 1:nz-1,
 ! except at top, where 1:nz is provided
@@ -55,7 +55,7 @@ divt(:, :, 0) = BOGUS
 do jz = 1, nz
 do jy = 1, ny
 do jx = 1, nx
-    divt(jx,jy,jz) = dtxdx(jx,jy,1) + dtydy(jx,jy,jz)
+    divt(jx,jy,jz) = dtxdx(jx,jy,jz) + dtydy(jx,jy,jz)
 end do 
 end do
 end do
