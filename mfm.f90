@@ -983,7 +983,7 @@ call project(gmu,gmv,gmw,dgmpdx,dgmpdy,dgmpdz)
 
 ! Output updated information on GMT to screen
 if (modulo (jt_total, wbase) == 0) then
-    call gmt_total_diff(du,dv,dw)
+    call check_gmt(gmu,gmv,gmw,du,dv,dw)
     call rmsdiv(dgmudx,dgmvdy,dgmwdz,rmsdivvel,nxp)
 
     if(coord == 0) then
@@ -1087,7 +1087,7 @@ close(2)
 end subroutine write_gmt_tau_wall_top
 
 !*****************************************************************************
-subroutine gmt_total_diff(du,dv,dw)
+subroutine check_gmt(u,v,w,du,dv,dw)
 !*****************************************************************************
 ! 
 ! Measure and write the average difference from the target macroscopic value.
@@ -1095,23 +1095,45 @@ subroutine gmt_total_diff(du,dv,dw)
 ! and were found by averaging in the x & y directions. Therefore, only 
 ! averaging in the z direction here to get a global estimate.
 ! 
+! Added computation of the energy of the u, v, and w components
+! 
 use types, only : rprec
 use param
 use messages
 implicit none
-integer :: jz
+integer :: jx, jy, jz
+real(rprec), dimension(nxp+2,ny,lbz:nz), intent(in) :: u, v, w
 real(rprec), dimension(nz), intent(in) :: du, dv, dw
-real(rprec) :: du_avg, dv_avg, dw_avg
+real(rprec) :: uu, vv, ww, du_avg, dv_avg, dw_avg
 #ifdef PPMPI
+real(rprec) :: uu_global, vv_global, ww_global
 real(rprec) :: du_global, dv_global, dw_global
 #endif
 
 ! Initialize variables
+uu = 0._rprec
+vv = 0._rprec
+ww = 0._rprec
 du_avg = 0._rprec
 dv_avg = 0._rprec
 dw_avg = 0._rprec
 
-! Perform spatial averaging
+! Compute spatial average of squared velocities
+do jz = 1, nz-1
+do jy = 1, ny
+do jx = 1, nxp
+    uu = uu + u(jx,jy,jz)**2
+    vv = vv + v(jx,jy,jz)**2
+    ww = ww + w(jx,jy,jz)**2
+enddo
+enddo
+enddo
+uu = uu / (nxp*ny*(nz-1))
+vv = vv / (nxp*ny*(nz-1))
+ww = ww / (nxp*ny*(nz-1))
+
+! Perform spatial averaging for differences
+! Remember these are already averaged in the x & y directions
 do jz = 1, nz-1
     du_avg = du_avg + du(jz)
     dv_avg = dv_avg + dv(jz)
@@ -1122,28 +1144,34 @@ dv_avg = dv_avg / (nz-1)
 dw_avg = dw_avg / (nz-1)
 
 #ifdef PPMPI
+call mpi_reduce (uu, uu_global, 1, MPI_RPREC, MPI_SUM, 0, comm, ierr)
+call mpi_reduce (vv, vv_global, 1, MPI_RPREC, MPI_SUM, 0, comm, ierr)
+call mpi_reduce (ww, ww_global, 1, MPI_RPREC, MPI_SUM, 0, comm, ierr)
 call mpi_reduce (du_avg, du_global, 1, MPI_RPREC, MPI_SUM, 0, comm, ierr)
 call mpi_reduce (dv_avg, dv_global, 1, MPI_RPREC, MPI_SUM, 0, comm, ierr)
 call mpi_reduce (dw_avg, dw_global, 1, MPI_RPREC, MPI_SUM, 0, comm, ierr)
 if (rank == 0) then ! note that it's rank here, not coord
+    uu = uu_global/nproc
+    vv = vv_global/nproc
+    ww = ww_global/nproc
     du_avg = du_global/nproc
     dv_avg = dv_global/nproc
     dw_avg = dw_global/nproc
 #endif
-    open(2,file=path // 'output/check_gmt_diff.dat', status='unknown',      &
+    open(2,file=path // 'output/check_gmt.dat', status='unknown',      &
         form='formatted', position='append')
 
     ! one time header output
-    if (jt_total==wbase) write(2,*) 'jt_total, du_avg, dv_avg, dw_avg'
+    if (jt_total==wbase) write(2,*) 'jt_total, uu, vv, ww, du_avg, dv_avg, dw_avg'
 
     ! continual time-related output
-    write(2,*) jt_total, du_avg, dv_avg, dw_avg
+    write(2,*) jt_total, uu, vv, ww, du_avg, dv_avg, dw_avg
     close(2)
 #ifdef PPMPI
 endif
 #endif
 
-end subroutine gmt_total_diff
+end subroutine check_gmt
 
 !*****************************************************************************
 subroutine gmt_ddx(f, dfdx, lbz)
