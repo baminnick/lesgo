@@ -864,6 +864,8 @@ do
                 read (buff(equal_pos+1:), *) bf_loc
             case ('INITIAL_NOISE_GMT')
                 read (buff(equal_pos+1:), *) initial_noise_gmt
+            case ('TOTAL_ADVEC')
+                read (buff(equal_pos+1:), *) total_advec
             case default
                 ! if (coord == 0) write(*,*) 'Found unused data value in '  &
                 !     // block_name // ' block: ' // buff(1:equal_pos-1)

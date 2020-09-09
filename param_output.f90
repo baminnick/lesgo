@@ -266,6 +266,7 @@ write(2,f_fmt) 'gmv_bot : ', gmv_bot
 write(2,f_fmt) 'gmv_top : ', gmv_top
 write(2,f_fmt) 'bf_loc : ', bf_loc
 write(2,f_fmt) 'initial_noise_gmt : ', initial_noise_gmt
+write(2,x3l_fmt) 'total_advec : ', total_advec
 #endif
 
 close(2)
