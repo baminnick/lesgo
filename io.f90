@@ -1656,6 +1656,9 @@ use param, only : ny, nz, dz
 use level_set_base, only : phi
 use sim_param, only : fx, fy, fz, fxa, fya, fza
 #endif
+#ifdef PPMFM
+use mfm, only : gmu, gmv, gmw
+#endif
 
 implicit none
 
@@ -1942,6 +1945,34 @@ endif
 
      deallocate(pres_real)
      deallocate(presF_real)
+
+! Instantaneous domain values from GMT velocity field
+#ifdef PPMFM
+    ! Common file name for all output types
+    call string_splice(fname, path //'output/gmt.', jt_total)
+
+!! For fourier or .not. fourier
+#if defined(PPCGNS) && defined(PPMPI)
+    ! Write CGNS Output
+    call string_concat(fname, '.cgns')
+    call write_parallel_cgns(fname, nxp, ny, nz - nz_end, nz_tot,              &
+        (/ 1, 1,   (nz-1)*coord + 1 /),                                        &
+        (/ nxp, ny, (nz-1)*(coord+1) + 1 - nz_end /),                          &
+        x(1:nxp) , y(1:ny) , z(1:(nz-nz_end) ),                                &
+        3, (/ 'VelocityX', 'VelocityY', 'VelocityZ' /),                        &
+        (/ gmu(1:nxp,1:ny,1:(nz-nz_end)), gmv(1:nxp,1:ny,1:(nz-nz_end)),       &
+         gmw(1:nxp,1:ny,1:(nz-nz_end)) /) )
+#else
+    ! Write binary Output
+    call string_concat(fname, bin_ext)
+    open(unit=13, file=fname, form='unformatted', convert=write_endian,        &
+        access='direct', recl=nxp*ny*nz*rprec)
+    write(13,rec=1) gmu(:nxp,:ny,1:nz)
+    write(13,rec=2) gmv(:nxp,:ny,1:nz)
+    write(13,rec=3) gmw(:nxp,:ny,1:nz)
+    close(13)
+#endif
+#endif
 
 !  Write instantaneous x-plane values
 elseif(itype==3) then
