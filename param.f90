@@ -50,6 +50,9 @@ character(*), parameter :: checkpoint_tavg_budget_file = path // 'tavg_budget.ou
 #ifdef PPOUTPUT_TURBSPEC
 character(*), parameter :: checkpoint_tavg_turbspec_file = path // 'tavg_turbspec.out'
 #endif
+#ifdef PPOUTPUT_SPECBUDG
+character(*), parameter :: checkpoint_tavg_specbudg_file = path // 'tavg_specbudg.out'
+#endif
 #ifdef PPOUTPUT_WMLES
 character(*), parameter :: checkpoint_tavg_wmles_file = path // 'tavg_wmles.out'
 #endif

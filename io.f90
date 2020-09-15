@@ -16,9 +16,9 @@
 !!  You should have received a copy of the GNU General Public License
 !!  along with lesgo.  If not, see <http://www.gnu.org/licenses/>.
 
-!*******************************************************************************
+!*****************************************************************************
 module io
-!*******************************************************************************
+!*****************************************************************************
 use types, only : rprec
 use param, only : ld, nx, ny, nz, nz_tot, path, coord, rank, nproc, jt_total
 use param, only : total_time, total_time_dim, lbz, jzmin, jzmax
@@ -55,9 +55,9 @@ integer :: nz_end
 
 contains
 
-!*******************************************************************************
+!*****************************************************************************
 subroutine openfiles()
-!*******************************************************************************
+!*****************************************************************************
 use param, only : use_cfl_dt, dt, cfl_f
 implicit none
 logical :: exst
@@ -93,9 +93,9 @@ end if
 
 end subroutine openfiles
 
-!*******************************************************************************
+!*****************************************************************************
 subroutine energy (ke)
-!*******************************************************************************
+!*****************************************************************************
 use types, only : rprec
 use param
 use sim_param, only : u, v, w
@@ -138,9 +138,9 @@ end if
 
 end subroutine energy
 
-!*******************************************************************************
+!*****************************************************************************
 subroutine xpert (u,upert)
-!*******************************************************************************
+!*****************************************************************************
 ! 
 ! This routine takes in field variable u and outputs the streamwise fluctuating 
 ! component upert
@@ -174,9 +174,9 @@ enddo
 return
 end subroutine xpert
 
-!*******************************************************************************
+!*****************************************************************************
 subroutine ypert (u,upert)
-!*******************************************************************************
+!*****************************************************************************
 ! 
 ! This routine takes in field variable u and outputs the spanwise fluctuating 
 ! component upert
@@ -210,9 +210,9 @@ enddo
 return
 end subroutine ypert
 
-!*******************************************************************************
+!*****************************************************************************
 subroutine ypert_fourier (u,upert)
-!*******************************************************************************
+!*****************************************************************************
 ! 
 ! This routine takes in field variable u and outputs the spanwise fluctuating 
 ! component upert
@@ -246,9 +246,9 @@ enddo
 return
 end subroutine ypert_fourier
 
-!*******************************************************************************
+!*****************************************************************************
 subroutine zpert (u,upert)
-!*******************************************************************************
+!*****************************************************************************
 ! 
 ! This routine takes in field variable u and outputs the wall-normal fluctuating 
 ! component upert
@@ -280,9 +280,9 @@ enddo
 return
 end subroutine zpert
 
-!*******************************************************************************
+!*****************************************************************************
 subroutine ypert_by_z (u,upert)
-!*******************************************************************************
+!*****************************************************************************
 ! 
 ! This routine takes in field variable u and outputs the spanwise fluctuating 
 ! component upert. This subroutine differs from ypert by assuming the input
@@ -321,9 +321,9 @@ enddo
 return
 end subroutine ypert_by_z
 
-!*******************************************************************************
+!*****************************************************************************
 subroutine kx_energy ()
-!*******************************************************************************
+!*****************************************************************************
 ! 
 ! Computes and writes the energy of the streamwise modes
 ! 
@@ -496,9 +496,9 @@ end if
 
 end subroutine kx_energy
 
-!*******************************************************************************
+!*****************************************************************************
 subroutine ky_energy ()
-!*******************************************************************************
+!*****************************************************************************
 ! 
 ! Computes and writes the energy of the spanwise modes
 ! 
@@ -611,9 +611,9 @@ end if
 
 end subroutine ky_energy
 
-!*******************************************************************************
+!*****************************************************************************
 subroutine kx_energy_fourier ()
-!*******************************************************************************
+!*****************************************************************************
 ! 
 ! Computes and writes the energy of the streamwise modes
 ! 
@@ -785,9 +785,9 @@ end if
 
 end subroutine kx_energy_fourier
 
-!*******************************************************************************
+!*****************************************************************************
 subroutine kx_energy_by_z_fourier ()
-!*******************************************************************************
+!*****************************************************************************
 ! 
 ! Computes and writes the energy of the streamwise modes for each z-level.
 ! 
@@ -906,7 +906,7 @@ complex(rprec), dimension(nx/2+1) :: txzhat, tyzhat
 real(rprec), dimension(nx/2+1) :: txz2, tyz2, twall2
 character(len = 10), dimension(nx/2+1) :: fhead !! file header variable for kx
 
-! --------------------------- Wall Stress Statistics  ---------------------------
+! ------------------------- Wall Stress Statistics  -------------------------
 ! Compute output to write to file
 turnovers = total_time_dim / (L_x * z_i / u_star)
 txzavg = 0._rprec
@@ -966,9 +966,6 @@ endif
 call ypert_by_z(txz(:,:,1),txzpert)
 call ypert_by_z(tyz(:,:,1),tyzpert)
 
-! DEBUG
-!write(*,*) '0', txzpert
-
 ! Consider each y location
 do jy = 1, ny
     ! Take 1D Fourier Transform
@@ -1001,7 +998,7 @@ twall2 = txz2 + tyz2
 
 endif
 
-! ------------------------------- Write to file -------------------------------
+! ------------------------------ Write to file ------------------------------
 ! Wall Stress Statistics File
 open(2,file=path // 'output/tau_wall_bot.dat', status='unknown',               &
     form='formatted', position='append')
@@ -1074,7 +1071,7 @@ end subroutine write_clocks
 #ifdef PPCGNS
 #ifdef PPMPI
 !*****************************************************************************
-subroutine write_parallel_cgns (file_name, nx, ny, nz, nz_tot, start_n_in,     &
+subroutine write_parallel_cgns (file_name, nx, ny, nz, nz_tot, start_n_in,  &
     end_n_in, xin, yin, zin, num_fields, fieldNames, input )
 !*****************************************************************************
 implicit none
@@ -1230,7 +1227,7 @@ do i=1,num_fields
         field, ier)
     if (ier .ne. CG_OK) call cgp_error_exit_f
 
-    call cgp_field_write_data_f(fn, base, zone, sol, field, start_n, end_n,    &
+    call cgp_field_write_data_f(fn, base, zone, sol, field, start_n, end_n, &
         input((i-1)*nnodes+1:(i)*nnodes), ier)
     if (ier .ne. CG_OK) call cgp_error_exit_f
 
@@ -1242,10 +1239,10 @@ if (ier .ne. CG_OK) call cgp_error_exit_f
 
 end subroutine write_parallel_cgns
 
-!*******************************************************************************
-subroutine write_null_cgns (file_name, nx, ny, nz, nz_tot, start_n_in,         &
+!*****************************************************************************
+subroutine write_null_cgns (file_name, nx, ny, nz, nz_tot, start_n_in,     &
     end_n_in, xin, yin, zin, num_fields, fieldNames )
-!*******************************************************************************
+!*****************************************************************************
 implicit none
 
 integer, intent(in) :: nx, ny, nz, nz_tot, num_fields
@@ -1382,11 +1379,11 @@ if (ier .ne. CG_OK) call cgp_error_exit_f
 
 ! Write the solution
 do i = 1, num_fields
-    call cgp_field_write_f(fn, base, zone, sol, RealDouble, fieldNames(i),     &
+    call cgp_field_write_f(fn, base, zone, sol, RealDouble, fieldNames(i),  &
                            field, ier)
     if (ier .ne. CG_OK) call cgp_error_exit_f
 
-    call cgp_field_write_data_f(fn, base, zone, sol, field, start_n, end_n,    &
+    call cgp_field_write_data_f(fn, base, zone, sol, field, start_n, end_n, &
                                 %VAL(0), ier)
     if (ier .ne. CG_OK) call cgp_error_exit_f
 
@@ -1402,9 +1399,9 @@ end subroutine write_null_cgns
 #endif
 #endif
 
-!*******************************************************************************
+!*****************************************************************************
 subroutine output_loop()
-!*******************************************************************************
+!*****************************************************************************
 !
 !  This subroutine is called every time step and acts as a driver for
 !  computing statistics and outputing instantaneous data. No actual
@@ -1474,8 +1471,8 @@ if (tavg_calc) then
             if (.not.tavg_initialized) then
                 if (coord == 0) then
                     write(*,*) '-------------------------------'
-                    write(*,"(1a,i9,1a,i9)")                                   &
-                        'Starting running time summation from ',               &
+                    write(*,"(1a,i9,1a,i9)")                               &
+                        'Starting running time summation from ',           &
                         tavg_nstart, ' to ', tavg_nend
                     write(*,*) '-------------------------------'
                 end if
@@ -1518,13 +1515,13 @@ end if
 
 !  Determine if instantaneous point velocities are to be recorded
 if(point_calc) then
-    if (jt_total >= point_nstart .and. jt_total <= point_nend .and.            &
+    if (jt_total >= point_nstart .and. jt_total <= point_nend .and.        &
         ( mod(jt_total-point_nstart,point_nskip)==0) ) then
         if (jt_total == point_nstart) then
             if (coord == 0) then
                 write(*,*) '-------------------------------'
-                write(*,"(1a,i9,1a,i9)")                                       &
-                    'Writing instantaneous point velocities from ',            &
+                write(*,"(1a,i9,1a,i9)")                                   &
+                    'Writing instantaneous point velocities from ',        &
                     point_nstart, ' to ', point_nend
                 write(*,"(1a,i9)") 'Iteration skip:', point_nskip
                 write(*,*) '-------------------------------'
@@ -1536,13 +1533,13 @@ end if
 
 !  Determine if instantaneous domain velocities are to be recorded
 if(domain_calc) then
-    if (jt_total >= domain_nstart .and. jt_total <= domain_nend .and.          &
+    if (jt_total >= domain_nstart .and. jt_total <= domain_nend .and.       &
         ( mod(jt_total-domain_nstart,domain_nskip)==0) ) then
         if (jt_total == domain_nstart) then
             if (coord == 0) then
                 write(*,*) '-------------------------------'
-                write(*,"(1a,i9,1a,i9)")                                       &
-                    'Writing instantaneous domain velocities from ',           &
+                write(*,"(1a,i9,1a,i9)")                                    &
+                    'Writing instantaneous domain velocities from ',        &
                     domain_nstart, ' to ', domain_nend
                 write(*,"(1a,i9)") 'Iteration skip:', domain_nskip
                 write(*,*) '-------------------------------'
@@ -1555,13 +1552,13 @@ end if
 
 !  Determine if instantaneous x-plane velocities are to be recorded
 if(xplane_calc) then
-    if (jt_total >= xplane_nstart .and. jt_total <= xplane_nend .and.          &
+    if (jt_total >= xplane_nstart .and. jt_total <= xplane_nend .and.       &
         ( mod(jt_total-xplane_nstart,xplane_nskip)==0) ) then
     if (jt_total == xplane_nstart) then
         if (coord == 0) then
             write(*,*) '-------------------------------'
-            write(*,"(1a,i9,1a,i9)")                                           &
-                'Writing instantaneous x-plane velocities from ',              &
+            write(*,"(1a,i9,1a,i9)")                                        &
+                'Writing instantaneous x-plane velocities from ',           &
                 xplane_nstart, ' to ', xplane_nend
             write(*,"(1a,i9)") 'Iteration skip:', xplane_nskip
             write(*,*) '-------------------------------'
@@ -1574,13 +1571,13 @@ end if
 
 !  Determine if instantaneous y-plane velocities are to be recorded
 if(yplane_calc) then
-    if (jt_total >= yplane_nstart .and. jt_total <= yplane_nend .and.          &
+    if (jt_total >= yplane_nstart .and. jt_total <= yplane_nend .and.       &
         ( mod(jt_total-yplane_nstart,yplane_nskip)==0) ) then
         if (jt_total == yplane_nstart) then
             if (coord == 0) then
                 write(*,*) '-------------------------------'
-                write(*,"(1a,i9,1a,i9)")                                       &
-                    'Writing instantaneous y-plane velocities from ',          &
+                write(*,"(1a,i9,1a,i9)")                                    &
+                    'Writing instantaneous y-plane velocities from ',       &
                     yplane_nstart, ' to ', yplane_nend
                 write(*,"(1a,i9)") 'Iteration skip:', yplane_nskip
                 write(*,*) '-------------------------------'
@@ -1593,13 +1590,13 @@ end if
 
 !  Determine if instantaneous z-plane velocities are to be recorded
 if(zplane_calc) then
-    if (jt_total >= zplane_nstart .and. jt_total <= zplane_nend .and.          &
+    if (jt_total >= zplane_nstart .and. jt_total <= zplane_nend .and.       &
         ( mod(jt_total-zplane_nstart,zplane_nskip)==0) ) then
         if (jt_total == zplane_nstart) then
             if (coord == 0) then
                 write(*,*) '-------------------------------'
-                write(*,"(1a,i9,1a,i9)")                                       &
-                    'Writing instantaneous z-plane velocities from ',          &
+                write(*,"(1a,i9,1a,i9)")                                    &
+                    'Writing instantaneous z-plane velocities from ',       &
                     zplane_nstart, ' to ', zplane_nend
                 write(*,"(1a,i9)") 'Iteration skip:', zplane_nskip
                 write(*,*) '-------------------------------'
@@ -1612,9 +1609,9 @@ end if
 
 end subroutine output_loop
 
-!*******************************************************************************
+!*****************************************************************************
 subroutine inst_write(itype)
-!*******************************************************************************
+!*****************************************************************************
 !
 ! This subroutine is used to write all of the instantaneous data from
 ! lesgo to file. The types of data written are:
@@ -1756,17 +1753,17 @@ if (fourier) then
 #if defined(PPCGNS) && defined(PPMPI)
     ! Write CGNS Output
     call string_concat(fname, '.cgns')
-    call write_parallel_cgns(fname, nxp, ny, nz - nz_end, nz_tot,               &
-        (/ 1, 1,   (nz-1)*coord + 1 /),                                         &
-        (/ nxp, ny, (nz-1)*(coord+1) + 1 - nz_end /),                           &
-        x(1:nxp) , y(1:ny) , z(1:(nz-nz_end) ),                                 &
-        3, (/ 'VelocityX', 'VelocityY', 'VelocityZ' /),                         &
-        (/ uF(1:nxp,1:ny,1:(nz-nz_end)), vF(1:nxp,1:ny,1:(nz-nz_end)),          &
+    call write_parallel_cgns(fname, nxp, ny, nz - nz_end, nz_tot,           &
+        (/ 1, 1,   (nz-1)*coord + 1 /),                                     &
+        (/ nxp, ny, (nz-1)*(coord+1) + 1 - nz_end /),                       &
+        x(1:nxp) , y(1:ny) , z(1:(nz-nz_end) ),                             &
+        3, (/ 'VelocityX', 'VelocityY', 'VelocityZ' /),                     &
+        (/ uF(1:nxp,1:ny,1:(nz-nz_end)), vF(1:nxp,1:ny,1:(nz-nz_end)),      &
          wF_uv(1:nxp,1:ny,1:(nz-nz_end)) /) )
 #else
     ! Write binary Output
     call string_concat(fname, bin_ext)
-    open(unit=13, file=fname, form='unformatted', convert=write_endian,        &
+    open(unit=13, file=fname, form='unformatted', convert=write_endian,     &
         access='direct', recl=nxp*ny*nz*rprec)
     write(13,rec=1) uF(:nxp,:ny,1:nz)
     write(13,rec=2) vF(:nxp,:ny,1:nz)
@@ -1777,17 +1774,17 @@ else !! .not. fourier
 #if defined(PPCGNS) && defined(PPMPI)
     ! Write CGNS Output
     call string_concat(fname, '.cgns')
-    call write_parallel_cgns(fname, nx, ny, nz - nz_end, nz_tot,               &
-        (/ 1, 1,   (nz-1)*coord + 1 /),                                        &
-        (/ nx, ny, (nz-1)*(coord+1) + 1 - nz_end /),                           &
-        x(1:nx) , y(1:ny) , z(1:(nz-nz_end) ),                                 &
-        3, (/ 'VelocityX', 'VelocityY', 'VelocityZ' /),                        &
-        (/ u(1:nx,1:ny,1:(nz-nz_end)), v(1:nx,1:ny,1:(nz-nz_end)),             &
+    call write_parallel_cgns(fname, nx, ny, nz - nz_end, nz_tot,            &
+        (/ 1, 1,   (nz-1)*coord + 1 /),                                     &
+        (/ nx, ny, (nz-1)*(coord+1) + 1 - nz_end /),                        &
+        x(1:nx) , y(1:ny) , z(1:(nz-nz_end) ),                              &
+        3, (/ 'VelocityX', 'VelocityY', 'VelocityZ' /),                     &
+        (/ u(1:nx,1:ny,1:(nz-nz_end)), v(1:nx,1:ny,1:(nz-nz_end)),          &
          w_uv(1:nx,1:ny,1:(nz-nz_end)) /) )
 #else
     ! Write binary Output
     call string_concat(fname, bin_ext)
-    open(unit=13, file=fname, form='unformatted', convert=write_endian,        &
+    open(unit=13, file=fname, form='unformatted', convert=write_endian,     &
         access='direct', recl=nx*ny*nz*rprec)
     write(13,rec=1) u(:nx,:ny,1:nz)
     write(13,rec=2) v(:nx,:ny,1:nz)
@@ -1841,18 +1838,18 @@ if (fourier) then
 #if defined(PPCGNS) && defined(PPMPI)
     ! Write CGNS Output
     call string_concat(fname, '.cgns')
-    call write_parallel_cgns(fname,nxp,ny, nz - nz_end, nz_tot,                 &
-        (/ 1, 1,   (nz-1)*coord + 1 /),                                         &
-        (/ nxp, ny, (nz-1)*(coord+1) + 1 - nz_end /),                           &
-        x(1:nxp) , y(1:ny) , zw(1:(nz-nz_end) ),                                &
-        3, (/ 'VorticityX', 'VorticityY', 'VorticityZ' /),                      &
+    call write_parallel_cgns(fname,nxp,ny, nz - nz_end, nz_tot,             &
+        (/ 1, 1,   (nz-1)*coord + 1 /),                                     &
+        (/ nxp, ny, (nz-1)*(coord+1) + 1 - nz_end /),                       &
+        x(1:nxp) , y(1:ny) , zw(1:(nz-nz_end) ),                            &
+        3, (/ 'VorticityX', 'VorticityY', 'VorticityZ' /),                  &
         (/ vortxF(1:nxp,1:ny,1:(nz-nz_end)), vortyF(1:nxp,1:ny,1:(nz-nz_end)),  &
         vortzF(1:nxp,1:ny,1:(nz-nz_end)) /) )
 
 #else
     ! Write binary Output
     call string_concat(fname, bin_ext)
-    open(unit=13, file=fname, form='unformatted', convert=write_endian,        &
+    open(unit=13, file=fname, form='unformatted', convert=write_endian,     &
         access='direct', recl=nxp*ny*nz*rprec)
     write(13,rec=1) vortxF(:nxp,:ny,1:nz)
     write(13,rec=2) vortyF(:nxp,:ny,1:nz)
@@ -1863,18 +1860,18 @@ else !! .not. fourier
 #if defined(PPCGNS) && defined(PPMPI)
     ! Write CGNS Output
     call string_concat(fname, '.cgns')
-    call write_parallel_cgns(fname,nx,ny, nz - nz_end, nz_tot,                 &
-        (/ 1, 1,   (nz-1)*coord + 1 /),                                        &
-        (/ nx, ny, (nz-1)*(coord+1) + 1 - nz_end /),                           &
-        x(1:nx) , y(1:ny) , zw(1:(nz-nz_end) ),                                &
-        3, (/ 'VorticityX', 'VorticityY', 'VorticityZ' /),                     &
-        (/ vortx(1:nx,1:ny,1:(nz-nz_end)), vorty(1:nx,1:ny,1:(nz-nz_end)),     &
+    call write_parallel_cgns(fname,nx,ny, nz - nz_end, nz_tot,              &
+        (/ 1, 1,   (nz-1)*coord + 1 /),                                     &
+        (/ nx, ny, (nz-1)*(coord+1) + 1 - nz_end /),                        &
+        x(1:nx) , y(1:ny) , zw(1:(nz-nz_end) ),                             &
+        3, (/ 'VorticityX', 'VorticityY', 'VorticityZ' /),                  &
+        (/ vortx(1:nx,1:ny,1:(nz-nz_end)), vorty(1:nx,1:ny,1:(nz-nz_end)),  &
         vortz(1:nx,1:ny,1:(nz-nz_end)) /) )
 
 #else
     ! Write binary Output
     call string_concat(fname, bin_ext)
-    open(unit=13, file=fname, form='unformatted', convert=write_endian,        &
+    open(unit=13, file=fname, form='unformatted', convert=write_endian,     &
         access='direct', recl=nx*ny*nz*rprec)
     write(13,rec=1) vortx(:nx,:ny,1:nz)
     write(13,rec=2) vorty(:nx,:ny,1:nz)
@@ -1912,16 +1909,16 @@ if (fourier) then
 #if defined(PPCGNS) && defined(PPMPI)
     ! Write CGNS Output
     call string_concat(fname, '.cgns')
-    call write_parallel_cgns(fname, nxp, ny, nz - nz_end, nz_tot,              &
-        (/ 1, 1,   (nz-1)*coord + 1 /),                                        &
-        (/ nxp, ny, (nz-1)*(coord+1) + 1 - nz_end /),                          &
-        x(1:nxp) , y(1:ny) , z(1:(nz-nz_end) ),                                &
+    call write_parallel_cgns(fname, nxp, ny, nz - nz_end, nz_tot,           &
+        (/ 1, 1,   (nz-1)*coord + 1 /),                                     &
+        (/ nxp, ny, (nz-1)*(coord+1) + 1 - nz_end /),                       &
+        x(1:nxp) , y(1:ny) , z(1:(nz-nz_end) ),                             &
         1, (/ 'Pressure' /), (/ presF_real(1:nxp,1:ny,1:(nz-nz_end)) /) )
 
 #else
     ! Write binary Output
     call string_concat(fname, bin_ext)
-    open(unit=13, file=fname, form='unformatted', convert=write_endian,        &
+    open(unit=13, file=fname, form='unformatted', convert=write_endian,     &
         access='direct', recl=nxp*ny*nz*rprec)
     write(13,rec=1) presF_real(:nxp,:ny,1:nz)
     close(13)
@@ -1930,16 +1927,16 @@ else !! .not. fourier
 #if defined(PPCGNS) && defined(PPMPI)
     ! Write CGNS Output
     call string_concat(fname, '.cgns')
-    call write_parallel_cgns(fname, nx, ny, nz - nz_end, nz_tot,               &
-        (/ 1, 1,   (nz-1)*coord + 1 /),                                        &
-        (/ nx, ny, (nz-1)*(coord+1) + 1 - nz_end /),                           &
-        x(1:nx) , y(1:ny) , z(1:(nz-nz_end) ),                                 &
+    call write_parallel_cgns(fname, nx, ny, nz - nz_end, nz_tot,            &
+        (/ 1, 1,   (nz-1)*coord + 1 /),                                     &
+        (/ nx, ny, (nz-1)*(coord+1) + 1 - nz_end /),                        &
+        x(1:nx) , y(1:ny) , z(1:(nz-nz_end) ),                              &
         1, (/ 'Pressure' /), (/ pres_real(1:nx,1:ny,1:(nz-nz_end)) /) )
 
 #else
     ! Write binary Output
     call string_concat(fname, bin_ext)
-    open(unit=13, file=fname, form='unformatted', convert=write_endian,        &
+    open(unit=13, file=fname, form='unformatted', convert=write_endian,     &
         access='direct', recl=nx*ny*nz*rprec)
     write(13,rec=1) pres_real(:nx,:ny,1:nz)
     close(13)
@@ -2052,18 +2049,18 @@ call phys2wave( w, lbz )
 #if defined(PPCGNS) && defined(PPMPI)
     ! Write CGNS Output
     call string_concat(fname, '.cgns')
-    call write_parallel_cgns(fname,1,ny, nz - nz_end, nz_tot,                   &
-        (/ 1, 1,   (nz-1)*coord + 1 /),                                         &
-        (/ nxp, ny, (nz-1)*(coord+1) + 1 - nz_end /),                           &
-        x(1:nxp) , y(1:ny) , zw(1:(nz-nz_end) ),                                &
-        3, (/ 'VorticityX', 'VorticityY', 'VorticityZ' /),                      &
-        (/ vortxF(1,1:ny,1:(nz-nz_end)), vortyF(1,1:ny,1:(nz-nz_end)),  &
+    call write_parallel_cgns(fname,1,ny, nz - nz_end, nz_tot,               &
+        (/ 1, 1,   (nz-1)*coord + 1 /),                                     &
+        (/ nxp, ny, (nz-1)*(coord+1) + 1 - nz_end /),                       &
+        x(1:nxp) , y(1:ny) , zw(1:(nz-nz_end) ),                            &
+        3, (/ 'VorticityX', 'VorticityY', 'VorticityZ' /),                  &
+        (/ vortxF(1,1:ny,1:(nz-nz_end)), vortyF(1,1:ny,1:(nz-nz_end)),      &
         vortzF(1,1:ny,1:(nz-nz_end)) /) )
 
 #else
     ! Write binary Output
     call string_concat(fname, bin_ext)
-    open(unit=13, file=fname, form='unformatted', convert=write_endian,        &
+    open(unit=13, file=fname, form='unformatted', convert=write_endian,     &
         access='direct', recl=ny*nz*rprec)
     write(13,rec=1) vortxF(1,:ny,1:nz)
     write(13,rec=2) vortyF(1,:ny,1:nz)
@@ -2128,11 +2125,11 @@ elseif(itype==4) then
         do k = 1, nz
             do i = 1, nx
 
-                ui(i,1,k) = linear_interp(u(i,yplane(j) % istart,k),           &
+                ui(i,1,k) = linear_interp(u(i,yplane(j) % istart,k),        &
                      u(i,yplane(j) % istart+1,k), dy, yplane(j) % ldiff)
-                vi(i,1,k) = linear_interp(v(i,yplane(j) % istart,k),           &
+                vi(i,1,k) = linear_interp(v(i,yplane(j) % istart,k),        &
                      v(i,yplane(j) % istart+1,k), dy, yplane(j) % ldiff)
-                wi(i,1,k) = linear_interp(w_uv(i,yplane(j) % istart,k),        &
+                wi(i,1,k) = linear_interp(w_uv(i,yplane(j) % istart,k),     &
                      w_uv(i,yplane(j) % istart+1,k), dy, yplane(j) % ldiff)
             end do
         end do
@@ -2143,12 +2140,12 @@ elseif(itype==4) then
 
 #if defined(PPCGNS) && defined(PPMPI)
         call string_concat(fname, '.cgns')
-        call write_parallel_cgns (fname,nx,1, nz - nz_end, nz_tot,             &
-            (/ 1, 1,   (nz-1)*coord + 1 /),                                    &
-            (/ nx, 1, (nz-1)*(coord+1) + 1 - nz_end /),                        &
-            x(1:nx) , yplane_loc(j:j) , z(1:(nz-nz_end) ),                     &
-            3, (/ 'VelocityX', 'VelocityY', 'VelocityZ' /),                    &
-            (/ ui(1:nx,1,1:(nz-nz_end)), vi(1:nx,1,1:(nz-nz_end)),             &
+        call write_parallel_cgns (fname,nx,1, nz - nz_end, nz_tot,          &
+            (/ 1, 1,   (nz-1)*coord + 1 /),                                 &
+            (/ nx, 1, (nz-1)*(coord+1) + 1 - nz_end /),                     &
+            x(1:nx) , yplane_loc(j:j) , z(1:(nz-nz_end) ),                  &
+            3, (/ 'VelocityX', 'VelocityY', 'VelocityZ' /),                 &
+            (/ ui(1:nx,1,1:(nz-nz_end)), vi(1:nx,1,1:(nz-nz_end)),          &
             wi(1:nx,1,1:(nz-nz_end)) /) )
 #else
         ! Write binary output
@@ -2172,7 +2169,7 @@ elseif (itype==5) then
     !  Loop over all zplane locations
     do k = 1, zplane_nloc
         ! Common file name portion for all output types
-        call string_splice(fname, path // 'output/vel.z-',                     &
+        call string_splice(fname, path // 'output/vel.z-',                  &
                 zplane_loc(k), '.', jt_total)
 
 #ifdef PPCGNS
@@ -2183,11 +2180,11 @@ elseif (itype==5) then
         if(zplane(k) % coord == coord) then
             do j = 1, Ny
                 do i = 1, Nx
-                    ui(i,j,1) = linear_interp(u(i,j,zplane(k) % istart),       &
+                    ui(i,j,1) = linear_interp(u(i,j,zplane(k) % istart),     &
                          u(i,j,zplane(k) % istart+1), dz, zplane(k) % ldiff)
-                    vi(i,j,1) = linear_interp(v(i,j,zplane(k) % istart),       &
+                    vi(i,j,1) = linear_interp(v(i,j,zplane(k) % istart),     &
                          v(i,j,zplane(k) % istart+1), dz, zplane(k) % ldiff)
-                    wi(i,j,1) = linear_interp(w_uv(i,j,zplane(k) % istart),    &
+                    wi(i,j,1) = linear_interp(w_uv(i,j,zplane(k) % istart),  &
                          w_uv(i,j,zplane(k) % istart+1), dz, zplane(k) % ldiff)
                 end do
             end do
@@ -2197,15 +2194,15 @@ elseif (itype==5) then
 !            ! Write CGNS Data
 !            ! Only the processor with data writes, the other one is written
 !            ! using null arguments with 'write_null_cgns'
-!            call write_parallel_cgns (fname ,nx, ny, 1, 1,                     &
-!                (/ 1, 1,   1 /),                                               &
-!                (/ nx, ny, 1 /),                                               &
-!                x(1:nx) , y(1:ny) , zplane_loc(k:k), 3,                        &
-!                (/ 'VelocityX', 'VelocityY', 'VelocityZ' /),                   &
+!            call write_parallel_cgns (fname ,nx, ny, 1, 1,                  &
+!                (/ 1, 1,   1 /),                                            &
+!                (/ nx, ny, 1 /),                                            &
+!                x(1:nx) , y(1:ny) , zplane_loc(k:k), 3,                     &
+!                (/ 'VelocityX', 'VelocityY', 'VelocityZ' /),                &
 !                (/ ui(1:nx,1:ny,1), vi(1:nx,1:ny,1), wi(1:nx,1:ny,1) /) )
 #else
             call string_concat(fname, bin_ext)
-            open(unit=13,file=fname,form='unformatted',convert=write_endian,   &
+            open(unit=13,file=fname,form='unformatted',convert=write_endian, &
                             access='direct',recl=nx*ny*1*rprec)
             write(13,rec=1) ui(1:nx,1:ny,1)
             write(13,rec=2) vi(1:nx,1:ny,1)
@@ -2217,10 +2214,10 @@ elseif (itype==5) then
 !         else
 ! #ifdef PPCGNS
 !            write(*,*) "At write_null_cgns"
-!            call write_null_cgns (fname ,nx, ny, 1, 1,                         &
-!            (/ 1, 1,   1 /),                                                   &
-!            (/ nx, ny, 1 /),                                                   &
-!            x(1:nx) , y(1:ny) , zplane_loc(k:k), 3,                            &
+!            call write_null_cgns (fname ,nx, ny, 1, 1,                      &
+!            (/ 1, 1,   1 /),                                                &
+!            (/ nx, ny, 1 /),                                                &
+!            x(1:nx) , y(1:ny) , zplane_loc(k:k), 3,                         &
 !            (/ 'VelocityX', 'VelocityY', 'VelocityZ' /) )
 !#endif
         end if
@@ -2237,9 +2234,9 @@ nullify(x,y,z,zw)
 
 #ifdef PPLVLSET
 contains
-!*******************************************************************************
+!*****************************************************************************
 subroutine force_tot()
-!*******************************************************************************
+!*****************************************************************************
 #ifdef PPMPI
 use mpi_defs, only : mpi_sync_real_array, MPI_SYNC_DOWN
 #endif
@@ -2287,9 +2284,9 @@ return
 end subroutine force_tot
 #endif
 
-!*******************************************************************************
+!!****************************************************************************
 !subroutine pressure_sync()
-!!*******************************************************************************
+!!****************************************************************************
 !use mpi_defs, only : mpi_sync_real_array, MPI_SYNC_DOWN
 !use param, only : ld
 !implicit none
@@ -2311,9 +2308,9 @@ end subroutine force_tot
 !return
 !end subroutine pressure_sync
 !
-!!*******************************************************************************
+!!****************************************************************************
 !subroutine RHS_sync()
-!!*******************************************************************************
+!!****************************************************************************
 !use param, only : ld
 !use mpi_defs, only : mpi_sync_real_array, MPI_SYNC_DOWN
 !implicit none
@@ -2335,9 +2332,9 @@ end subroutine force_tot
 
 end subroutine inst_write
 
-!*******************************************************************************
+!*****************************************************************************
 subroutine checkpoint ()
-!*******************************************************************************
+!*****************************************************************************
 use iwmles
 use param, only : nz, checkpoint_file, tavg_calc, lbc_mom, L_x, L_y, L_z
 #ifdef PPMPI
@@ -2345,7 +2342,7 @@ use param, only : comm, ierr
 #endif
 use sim_param, only : u, v, w, RHSx, RHSy, RHSz
 use sgs_param, only : Cs_opt2, F_LM, F_MM, F_QN, F_NN
-use param, only : jt_total, total_time, total_time_dim, dt,                    &
+use param, only : jt_total, total_time, total_time_dim, dt,                 &
     use_cfl_dt, cfl, write_endian
 use cfl_util, only : get_max_cfl
 use stat_defs, only : tavg_initialized
@@ -2369,11 +2366,11 @@ call string_concat( fname, '.c', coord )
 #endif
 
 !  Open vel.out (lun_default in io) for final output
-open(11, file=fname, form='unformatted', convert=write_endian,                 &
+open(11, file=fname, form='unformatted', convert=write_endian,              &
     status='unknown', position='rewind')
-write (11) u(:, :, 1:nz), v(:, :, 1:nz), w(:, :, 1:nz),                        &
-    RHSx(:, :, 1:nz), RHSy(:, :, 1:nz), RHSz(:, :, 1:nz),                      &
-    Cs_opt2(:,:,1:nz), F_LM(:,:,1:nz), F_MM(:,:,1:nz),                         &
+write (11) u(:, :, 1:nz), v(:, :, 1:nz), w(:, :, 1:nz),                     &
+    RHSx(:, :, 1:nz), RHSy(:, :, 1:nz), RHSz(:, :, 1:nz),                   &
+    Cs_opt2(:,:,1:nz), F_LM(:,:,1:nz), F_MM(:,:,1:nz),                      &
     F_QN(:,:,1:nz), F_NN(:,:,1:nz)
 close(11)
 
@@ -2423,9 +2420,9 @@ end if
 
 end subroutine checkpoint
 
-!*******************************************************************************
+!*****************************************************************************
 subroutine output_final()
-!*******************************************************************************
+!*****************************************************************************
 use stat_defs, only : tavg_initialized
 use param, only : tavg_calc
 implicit none
@@ -2438,9 +2435,9 @@ if (tavg_calc .and. tavg_initialized ) call tavg_finalize()
 
 end subroutine output_final
 
-!*******************************************************************************
+!*****************************************************************************
 subroutine output_init ()
-!*******************************************************************************
+!*****************************************************************************
 !
 !  This subroutine allocates the memory for arrays used for statistical
 !  calculations
@@ -2463,6 +2460,9 @@ use stat_defs, only : tavg_budget
 #endif
 #ifdef PPOUTPUT_TURBSPEC
 use stat_defs, only : tavg_turbspecx, tavg_turbspecy
+#endif
+#ifdef PPOUTPUT_SPECBUDG
+use stat_defs, only : tavg_specbudgx
 #endif
 
 implicit none
@@ -2503,6 +2503,9 @@ if( tavg_calc ) then
 #ifdef PPOUTPUT_TURBSPEC
     allocate(tavg_turbspecx(nx/2+1,ny,lbz:nz))
     allocate(tavg_turbspecy(nx,ny/2+1,lbz:nz))
+#endif
+#ifdef PPOUTPUT_SPECBUDG
+    allocate(tavg_specbudgx(nx/2+1,ny,lbz:nz))
 #endif
 
   ! Initialize the derived types tavg and tavg_zplane
@@ -2725,7 +2728,6 @@ if( tavg_calc ) then
         tavg_budget(i,j,k) % wlapu = 0._rprec
         tavg_budget(i,j,k) % wlapv = 0._rprec
         tavg_budget(i,j,k) % wlapw = 0._rprec
-
     end do
     end do
     end do
@@ -2740,23 +2742,23 @@ if( tavg_calc ) then
         tavg_turbspecx(i,j,k) % vf = 0.d0
         tavg_turbspecx(i,j,k) % wf = 0.d0
 
-        tavg_turbspecx(i,j,k) % uu = 0._rprec
-        tavg_turbspecx(i,j,k) % vv = 0._rprec
-        tavg_turbspecx(i,j,k) % ww = 0._rprec
-        !tavg_turbspecx(i,j,k) % vel2 = 0._rprec
+        tavg_turbspecx(i,j,k) % uu = 0.d0
+        tavg_turbspecx(i,j,k) % vv = 0.d0
+        tavg_turbspecx(i,j,k) % ww = 0.d0
+        !tavg_turbspecx(i,j,k) % vel2 = 0.d0
 
-        tavg_turbspecx(i,j,k) % uv = 0._rprec
-        tavg_turbspecx(i,j,k) % uw = 0._rprec
-        tavg_turbspecx(i,j,k) % vw = 0._rprec
+        tavg_turbspecx(i,j,k) % uv = 0.d0
+        tavg_turbspecx(i,j,k) % uw = 0.d0
+        tavg_turbspecx(i,j,k) % vw = 0.d0
 
         tavg_turbspecx(i,j,k) % vortxf = 0.d0
         tavg_turbspecx(i,j,k) % vortyf = 0.d0
         tavg_turbspecx(i,j,k) % vortzf = 0.d0
 
-        tavg_turbspecx(i,j,k) % vortx2 = 0._rprec
-        tavg_turbspecx(i,j,k) % vorty2 = 0._rprec
-        tavg_turbspecx(i,j,k) % vortz2 = 0._rprec
-        !tavg_turbspecx(i,j,k) % vort2 = 0._rprec
+        tavg_turbspecx(i,j,k) % vortx2 = 0.d0
+        tavg_turbspecx(i,j,k) % vorty2 = 0.d0
+        tavg_turbspecx(i,j,k) % vortz2 = 0.d0
+        !tavg_turbspecx(i,j,k) % vort2 = 0.d0
 
     end do
     end do
@@ -2770,23 +2772,184 @@ if( tavg_calc ) then
         tavg_turbspecy(i,j,k) % vf = 0.d0
         tavg_turbspecy(i,j,k) % wf = 0.d0
 
-        tavg_turbspecy(i,j,k) % uu = 0._rprec
-        tavg_turbspecy(i,j,k) % vv = 0._rprec
-        tavg_turbspecy(i,j,k) % ww = 0._rprec
-        !tavg_turbspecy(i,j,k) % vel2 = 0._rprec
+        tavg_turbspecy(i,j,k) % uu = 0.d0
+        tavg_turbspecy(i,j,k) % vv = 0.d0
+        tavg_turbspecy(i,j,k) % ww = 0.d0
+        !tavg_turbspecy(i,j,k) % vel2 = 0.d0
 
-        tavg_turbspecy(i,j,k) % uv = 0._rprec
-        tavg_turbspecy(i,j,k) % uw = 0._rprec
-        tavg_turbspecy(i,j,k) % vw = 0._rprec
+        tavg_turbspecy(i,j,k) % uv = 0.d0
+        tavg_turbspecy(i,j,k) % uw = 0.d0
+        tavg_turbspecy(i,j,k) % vw = 0.d0
 
         tavg_turbspecy(i,j,k) % vortxf = 0.d0
         tavg_turbspecy(i,j,k) % vortyf = 0.d0
         tavg_turbspecy(i,j,k) % vortzf = 0.d0
 
-        tavg_turbspecy(i,j,k) % vortx2 = 0._rprec
-        tavg_turbspecy(i,j,k) % vorty2 = 0._rprec
-        tavg_turbspecy(i,j,k) % vortz2 = 0._rprec
-        !tavg_turbspecy(i,j,k) % vort2 = 0._rprec
+        tavg_turbspecy(i,j,k) % vortx2 = 0.d0
+        tavg_turbspecy(i,j,k) % vorty2 = 0.d0
+        tavg_turbspecy(i,j,k) % vortz2 = 0.d0
+        !tavg_turbspecy(i,j,k) % vort2 = 0.d0
+    end do
+    end do
+    end do
+#endif
+
+#ifdef PPOUTPUT_SPECBUDG
+    do k = 1, Nz
+    do j = 1, Ny
+    do i = 1, Nx/2 + 1
+        ! Mean pressure
+        tavg_specbudgx(i,j,k) % p = 0.d0
+
+        ! Mean pressure gradients
+        tavg_specbudgx(i,j,k) % dpdx = 0.d0
+        tavg_specbudgx(i,j,k) % dpdy = 0.d0
+        tavg_specbudgx(i,j,k) % dpdz = 0.d0
+
+        ! Mean velocity gradients
+        tavg_specbudgx(i,j,k) % dudx = 0.d0
+        tavg_specbudgx(i,j,k) % dudy = 0.d0
+        tavg_specbudgx(i,j,k) % dudz = 0.d0
+        tavg_specbudgx(i,j,k) % dvdx = 0.d0
+        tavg_specbudgx(i,j,k) % dvdy = 0.d0
+        tavg_specbudgx(i,j,k) % dvdz = 0.d0
+        tavg_specbudgx(i,j,k) % dwdx = 0.d0
+        tavg_specbudgx(i,j,k) % dwdy = 0.d0
+        tavg_specbudgx(i,j,k) % dwdz = 0.d0
+
+        ! Mean vel-velGrad product, ui_hat*dujdxk_hat
+        tavg_specbudgx(i,j,k) % uh_dudxh = 0.d0
+        tavg_specbudgx(i,j,k) % uh_dudyh = 0.d0
+        tavg_specbudgx(i,j,k) % uh_dudzh = 0.d0
+        tavg_specbudgx(i,j,k) % uh_dvdxh = 0.d0
+        tavg_specbudgx(i,j,k) % uh_dvdyh = 0.d0
+        tavg_specbudgx(i,j,k) % uh_dvdzh = 0.d0
+        tavg_specbudgx(i,j,k) % uh_dwdxh = 0.d0
+        tavg_specbudgx(i,j,k) % uh_dwdyh = 0.d0
+        tavg_specbudgx(i,j,k) % uh_dwdzh = 0.d0
+
+        tavg_specbudgx(i,j,k) % vh_dudxh = 0.d0
+        tavg_specbudgx(i,j,k) % vh_dudyh = 0.d0
+        tavg_specbudgx(i,j,k) % vh_dudzh = 0.d0
+        tavg_specbudgx(i,j,k) % vh_dvdxh = 0.d0
+        tavg_specbudgx(i,j,k) % vh_dvdyh = 0.d0
+        tavg_specbudgx(i,j,k) % vh_dvdzh = 0.d0
+        tavg_specbudgx(i,j,k) % vh_dwdxh = 0.d0
+        tavg_specbudgx(i,j,k) % vh_dwdyh = 0.d0
+        tavg_specbudgx(i,j,k) % vh_dwdzh = 0.d0
+
+        tavg_specbudgx(i,j,k) % wh_dudxh = 0.d0
+        tavg_specbudgx(i,j,k) % wh_dudyh = 0.d0
+        tavg_specbudgx(i,j,k) % wh_dudzh = 0.d0
+        tavg_specbudgx(i,j,k) % wh_dvdxh = 0.d0
+        tavg_specbudgx(i,j,k) % wh_dvdyh = 0.d0
+        tavg_specbudgx(i,j,k) % wh_dvdzh = 0.d0
+        tavg_specbudgx(i,j,k) % wh_dwdxh = 0.d0
+        tavg_specbudgx(i,j,k) % wh_dwdyh = 0.d0
+        tavg_specbudgx(i,j,k) % wh_dwdzh = 0.d0
+
+        ! Mean vel-velGrad product, uk*duidxk_hat
+        tavg_specbudgx(i,j,k) % ududxh = 0.d0
+        tavg_specbudgx(i,j,k) % vdudyh = 0.d0
+        tavg_specbudgx(i,j,k) % wdudzh = 0.d0
+        tavg_specbudgx(i,j,k) % udvdxh = 0.d0
+        tavg_specbudgx(i,j,k) % vdvdyh = 0.d0
+        tavg_specbudgx(i,j,k) % wdvdzh = 0.d0
+        tavg_specbudgx(i,j,k) % udwdxh = 0.d0
+        tavg_specbudgx(i,j,k) % vdwdyh = 0.d0
+        tavg_specbudgx(i,j,k) % wdwdzh = 0.d0
+
+        ! Mean vel-vel-velGrad product, uj_hat*(uk*duidxk)_hat
+        tavg_specbudgx(i,j,k) % uh_ududxh = 0.d0
+        tavg_specbudgx(i,j,k) % uh_vdudyh = 0.d0
+        tavg_specbudgx(i,j,k) % uh_wdudzh = 0.d0
+        tavg_specbudgx(i,j,k) % vh_ududxh = 0.d0
+        tavg_specbudgx(i,j,k) % vh_vdudyh = 0.d0
+        tavg_specbudgx(i,j,k) % vh_wdudzh = 0.d0
+        tavg_specbudgx(i,j,k) % wh_ududxh = 0.d0
+        tavg_specbudgx(i,j,k) % wh_vdudyh = 0.d0
+        tavg_specbudgx(i,j,k) % wh_wdudzh = 0.d0
+
+        tavg_specbudgx(i,j,k) % uh_udvdxh = 0.d0
+        tavg_specbudgx(i,j,k) % uh_vdvdyh = 0.d0
+        tavg_specbudgx(i,j,k) % uh_wdvdzh = 0.d0
+        tavg_specbudgx(i,j,k) % vh_udvdxh = 0.d0
+        tavg_specbudgx(i,j,k) % vh_vdvdyh = 0.d0
+        tavg_specbudgx(i,j,k) % vh_wdvdzh = 0.d0
+        tavg_specbudgx(i,j,k) % wh_udvdxh = 0.d0
+        tavg_specbudgx(i,j,k) % wh_vdvdyh = 0.d0
+        tavg_specbudgx(i,j,k) % wh_wdvdzh = 0.d0
+
+        tavg_specbudgx(i,j,k) % uh_udwdxh = 0.d0
+        tavg_specbudgx(i,j,k) % uh_vdwdyh = 0.d0
+        tavg_specbudgx(i,j,k) % uh_wdwdzh = 0.d0
+        tavg_specbudgx(i,j,k) % vh_udwdxh = 0.d0
+        tavg_specbudgx(i,j,k) % vh_vdwdyh = 0.d0
+        tavg_specbudgx(i,j,k) % vh_wdwdzh = 0.d0
+        tavg_specbudgx(i,j,k) % wh_udwdxh = 0.d0
+        tavg_specbudgx(i,j,k) % wh_vdwdyh = 0.d0
+        tavg_specbudgx(i,j,k) % wh_wdwdzh = 0.d0
+
+        ! Mean velGrad-velGrad product, duidxk*dujdxk, i=j
+        tavg_specbudgx(i,j,k) % uxux = 0.d0
+        tavg_specbudgx(i,j,k) % uyuy = 0.d0
+        tavg_specbudgx(i,j,k) % uzuz = 0.d0
+        tavg_specbudgx(i,j,k) % vxvx = 0.d0
+        tavg_specbudgx(i,j,k) % vyvy = 0.d0
+        tavg_specbudgx(i,j,k) % vzvz = 0.d0
+        tavg_specbudgx(i,j,k) % wxwx = 0.d0
+        tavg_specbudgx(i,j,k) % wywy = 0.d0
+        tavg_specbudgx(i,j,k) % wzwz = 0.d0
+
+        ! Mean velGrad-velGrad product, duidxk*dujdxk, i/=j
+        tavg_specbudgx(i,j,k) % uxvx = 0.d0
+        tavg_specbudgx(i,j,k) % uyvy = 0.d0
+        tavg_specbudgx(i,j,k) % uzvz = 0.d0
+        tavg_specbudgx(i,j,k) % uxwx = 0.d0
+        tavg_specbudgx(i,j,k) % uywy = 0.d0
+        tavg_specbudgx(i,j,k) % uzwz = 0.d0
+        tavg_specbudgx(i,j,k) % vxwx = 0.d0
+        tavg_specbudgx(i,j,k) % vywy = 0.d0
+        tavg_specbudgx(i,j,k) % vzwz = 0.d0
+
+        ! Mean pressure * velocity gradient product, p*dujdxk
+        tavg_specbudgx(i,j,k) % pdudx = 0.d0
+        tavg_specbudgx(i,j,k) % pdudy = 0.d0
+        tavg_specbudgx(i,j,k) % pdudz = 0.d0
+        tavg_specbudgx(i,j,k) % pdvdx = 0.d0
+        tavg_specbudgx(i,j,k) % pdvdy = 0.d0
+        tavg_specbudgx(i,j,k) % pdvdz = 0.d0
+        tavg_specbudgx(i,j,k) % pdwdx = 0.d0
+        tavg_specbudgx(i,j,k) % pdwdy = 0.d0
+        tavg_specbudgx(i,j,k) % pdwdz = 0.d0
+
+        ! Mean velocity * pressure gradient product, uj*dpdxk
+        tavg_specbudgx(i,j,k) % udpdx = 0.d0
+        tavg_specbudgx(i,j,k) % udpdy = 0.d0
+        tavg_specbudgx(i,j,k) % udpdz = 0.d0
+        tavg_specbudgx(i,j,k) % vdpdx = 0.d0
+        tavg_specbudgx(i,j,k) % vdpdy = 0.d0
+        tavg_specbudgx(i,j,k) % vdpdz = 0.d0
+        tavg_specbudgx(i,j,k) % wdpdx = 0.d0
+        tavg_specbudgx(i,j,k) % wdpdy = 0.d0
+        tavg_specbudgx(i,j,k) % wdpdz = 0.d0
+
+        ! Mean Laplacian, nu*lap(uj)
+        tavg_specbudgx(i,j,k) % lapu = 0._rprec
+        tavg_specbudgx(i,j,k) % lapv = 0._rprec
+        tavg_specbudgx(i,j,k) % lapw = 0._rprec
+
+        ! Mean Vel-Laplacian, nu*ui*lap(uj)
+        tavg_specbudgx(i,j,k) % ulapu = 0._rprec
+        tavg_specbudgx(i,j,k) % ulapv = 0._rprec
+        tavg_specbudgx(i,j,k) % ulapw = 0._rprec
+        tavg_specbudgx(i,j,k) % vlapu = 0._rprec
+        tavg_specbudgx(i,j,k) % vlapv = 0._rprec
+        tavg_specbudgx(i,j,k) % vlapw = 0._rprec
+        tavg_specbudgx(i,j,k) % wlapu = 0._rprec
+        tavg_specbudgx(i,j,k) % wlapv = 0._rprec
+        tavg_specbudgx(i,j,k) % wlapw = 0._rprec
+
     end do
     end do
     end do
@@ -2899,6 +3062,9 @@ use stat_defs, only : tavg_budget
 #ifdef PPOUTPUT_TURBSPEC
 use stat_defs, only : tavg_turbspecx, tavg_turbspecy
 #endif
+#ifdef PPOUTPUT_SPECBUDG
+use stat_defs, only : tavg_specbudgx
+#endif
 
 implicit none
 
@@ -2911,6 +3077,9 @@ character (*), parameter :: ftavg_budget_in = path // 'tavg_budget.out'
 #endif
 #ifdef PPOUTPUT_TURBSPEC
 character (*), parameter :: ftavg_turbspec_in = path // 'tavg_turbspec.out'
+#endif
+#ifdef PPOUTPUT_SPECBUDG
+character (*), parameter :: ftavg_specbudg_in = path // 'tavg_specbudg.out'
 #endif
 #ifdef PPMPI
 character (*), parameter :: MPI_suffix = '.c'
@@ -2974,6 +3143,18 @@ else
     read(1) tavg_total_time
     read(1) tavg_turbspecx
     read(1) tavg_turbspecy
+    close(1)
+#endif
+
+#ifdef PPOUTPUT_SPECBUDG
+    fname = ftavg_specbudg_in
+#ifdef PPMPI
+    call string_concat( fname, MPI_suffix, coord )
+#endif
+    open(1, file=fname, action='read', position='rewind', form='unformatted',  &
+        convert=read_endian)
+    read(1) tavg_total_time
+    read(1) tavg_specbudgx
     close(1)
 #endif
 
@@ -3137,9 +3318,9 @@ tavg_dt = 0._rprec
 end subroutine tavg_compute
 
 #ifdef PPOUTPUT_BUDGET
-!*******************************************************************************
+!*****************************************************************************
 subroutine tavg_budget_compute
-!*******************************************************************************
+!*****************************************************************************
 !
 ! Computes terms that are used for budgets and time-averages accordingly.
 ! All quantities used in the averaging are moved to the w-grid.
@@ -3218,8 +3399,8 @@ divty_w(1:nx,1:ny,lbz:nz) = interp_to_w_grid(divty(1:nx,1:ny,lbz:nz), lbz)
 ! Remove energy from dynamic simulation pressure for static pressure
 ! This is different than in tavg_compute since on w-grid
 pres_real(1:nx,1:ny,lbz:nz) = 0._rprec
-pres_real(1:nx,1:ny,lbz:nz) = p_w(1:nx,1:ny,lbz:nz)                            &
-    - 0.5 * ( u_w(1:nx,1:ny,lbz:nz)**2 + v_w(1:nx,1:ny,lbz:nz)**2              &
+pres_real(1:nx,1:ny,lbz:nz) = p_w(1:nx,1:ny,lbz:nz)                         &
+    - 0.5 * ( u_w(1:nx,1:ny,lbz:nz)**2 + v_w(1:nx,1:ny,lbz:nz)**2           &
     + w(1:nx,1:ny,lbz:nz)**2 )
 
 ! dpdx and dpdy are treated differently since the 0 index is empty 
@@ -3252,14 +3433,14 @@ dpdx_real(1:nx,1:ny,lbz:nz) = interp_to_w_grid(dpdx_real(1:nx,1:ny,lbz:nz), lbz)
 dpdy_real(1:nx,1:ny,lbz:nz) = interp_to_w_grid(dpdy_real(1:nx,1:ny,lbz:nz), lbz)
 
 ! Extract energy from pressure
-dpdx_real(1:nx,1:ny,lbz:nz) = dpdx_real(1:nx,1:ny,lbz:nz)                      &
-    - ( u_w(1:nx,1:ny,lbz:nz)*dudx_w(1:nx,1:ny,lbz:nz)                         &
-    + v_w(1:nx,1:ny,lbz:nz)*dvdx_w(1:nx,1:ny,lbz:nz)                           &
+dpdx_real(1:nx,1:ny,lbz:nz) = dpdx_real(1:nx,1:ny,lbz:nz)                   &
+    - ( u_w(1:nx,1:ny,lbz:nz)*dudx_w(1:nx,1:ny,lbz:nz)                      &
+    + v_w(1:nx,1:ny,lbz:nz)*dvdx_w(1:nx,1:ny,lbz:nz)                        &
     + w(1:nx,1:ny,lbz:nz)*dwdx(1:nx,1:ny,lbz:nz) )
 
-dpdy_real(1:nx,1:ny,lbz:nz) = dpdy_real(1:nx,1:ny,lbz:nz)                      &
-    - ( u_w(1:nx,1:ny,lbz:nz)*dudy_w(1:nx,1:ny,lbz:nz)                         &
-    + v_w(1:nx,1:ny,lbz:nz)*dvdy_w(1:nx,1:ny,lbz:nz)                           &
+dpdy_real(1:nx,1:ny,lbz:nz) = dpdy_real(1:nx,1:ny,lbz:nz)                   &
+    - ( u_w(1:nx,1:ny,lbz:nz)*dudy_w(1:nx,1:ny,lbz:nz)                      &
+    + v_w(1:nx,1:ny,lbz:nz)*dvdy_w(1:nx,1:ny,lbz:nz)                        &
     + w(1:nx,1:ny,lbz:nz)*dwdy(1:nx,1:ny,lbz:nz) )
 
 ! dpdx and dpdy were already interpolated, still need to consider dpdz_real
@@ -3273,9 +3454,9 @@ call mpi_sync_real_array( dpdz_real, lbz, MPI_SYNC_DOWNUP )
 #endif
 
 ! Extract energy from pressure
-dpdz_real(1:nx,1:ny,lbz:nz) = dpdz_real(1:nx,1:ny,lbz:nz)                      &
-    - ( u_w(1:nx,1:ny,lbz:nz)*dudz(1:nx,1:ny,lbz:nz)                           &
-    + v_w(1:nx,1:ny,lbz:nz)*dvdz(1:nx,1:ny,lbz:nz)                             &
+dpdz_real(1:nx,1:ny,lbz:nz) = dpdz_real(1:nx,1:ny,lbz:nz)                   &
+    - ( u_w(1:nx,1:ny,lbz:nz)*dudz(1:nx,1:ny,lbz:nz)                        &
+    + v_w(1:nx,1:ny,lbz:nz)*dvdz(1:nx,1:ny,lbz:nz)                          &
     + w(1:nx,1:ny,lbz:nz)*dwdz_w(1:nx,1:ny,lbz:nz) )
 
 ! Enforce no penetration and no-slip
@@ -3501,19 +3682,27 @@ end subroutine tavg_budget_compute
 #endif
 
 #ifdef PPOUTPUT_TURBSPEC
-!*******************************************************************************
+!*****************************************************************************
 subroutine tavg_turbspec_compute
-!*******************************************************************************
+!*****************************************************************************
 !
 ! Computes various spectral densities, including energy (velocity) and 
 ! dissipation (vorticity), then time-averages these quantities.
-!
+! 
+! Additional quantities for the spectral budget are also computed here.
+! 
 use types, only: rprec 
 use param, only: nx, ny, nz, lbz
 use sim_param, only: u, v, w, dwdy, dvdz, dudz, dwdx, dvdx, dudy
 use stat_defs, only: tavg_dt, tavg_turbspecx, tavg_turbspecy
 use fft
-use functions, only : interp_to_w_grid
+use functions, only: interp_to_w_grid
+#ifdef PPOUTPUT_SPECBUDG
+use stat_defs, only: tavg_specbudgx
+use sim_param, only: p, dpdx, dpdy, dpdz, dudx, dvdy, dwdz
+use sim_param, only: divtx, divty, divtz
+use mpi_defs, only: mpi_sync_real_array, MPI_SYNC_DOWNUP
+#endif
 
 implicit none
 
@@ -3524,10 +3713,37 @@ complex(rprec), dimension(nx/2+1) :: ufx, vfx, wfx
 complex(rprec), dimension(nx/2+1) :: vortxfx, vortyfx, vortzfx
 complex(rprec), dimension(ny/2+1) :: ufy, vfy, wfy
 complex(rprec), dimension(ny/2+1) :: vortxfy, vortyfy, vortzfy
+#ifdef PPOUTPUT_SPECBUDG
+real(rprec), dimension(ld,ny,lbz:nz) :: p_w, pres_real
+real(rprec), dimension(ld,ny,lbz:nz) :: dpdx_real, dpdy_real, dpdz_real
+real(rprec), dimension(ld,ny,lbz:nz) :: dudx_w, dudy_w, dvdx_w, dvdy_w, dwdz_w
+real(rprec), dimension(ld,ny,lbz:nz) :: divtx_w, divty_w
+complex(rprec), dimension(nx/2+1) :: dudxfx, dudyfx, dudzfx,              &
+    dvdxfx, dvdyfx, dvdzfx, dwdxfx, dwdyfx, dwdzfx,                       &
+    pfx, dpdxfx, dpdyfx, dpdzfx, divtxfx, divtyfx, divtzfx,               &
+    ududxfx, vdudyfx, wdudzfx, udvdxfx, vdvdyfx, wdvdzfx,                 &
+    udwdxfx, vdwdyfx, wdwdzfx
+#endif
 
 !real(rprec), dimension(ld,ny,lbz:nz) :: vel, vort
 !complex(rprec), dimension(nx/2+1) :: velfx, vortfx
 !complex(rprec), dimension(ny/2+1) :: velfy, vortfy
+
+#ifdef PPOUTPUT_SPECBUDG
+! Prepare variables that need to be interpolated onto the w-grid
+! Remove BOGUS values at processor interfaces
+call mpi_sync_real_array( p, lbz, MPI_SYNC_DOWNUP )
+
+! Remove BOGUS value within boundary conditions as well
+if (coord == 0) then
+    u(:,:,lbz) = 0._rprec
+    v(:,:,lbz) = 0._rprec
+    dwdz(:,:,lbz) = 0._rprec
+endif
+if (coord == nproc-1) then
+    dwdz(:,:,nz) = 0._rprec
+endif
+#endif
 
 ! Compute vorticity on w-grid from definition
 vortx(:,:,:) = dwdy(:,:,:) - dvdz(:,:,:)
@@ -3542,6 +3758,81 @@ v_w(1:nx,1:ny,lbz:nz) = interp_to_w_grid(v_w(1:nx,1:ny,lbz:nz), lbz)
 vortz(1:nx,1:ny,lbz:nz) = interp_to_w_grid(vortz(1:nx,1:ny,lbz:nz), lbz)
 ! dvdx and dudy both on uv-grid, just using vortz, so only interpolate once
 ! rewriting vortz variable
+
+#ifdef PPOUTPUT_SPECBUDG
+dudx_w(:,:,:) = dudx(:,:,:)
+dudy_w(:,:,:) = dudy(:,:,:)
+dvdx_w(:,:,:) = dvdx(:,:,:)
+dvdy_w(:,:,:) = dvdy(:,:,:)
+dwdz_w(:,:,:) = dwdz(:,:,:)
+dudx_w(1:nx,1:ny,lbz:nz) = interp_to_w_grid(dudx_w(1:nx,1:ny,lbz:nz), lbz)
+dudy_w(1:nx,1:ny,lbz:nz) = interp_to_w_grid(dudy_w(1:nx,1:ny,lbz:nz), lbz)
+dvdx_w(1:nx,1:ny,lbz:nz) = interp_to_w_grid(dvdx_w(1:nx,1:ny,lbz:nz), lbz)
+dvdy_w(1:nx,1:ny,lbz:nz) = interp_to_w_grid(dvdy_w(1:nx,1:ny,lbz:nz), lbz)
+dwdz_w(1:nx,1:ny,lbz:nz) = interp_to_w_grid(dwdz_w(1:nx,1:ny,lbz:nz), lbz)
+p_w(1:nx,1:ny,lbz:nz) = interp_to_w_grid(p(1:nx,1:ny,lbz:nz), lbz)
+divtx_w(1:nx,1:ny,lbz:nz) = interp_to_w_grid(divtx(1:nx,1:ny,lbz:nz), lbz)
+divty_w(1:nx,1:ny,lbz:nz) = interp_to_w_grid(divty(1:nx,1:ny,lbz:nz), lbz)
+
+! Remove energy from dynamic simulation pressure for static pressure
+pres_real(:,:,:) = 0._rprec
+pres_real(1:nx,1:ny,lbz:nz) = p_w(1:nx,1:ny,lbz:nz)                   &
+    - 0.5 * ( u_w(1:nx,1:ny,lbz:nz)**2 + v_w(1:nx,1:ny,lbz:nz)**2     &
+    + w(1:nx,1:ny,lbz:nz)**2 )
+
+! dpdx and dpdy are treated differently since the 0 index is empty
+! and the nz index is BOGUS
+! Initialize dpdx_real and dpdy_real from dpdx and dpdy
+! BOGUS values of dpdx_real and dpy_real are removed
+! on the uv grid then brought over to the w grid
+dpdx_real(:,:,1:nz) = dpdx(:,:,1:nz)
+dpdy_real(:,:,1:nz) = dpdy(:,:,1:nz)
+
+! Remove BOGUS value above ubc_mom
+if (coord == nproc-1) then
+    dpdx_real(:,:,nz) = 0._rprec
+    dpdy_real(:,:,nz) = 0._rprec
+endif
+
+! Fill empty 0 index to be overwritten
+dpdx_real(1:nx,1:ny,0) = 0._rprec
+dpdy_real(1:nx,1:ny,0) = 0._rprec
+
+! Remove intermediate BOGUS values (at nz) and zeros (at 0 index)
+call mpi_sync_real_array( dpdx_real, lbz, MPI_SYNC_DOWNUP )
+call mpi_sync_real_array( dpdy_real, lbz, MPI_SYNC_DOWNUP )
+
+! Now bring dpdx_real and dpdy_real onto the w grid
+dpdx_real(1:nx,1:ny,lbz:nz) = interp_to_w_grid(dpdx_real(1:nx,1:ny,lbz:nz), lbz)
+dpdy_real(1:nx,1:ny,lbz:nz) = interp_to_w_grid(dpdy_real(1:nx,1:ny,lbz:nz), lbz)
+
+! Extract energy from pressure
+dpdx_real(1:nx,1:ny,lbz:nz) = dpdx_real(1:nx,1:ny,lbz:nz)                   &
+    - ( u_w(1:nx,1:ny,lbz:nz)*dudx_w(1:nx,1:ny,lbz:nz)                      &
+    + v_w(1:nx,1:ny,lbz:nz)*dvdx_w(1:nx,1:ny,lbz:nz)                        &
+    + w(1:nx,1:ny,lbz:nz)*dwdx(1:nx,1:ny,lbz:nz) )
+
+dpdy_real(1:nx,1:ny,lbz:nz) = dpdy_real(1:nx,1:ny,lbz:nz)                   &
+    - ( u_w(1:nx,1:ny,lbz:nz)*dudy_w(1:nx,1:ny,lbz:nz)                      &
+    + v_w(1:nx,1:ny,lbz:nz)*dvdy_w(1:nx,1:ny,lbz:nz)                        &
+    + w(1:nx,1:ny,lbz:nz)*dwdy(1:nx,1:ny,lbz:nz) )
+
+! dpdx and dpdy were already interpolated, still need to consider dpdz_real
+dpdz_real(1:nx,1:ny,1:nz) = dpdz(1:nx,1:ny,1:nz)
+
+#ifdef PPMPI
+dpdz_real(1:nx,1:ny,0) = dpdz(1:nx,1:ny,1)
+
+! Remove intermediate BOGUS values (at nz) and zeros (at 0 index)
+call mpi_sync_real_array( dpdz_real, lbz, MPI_SYNC_DOWNUP )
+#endif
+
+! Extract energy from pressure
+dpdz_real(1:nx,1:ny,lbz:nz) = dpdz_real(1:nx,1:ny,lbz:nz)                   &
+    - ( u_w(1:nx,1:ny,lbz:nz)*dudz(1:nx,1:ny,lbz:nz)                        &
+    + v_w(1:nx,1:ny,lbz:nz)*dvdz(1:nx,1:ny,lbz:nz)                          &
+    + w(1:nx,1:ny,lbz:nz)*dwdz_w(1:nx,1:ny,lbz:nz) )
+#endif
 
 ! Compute magnitudes
 ! vel(:,:,:) = sqrt( u_w(:,:,:)**2 + v_w(:,:,:)**2 + w(:,:,:)**2 )
@@ -3560,6 +3851,34 @@ do jz = 1, nz
     call dfftw_execute_dft_r2c( forw_x, vortz(:,jy,jz), vortzfx )
     !call dfftw_execute_dft_r2c( forw_x, vort(:,jy,jz),  vortfx )
 
+#ifdef PPOUTPUT_SPECBUDG
+    call dfftw_execute_dft_r2c( forw_x, pres_real(:,jy,jz), pfx )
+    call dfftw_execute_dft_r2c( forw_x, dpdx_real(:,jy,jz), dpdxfx )
+    call dfftw_execute_dft_r2c( forw_x, dpdy_real(:,jy,jz), dpdyfx )
+    call dfftw_execute_dft_r2c( forw_x, dpdz_real(:,jy,jz), dpdzfx )
+    call dfftw_execute_dft_r2c( forw_x, dudx_w(:,jy,jz), dudxfx )
+    call dfftw_execute_dft_r2c( forw_x, dudy_w(:,jy,jz), dudyfx )
+    call dfftw_execute_dft_r2c( forw_x, dudz(:,jy,jz), dudzfx )
+    call dfftw_execute_dft_r2c( forw_x, dvdx_w(:,jy,jz), dvdxfx )
+    call dfftw_execute_dft_r2c( forw_x, dvdy_w(:,jy,jz), dvdyfx )
+    call dfftw_execute_dft_r2c( forw_x, dvdz(:,jy,jz), dvdzfx )
+    call dfftw_execute_dft_r2c( forw_x, dwdx(:,jy,jz), dwdxfx )
+    call dfftw_execute_dft_r2c( forw_x, dwdy(:,jy,jz), dwdyfx )
+    call dfftw_execute_dft_r2c( forw_x, dwdz_w(:,jy,jz), dwdzfx )
+    call dfftw_execute_dft_r2c( forw_x, divtx_w(:,jy,jz), divtxfx )
+    call dfftw_execute_dft_r2c( forw_x, divty_w(:,jy,jz), divtyfx )
+    call dfftw_execute_dft_r2c( forw_x, divtz(:,jy,jz), divtzfx )
+    call dfftw_execute_dft_r2c( forw_x, u_w(:,jy,jz)*dudx_w(:,jy,jz), ududxfx )
+    call dfftw_execute_dft_r2c( forw_x, v_w(:,jy,jz)*dudy_w(:,jy,jz), vdudyfx )
+    call dfftw_execute_dft_r2c( forw_x, w(:,jy,jz)*dudz(:,jy,jz), wdudzfx )
+    call dfftw_execute_dft_r2c( forw_x, u_w(:,jy,jz)*dvdx_w(:,jy,jz), udvdxfx )
+    call dfftw_execute_dft_r2c( forw_x, v_w(:,jy,jz)*dvdy_w(:,jy,jz), vdvdyfx )
+    call dfftw_execute_dft_r2c( forw_x, w(:,jy,jz)*dvdz(:,jy,jz), wdvdzfx )
+    call dfftw_execute_dft_r2c( forw_x, u_w(:,jy,jz)*dwdx(:,jy,jz), udwdxfx )
+    call dfftw_execute_dft_r2c( forw_x, v_w(:,jy,jz)*dwdy(:,jy,jz), vdwdyfx )
+    call dfftw_execute_dft_r2c( forw_x, w(:,jy,jz)*dwdz_w(:,jy,jz), wdwdzfx )
+#endif
+
     ! Multiply together and time-average
     do jx = 1, nx/2 + 1
         tavg_turbspecx(jx,jy,jz)%uf = tavg_turbspecx(jx,jy,jz)%uf +       &
@@ -3570,20 +3889,20 @@ do jz = 1, nz
             wfx(jx)*tavg_dt
 
         tavg_turbspecx(jx,jy,jz)%uu = tavg_turbspecx(jx,jy,jz)%uu +       &
-            real(ufx(jx)*conjg(ufx(jx)))*tavg_dt
+            ufx(jx)*conjg(ufx(jx))*tavg_dt
         tavg_turbspecx(jx,jy,jz)%vv = tavg_turbspecx(jx,jy,jz)%vv +       &
-            real(vfx(jx)*conjg(vfx(jx)))*tavg_dt
+            vfx(jx)*conjg(vfx(jx))*tavg_dt
         tavg_turbspecx(jx,jy,jz)%ww = tavg_turbspecx(jx,jy,jz)%ww +       &
-            real(wfx(jx)*conjg(wfx(jx)))*tavg_dt
+            wfx(jx)*conjg(wfx(jx))*tavg_dt
         !tavg_turbspecx(jx,jy,jz)%vel2 = tavg_turbspecx(jx,jy,jz)%vel2 +   &
-        !    real(velfx(jx)*conjg(velfx(jx)))*tavg_dt
+        !    velfx(jx)*conjg(velfx(jx))*tavg_dt
 
         tavg_turbspecx(jx,jy,jz)%uv = tavg_turbspecx(jx,jy,jz)%uv +       &
-            real(ufx(jx)*conjg(vfx(jx)))*tavg_dt
+            ufx(jx)*conjg(vfx(jx))*tavg_dt
         tavg_turbspecx(jx,jy,jz)%uw = tavg_turbspecx(jx,jy,jz)%uw +       &
-            real(ufx(jx)*conjg(wfx(jx)))*tavg_dt
+            ufx(jx)*conjg(wfx(jx))*tavg_dt
         tavg_turbspecx(jx,jy,jz)%vw = tavg_turbspecx(jx,jy,jz)%vw +       &
-            real(vfx(jx)*conjg(wfx(jx)))*tavg_dt
+            vfx(jx)*conjg(wfx(jx))*tavg_dt
 
         tavg_turbspecx(jx,jy,jz)%vortxf = tavg_turbspecx(jx,jy,jz)%vortxf + &
             vortxfx(jx)*tavg_dt
@@ -3593,13 +3912,291 @@ do jz = 1, nz
             vortzfx(jx)*tavg_dt
 
         tavg_turbspecx(jx,jy,jz)%vortx2 = tavg_turbspecx(jx,jy,jz)%vortx2 + &
-            real(vortxfx(jx)*conjg(vortxfx(jx)))*tavg_dt
+            vortxfx(jx)*conjg(vortxfx(jx))*tavg_dt
         tavg_turbspecx(jx,jy,jz)%vorty2 = tavg_turbspecx(jx,jy,jz)%vorty2 + &
-            real(vortyfx(jx)*conjg(vortyfx(jx)))*tavg_dt
+            vortyfx(jx)*conjg(vortyfx(jx))*tavg_dt
         tavg_turbspecx(jx,jy,jz)%vortz2 = tavg_turbspecx(jx,jy,jz)%vortz2 + &
-            real(vortzfx(jx)*conjg(vortzfx(jx)))*tavg_dt
+            vortzfx(jx)*conjg(vortzfx(jx))*tavg_dt
         !tavg_turbspecx(jx,jy,jz)%vort2 = tavg_turbspecx(jx,jy,jz)%vort2 +   &
-        !    real(vortfx(jx)*conjg(vortfx(jx)))*tavg_dt
+        !    vortfx(jx)*conjg(vortfx(jx))*tavg_dt
+
+#ifdef PPOUTPUT_SPECBUDG
+        ! Mean pressure
+        tavg_specbudgx(jx,jy,jz)%p = tavg_specbudgx(jx,jy,jz)%p + &
+            pfx(jx)*tavg_dt 
+
+        ! Mean velocity gradients, duidxj
+        tavg_specbudgx(jx,jy,jz)%dudx = tavg_specbudgx(jx,jy,jz)%dudx + &
+            dudxfx(jx)*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%dudy = tavg_specbudgx(jx,jy,jz)%dudy + &
+            dudyfx(jx)*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%dudz = tavg_specbudgx(jx,jy,jz)%dudz + &
+            dudzfx(jx)*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%dvdx = tavg_specbudgx(jx,jy,jz)%dvdx + &
+            dvdxfx(jx)*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%dvdy = tavg_specbudgx(jx,jy,jz)%dvdy + &
+            dvdyfx(jx)*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%dvdz = tavg_specbudgx(jx,jy,jz)%dvdz + &
+            dvdzfx(jx)*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%dwdx = tavg_specbudgx(jx,jy,jz)%dwdx + &
+            dwdxfx(jx)*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%dwdy = tavg_specbudgx(jx,jy,jz)%dwdy + &
+            dwdyfx(jx)*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%dwdz = tavg_specbudgx(jx,jy,jz)%dwdz + &
+            dwdzfx(jx)*tavg_dt
+
+        ! Mean velGrad-velGrad product, duidxk*dujdxk, i=j
+        tavg_specbudgx(jx,jy,jz)%uxux = tavg_specbudgx(jx,jy,jz)%uxux + &
+            dudxfx(jx)*conjg(dudxfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%uyuy = tavg_specbudgx(jx,jy,jz)%uyuy + &
+            dudyfx(jx)*conjg(dudyfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%uzuz = tavg_specbudgx(jx,jy,jz)%uzuz + &
+            dudzfx(jx)*conjg(dudzfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%vxvx = tavg_specbudgx(jx,jy,jz)%vxvx + &
+            dvdxfx(jx)*conjg(dvdxfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%vyvy = tavg_specbudgx(jx,jy,jz)%vyvy + &
+            dvdyfx(jx)*conjg(dvdyfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%vzvz = tavg_specbudgx(jx,jy,jz)%vzvz + &
+            dvdzfx(jx)*conjg(dvdzfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%wxwx = tavg_specbudgx(jx,jy,jz)%wxwx + &
+            dwdxfx(jx)*conjg(dwdxfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%wywy = tavg_specbudgx(jx,jy,jz)%wywy + &
+            dwdyfx(jx)*conjg(dwdyfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%wzwz = tavg_specbudgx(jx,jy,jz)%wzwz + &
+            dwdzfx(jx)*conjg(dwdzfx(jx))*tavg_dt
+
+        ! Mean velGrad-velGrad product, duidxk*dujdxk, i/=j
+        tavg_specbudgx(jx,jy,jz)%uxvx = tavg_specbudgx(jx,jy,jz)%uxvx + &
+            dudxfx(jx)*conjg(dvdxfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%uyvy = tavg_specbudgx(jx,jy,jz)%uyvy + &
+            dudyfx(jx)*conjg(dvdyfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%uzvz = tavg_specbudgx(jx,jy,jz)%uzvz + &
+            dudzfx(jx)*conjg(dvdzfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%uxwx = tavg_specbudgx(jx,jy,jz)%uxwx + &
+            dudxfx(jx)*conjg(dwdxfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%uywy = tavg_specbudgx(jx,jy,jz)%uywy + &
+            dudyfx(jx)*conjg(dwdyfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%uzwz = tavg_specbudgx(jx,jy,jz)%uzwz + &
+            dudzfx(jx)*conjg(dwdzfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%vxwx = tavg_specbudgx(jx,jy,jz)%vxwx + &
+            dvdxfx(jx)*conjg(dwdxfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%vywy = tavg_specbudgx(jx,jy,jz)%vywy + &
+            dvdyfx(jx)*conjg(dwdyfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%vzwz = tavg_specbudgx(jx,jy,jz)%vzwz + &
+            dvdzfx(jx)*conjg(dwdzfx(jx))*tavg_dt
+
+        ! Mean pressure gradients, dpdxi
+        tavg_specbudgx(jx,jy,jz)%dpdx = tavg_specbudgx(jx,jy,jz)%dpdx + &
+            dpdxfx(jx)*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%dpdy = tavg_specbudgx(jx,jy,jz)%dpdy + &
+            dpdyfx(jx)*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%dpdz = tavg_specbudgx(jx,jy,jz)%dpdz + &
+            dpdzfx(jx)*tavg_dt
+
+        ! Mean velocity * velocity gradient product, ui_hat*dujdxk_hat
+        tavg_specbudgx(jx,jy,jz)%uh_dudxh = tavg_specbudgx(jx,jy,jz)%uh_dudxh + &
+            ufx(jx)*conjg(dudxfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%uh_dudyh = tavg_specbudgx(jx,jy,jz)%uh_dudyh + &
+            ufx(jx)*conjg(dudyfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%uh_dudzh = tavg_specbudgx(jx,jy,jz)%uh_dudzh + &
+            ufx(jx)*conjg(dudzfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%uh_dvdxh = tavg_specbudgx(jx,jy,jz)%uh_dvdxh + &
+            ufx(jx)*conjg(dvdxfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%uh_dvdyh = tavg_specbudgx(jx,jy,jz)%uh_dvdyh + &
+            ufx(jx)*conjg(dvdyfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%uh_dvdzh = tavg_specbudgx(jx,jy,jz)%uh_dvdzh + &
+            ufx(jx)*conjg(dvdzfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%uh_dwdxh = tavg_specbudgx(jx,jy,jz)%uh_dwdxh + &
+            ufx(jx)*conjg(dwdxfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%uh_dwdyh = tavg_specbudgx(jx,jy,jz)%uh_dwdyh + &
+            ufx(jx)*conjg(dwdyfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%uh_dwdzh = tavg_specbudgx(jx,jy,jz)%uh_dwdzh + &
+            ufx(jx)*conjg(dwdzfx(jx))*tavg_dt
+
+        tavg_specbudgx(jx,jy,jz)%vh_dudxh = tavg_specbudgx(jx,jy,jz)%vh_dudxh + &
+            vfx(jx)*conjg(dudxfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%vh_dudyh = tavg_specbudgx(jx,jy,jz)%vh_dudyh + &
+            vfx(jx)*conjg(dudyfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%vh_dudzh = tavg_specbudgx(jx,jy,jz)%vh_dudzh + &
+            vfx(jx)*conjg(dudzfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%vh_dvdxh = tavg_specbudgx(jx,jy,jz)%vh_dvdxh + &
+            vfx(jx)*conjg(dvdxfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%vh_dvdyh = tavg_specbudgx(jx,jy,jz)%vh_dvdyh + &
+            vfx(jx)*conjg(dvdyfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%vh_dvdzh = tavg_specbudgx(jx,jy,jz)%vh_dvdzh + &
+            vfx(jx)*conjg(dvdzfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%vh_dwdxh = tavg_specbudgx(jx,jy,jz)%vh_dwdxh + &
+            vfx(jx)*conjg(dwdxfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%vh_dwdyh = tavg_specbudgx(jx,jy,jz)%vh_dwdyh + &
+            vfx(jx)*conjg(dwdyfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%vh_dwdzh = tavg_specbudgx(jx,jy,jz)%vh_dwdzh + &
+            vfx(jx)*conjg(dwdzfx(jx))*tavg_dt
+
+        tavg_specbudgx(jx,jy,jz)%wh_dudxh = tavg_specbudgx(jx,jy,jz)%wh_dudxh + &
+            wfx(jx)*conjg(dudxfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%wh_dudyh = tavg_specbudgx(jx,jy,jz)%wh_dudyh + &
+            wfx(jx)*conjg(dudyfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%wh_dudzh = tavg_specbudgx(jx,jy,jz)%wh_dudzh + &
+            wfx(jx)*conjg(dudzfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%wh_dvdxh = tavg_specbudgx(jx,jy,jz)%wh_dvdxh + &
+            wfx(jx)*conjg(dvdxfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%wh_dvdyh = tavg_specbudgx(jx,jy,jz)%wh_dvdyh + &
+            wfx(jx)*conjg(dvdyfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%wh_dvdzh = tavg_specbudgx(jx,jy,jz)%wh_dvdzh + &
+            wfx(jx)*conjg(dvdzfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%wh_dwdxh = tavg_specbudgx(jx,jy,jz)%wh_dwdxh + &
+            wfx(jx)*conjg(dwdxfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%wh_dwdyh = tavg_specbudgx(jx,jy,jz)%wh_dwdyh + &
+            wfx(jx)*conjg(dwdyfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%wh_dwdzh = tavg_specbudgx(jx,jy,jz)%wh_dwdzh + &
+            wfx(jx)*conjg(dwdzfx(jx))*tavg_dt
+
+        ! Mean velocity * velocity gradient product, uk*duidxk_hat
+        tavg_specbudgx(jx,jy,jz)%ududxh = tavg_specbudgx(jx,jy,jz)%ududxh + &
+            ududxfx(jx)*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%vdudyh = tavg_specbudgx(jx,jy,jz)%vdudyh + &
+            vdudyfx(jx)*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%wdudzh = tavg_specbudgx(jx,jy,jz)%wdudzh + &
+            wdudzfx(jx)*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%udvdxh = tavg_specbudgx(jx,jy,jz)%udvdxh + &
+            udvdxfx(jx)*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%vdvdyh = tavg_specbudgx(jx,jy,jz)%vdvdyh + &
+            vdvdyfx(jx)*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%wdvdzh = tavg_specbudgx(jx,jy,jz)%wdvdzh + &
+            wdvdzfx(jx)*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%udwdxh = tavg_specbudgx(jx,jy,jz)%udwdxh + &
+            udwdxfx(jx)*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%vdwdyh = tavg_specbudgx(jx,jy,jz)%vdwdyh + &
+            vdwdyfx(jx)*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%wdwdzh = tavg_specbudgx(jx,jy,jz)%wdwdzh + &
+            wdwdzfx(jx)*tavg_dt
+
+        ! Mean vel * vel * vel gradient product, uj_hat*(uk*duidxk)_hat
+        tavg_specbudgx(jx,jy,jz)%uh_ududxh = tavg_specbudgx(jx,jy,jz)%uh_ududxh + &
+            ufx(jx)*conjg(ududxfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%uh_vdudyh = tavg_specbudgx(jx,jy,jz)%uh_vdudyh + &
+            ufx(jx)*conjg(vdudyfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%uh_wdudzh = tavg_specbudgx(jx,jy,jz)%uh_wdudzh + &
+            ufx(jx)*conjg(wdudzfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%vh_ududxh = tavg_specbudgx(jx,jy,jz)%vh_ududxh + &
+            vfx(jx)*conjg(ududxfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%vh_vdudyh = tavg_specbudgx(jx,jy,jz)%vh_vdudyh + &
+            vfx(jx)*conjg(vdudyfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%vh_wdudzh = tavg_specbudgx(jx,jy,jz)%vh_wdudzh + &
+            vfx(jx)*conjg(wdudzfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%wh_ududxh = tavg_specbudgx(jx,jy,jz)%wh_ududxh + &
+            wfx(jx)*conjg(ududxfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%wh_vdudyh = tavg_specbudgx(jx,jy,jz)%wh_vdudyh + &
+            wfx(jx)*conjg(vdudyfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%wh_wdudzh = tavg_specbudgx(jx,jy,jz)%wh_wdudzh + &
+            wfx(jx)*conjg(wdudzfx(jx))*tavg_dt
+
+        tavg_specbudgx(jx,jy,jz)%uh_udvdxh = tavg_specbudgx(jx,jy,jz)%uh_udvdxh + &
+            ufx(jx)*conjg(udvdxfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%uh_vdvdyh = tavg_specbudgx(jx,jy,jz)%uh_vdvdyh + &
+            ufx(jx)*conjg(vdvdyfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%uh_wdvdzh = tavg_specbudgx(jx,jy,jz)%uh_wdvdzh + &
+            ufx(jx)*conjg(wdvdzfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%vh_udvdxh = tavg_specbudgx(jx,jy,jz)%vh_udvdxh + &
+            vfx(jx)*conjg(udvdxfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%vh_vdvdyh = tavg_specbudgx(jx,jy,jz)%vh_vdvdyh + &
+            vfx(jx)*conjg(vdvdyfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%vh_wdvdzh = tavg_specbudgx(jx,jy,jz)%vh_wdvdzh + &
+            vfx(jx)*conjg(wdvdzfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%wh_udvdxh = tavg_specbudgx(jx,jy,jz)%wh_udvdxh + &
+            wfx(jx)*conjg(udvdxfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%wh_vdvdyh = tavg_specbudgx(jx,jy,jz)%wh_vdvdyh + &
+            wfx(jx)*conjg(vdvdyfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%wh_wdvdzh = tavg_specbudgx(jx,jy,jz)%wh_wdvdzh + &
+            wfx(jx)*conjg(wdvdzfx(jx))*tavg_dt
+
+        tavg_specbudgx(jx,jy,jz)%uh_udwdxh = tavg_specbudgx(jx,jy,jz)%uh_udwdxh + &
+            ufx(jx)*conjg(udwdxfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%uh_vdwdyh = tavg_specbudgx(jx,jy,jz)%uh_vdwdyh + &
+            ufx(jx)*conjg(vdwdyfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%uh_wdwdzh = tavg_specbudgx(jx,jy,jz)%uh_wdwdzh + &
+            ufx(jx)*conjg(wdwdzfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%vh_udwdxh = tavg_specbudgx(jx,jy,jz)%vh_udwdxh + &
+            vfx(jx)*conjg(udwdxfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%vh_vdwdyh = tavg_specbudgx(jx,jy,jz)%vh_vdwdyh + &
+            vfx(jx)*conjg(vdwdyfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%vh_wdwdzh = tavg_specbudgx(jx,jy,jz)%vh_wdwdzh + &
+            vfx(jx)*conjg(wdwdzfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%wh_udwdxh = tavg_specbudgx(jx,jy,jz)%wh_udwdxh + &
+            wfx(jx)*conjg(udwdxfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%wh_vdwdyh = tavg_specbudgx(jx,jy,jz)%wh_vdwdyh + &
+            wfx(jx)*conjg(vdwdyfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%wh_wdwdzh = tavg_specbudgx(jx,jy,jz)%wh_wdwdzh + &
+            wfx(jx)*conjg(wdwdzfx(jx))*tavg_dt
+
+        ! Mean velocity * pressure gradient product, ui*dpdxj
+        tavg_specbudgx(jx,jy,jz)%udpdx = tavg_specbudgx(jx,jy,jz)%udpdx + &
+            ufx(jx)*conjg(dpdxfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%udpdy = tavg_specbudgx(jx,jy,jz)%udpdy + &
+            ufx(jx)*conjg(dpdyfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%udpdz = tavg_specbudgx(jx,jy,jz)%udpdz + &
+            ufx(jx)*conjg(dpdzfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%vdpdx = tavg_specbudgx(jx,jy,jz)%vdpdx + &
+            vfx(jx)*conjg(dpdxfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%vdpdy = tavg_specbudgx(jx,jy,jz)%vdpdy + &
+            vfx(jx)*conjg(dpdyfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%vdpdz = tavg_specbudgx(jx,jy,jz)%vdpdz + &
+            vfx(jx)*conjg(dpdzfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%wdpdx = tavg_specbudgx(jx,jy,jz)%wdpdx + &
+            wfx(jx)*conjg(dpdxfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%wdpdy = tavg_specbudgx(jx,jy,jz)%wdpdy + &
+            wfx(jx)*conjg(dpdyfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%wdpdz = tavg_specbudgx(jx,jy,jz)%wdpdz + &
+            wfx(jx)*conjg(dpdzfx(jx))*tavg_dt
+
+        ! Mean pressure * velocity gradient product, p*duidxj
+        tavg_specbudgx(jx,jy,jz)%pdudx = tavg_specbudgx(jx,jy,jz)%pdudx + &
+            pfx(jx)*conjg(dudxfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%pdudy = tavg_specbudgx(jx,jy,jz)%pdudy + &
+            pfx(jx)*conjg(dudyfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%pdudz = tavg_specbudgx(jx,jy,jz)%pdudz + &
+            pfx(jx)*conjg(dudzfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%pdvdx = tavg_specbudgx(jx,jy,jz)%pdvdx + &
+            pfx(jx)*conjg(dvdxfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%pdvdy = tavg_specbudgx(jx,jy,jz)%pdvdy + &
+            pfx(jx)*conjg(dvdyfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%pdvdz = tavg_specbudgx(jx,jy,jz)%pdvdz + &
+            pfx(jx)*conjg(dvdzfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%pdwdx = tavg_specbudgx(jx,jy,jz)%pdwdx + &
+            pfx(jx)*conjg(dwdxfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%pdwdy = tavg_specbudgx(jx,jy,jz)%pdwdy + &
+            pfx(jx)*conjg(dwdyfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%pdwdz = tavg_specbudgx(jx,jy,jz)%pdwdz + &
+            pfx(jx)*conjg(dwdzfx(jx))*tavg_dt
+
+        ! Mean Laplacian, nu*lap(uj)
+        tavg_specbudgx(jx,jy,jz)%lapu = tavg_specbudgx(jx,jy,jz)%lapu + &
+            divtxfx(jx)*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%lapv = tavg_specbudgx(jx,jy,jz)%lapv + &
+            divtyfx(jx)*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%lapw = tavg_specbudgx(jx,jy,jz)%lapw + &
+            divtzfx(jx)*tavg_dt
+
+        ! Mean Vel-Laplacian, nu*ui*lap(uj)
+        tavg_specbudgx(jx,jy,jz)%ulapu = tavg_specbudgx(jx,jy,jz)%ulapu + &
+            ufx(jx)*conjg(divtxfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%ulapv = tavg_specbudgx(jx,jy,jz)%ulapv + &
+            ufx(jx)*conjg(divtyfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%ulapw = tavg_specbudgx(jx,jy,jz)%ulapw + &
+            ufx(jx)*conjg(divtzfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%vlapu = tavg_specbudgx(jx,jy,jz)%vlapu + &
+            vfx(jx)*conjg(divtxfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%vlapv = tavg_specbudgx(jx,jy,jz)%vlapv + &
+            vfx(jx)*conjg(divtyfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%vlapw = tavg_specbudgx(jx,jy,jz)%vlapw + &
+            vfx(jx)*conjg(divtzfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%wlapu = tavg_specbudgx(jx,jy,jz)%wlapu + &
+            wfx(jx)*conjg(divtxfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%wlapv = tavg_specbudgx(jx,jy,jz)%wlapv + &
+            wfx(jx)*conjg(divtyfx(jx))*tavg_dt
+        tavg_specbudgx(jx,jy,jz)%wlapw = tavg_specbudgx(jx,jy,jz)%wlapw + &
+            wfx(jx)*conjg(divtzfx(jx))*tavg_dt
+#endif
     end do
 
 end do
@@ -3628,20 +4225,20 @@ do jz = 1, nz
             wfy(jy)*tavg_dt
 
         tavg_turbspecy(jx,jy,jz)%uu = tavg_turbspecy(jx,jy,jz)%uu +       &
-            real(ufy(jy)*conjg(ufy(jy)))*tavg_dt
+            ufy(jy)*conjg(ufy(jy))*tavg_dt
         tavg_turbspecy(jx,jy,jz)%vv = tavg_turbspecy(jx,jy,jz)%vv +       &
-            real(vfy(jy)*conjg(vfy(jy)))*tavg_dt
+            vfy(jy)*conjg(vfy(jy))*tavg_dt
         tavg_turbspecy(jx,jy,jz)%ww = tavg_turbspecy(jx,jy,jz)%ww +       &
-            real(wfy(jy)*conjg(wfy(jy)))*tavg_dt
+            wfy(jy)*conjg(wfy(jy))*tavg_dt
         !tavg_turbspecy(jx,jy,jz)%vel2 = tavg_turbspec(jx,jy,jz)%vel2 +   &
-        !    real(velfy(jy)*conjg(velfy(jy)))*tavg_dt
+        !    velfy(jy)*conjg(velfy(jy))*tavg_dt
 
         tavg_turbspecy(jx,jy,jz)%uv = tavg_turbspecy(jx,jy,jz)%uv +        &
-            real(ufy(jy)*conjg(vfy(jy)))*tavg_dt
+            ufy(jy)*conjg(vfy(jy))*tavg_dt
         tavg_turbspecy(jx,jy,jz)%uw = tavg_turbspecy(jx,jy,jz)%uw +        &
-            real(ufy(jy)*conjg(wfy(jy)))*tavg_dt
+            ufy(jy)*conjg(wfy(jy))*tavg_dt
         tavg_turbspecy(jx,jy,jz)%vw = tavg_turbspecy(jx,jy,jz)%vw +        &
-            real(vfy(jy)*conjg(wfy(jy)))*tavg_dt
+            vfy(jy)*conjg(wfy(jy))*tavg_dt
 
         tavg_turbspecy(jx,jy,jz)%vortxf = tavg_turbspecy(jx,jy,jz)%vortxf + &
             vortxfy(jy)*tavg_dt
@@ -3651,13 +4248,13 @@ do jz = 1, nz
             vortzfy(jy)*tavg_dt
 
         tavg_turbspecy(jx,jy,jz)%vortx2 = tavg_turbspecy(jx,jy,jz)%vortx2 +  &
-            real(vortxfy(jy)*conjg(vortxfy(jy)))*tavg_dt
+            vortxfy(jy)*conjg(vortxfy(jy))*tavg_dt
         tavg_turbspecy(jx,jy,jz)%vorty2 = tavg_turbspecy(jx,jy,jz)%vorty2 +  &
-            real(vortyfy(jy)*conjg(vortyfy(jy)))*tavg_dt
+            vortyfy(jy)*conjg(vortyfy(jy))*tavg_dt
         tavg_turbspecy(jx,jy,jz)%vortz2 = tavg_turbspecy(jx,jy,jz)%vortz2 +  &
-            real(vortzfy(jy)*conjg(vortzfy(jy)))*tavg_dt
-        !tavg_turbspecy(jx,jy,jz)%vort2 = tavg_turbspecy(jx,jy,jz)%vort2 +    &
-        !    real(vortfy(jy)*conjg(vortfy(jy)))*tavg_dt
+            vortzfy(jy)*conjg(vortzfy(jy))*tavg_dt
+        !tavg_turbspecy(jx,jy,jz)%vort2 = tavg_turbspecy(jx,jy,jz)%vort2 +   &
+        !    vortfy(jy)*conjg(vortfy(jy))*tavg_dt
     end do
 
 end do 
@@ -3666,9 +4263,9 @@ end do
 end subroutine tavg_turbspec_compute
 #endif
 
-!*******************************************************************************
+!*****************************************************************************
 subroutine tavg_finalize()
-!*******************************************************************************
+!*****************************************************************************
 use grid_m
 use stat_defs, only : tavg_t, tavg_total_time, tavg
 use stat_defs, only : rs_compute, rs
@@ -3687,6 +4284,10 @@ use stat_defs, only : tavg_budget, budget_compute, budget
 #ifdef PPOUTPUT_TURBSPEC
 use stat_defs, only : tavg_turbspecx, tavg_turbspecy, turbspecx, turbspecy
 use stat_defs, only : turbspec_compute
+#endif
+
+#ifdef PPOUTPUT_SPECBUDG
+use stat_defs, only : tavg_specbudgx, specbudgx, specbudg_compute
 #endif
 
 #ifdef PPMPI
@@ -3714,6 +4315,10 @@ character(64) :: fname_rxx, fname_ryy, fname_rzz, fname_rxy, fname_rxz, fname_ry
 
 #ifdef PPOUTPUT_TURBSPEC
 character(64) :: fname_sxvel, fname_syvel, fname_sxvort, fname_syvort
+#endif
+
+#ifdef PPOUTPUT_SPECBUDG
+character(64) :: fname_sxuu, fname_sxvv, fname_sxww, fname_sxuv, fname_sxuw, fname_sxvw
 #endif
 
 integer :: i,j,k
@@ -3754,6 +4359,14 @@ fname_syvel = path // 'output/syvel'
 fname_sxvort = path // 'output/sxvort'
 fname_syvort = path // 'output/syvort'
 #endif
+#ifdef PPOUTPUT_SPECBUDG
+fname_sxuu = path // 'output/sxuu_budg'
+fname_sxvv = path // 'output/sxvv_budg'
+fname_sxww = path // 'output/sxww_budg'
+fname_sxuv = path // 'output/sxuv_budg'
+fname_sxuw = path // 'output/sxuw_budg'
+fname_sxvw = path // 'output/sxvw_budg'
+#endif
 
 ! CGNS
 #ifdef PPCGNS
@@ -3782,6 +4395,14 @@ call string_concat(fname_sxvel, '.cgns')
 call string_concat(fname_syvel, '.cgns')
 call string_concat(fname_sxvort, '.cgns')
 call string_concat(fname_syvort, '.cgns')
+#endif
+#ifdef PPOUTPUT_SPECBUDG
+call string_concat(fname_sxuu, '.cgns')
+call string_concat(fname_sxvv, '.cgns')
+call string_concat(fname_sxww, '.cgns')
+call string_concat(fname_sxuv, '.cgns')
+call string_concat(fname_sxuw, '.cgns')
+call string_concat(fname_sxvw, '.cgns')
 #endif
 ! Binary
 #else
@@ -3815,6 +4436,14 @@ call string_concat(fname_sxvel, bin_ext)
 call string_concat(fname_syvel, bin_ext)
 call string_concat(fname_sxvort, bin_ext)
 call string_concat(fname_syvort, bin_ext)
+#endif
+#ifdef PPOUTPUT_SPECBUDG
+call string_concat(fname_sxuu, bin_ext)
+call string_concat(fname_sxvv, bin_ext)
+call string_concat(fname_sxww, bin_ext)
+call string_concat(fname_sxuv, bin_ext)
+call string_concat(fname_sxuw, bin_ext)
+call string_concat(fname_sxvw, bin_ext)
 #endif
 #endif
 
@@ -4073,6 +4702,110 @@ do i = 1, Nx/2 + 1
     tavg_turbspecx(i,j,k) % vorty2 = tavg_turbspecx(i,j,k) % vorty2 / tavg_total_time
     tavg_turbspecx(i,j,k) % vortz2 = tavg_turbspecx(i,j,k) % vortz2 / tavg_total_time
     !tavg_turbspecx(i,j,k) % vort2 = tavg_turbspecx(i,j,k) % vort2 / tavg_total_time
+
+#ifdef PPOUTPUT_SPECBUDG
+    tavg_specbudgx(i,j,k) % p = tavg_specbudgx(i,j,k) % p / tavg_total_time
+
+    tavg_specbudgx(i,j,k) % dudx = tavg_specbudgx(i,j,k) % dudx / tavg_total_time
+    tavg_specbudgx(i,j,k) % dudy = tavg_specbudgx(i,j,k) % dudy / tavg_total_time
+    tavg_specbudgx(i,j,k) % dudz = tavg_specbudgx(i,j,k) % dudz / tavg_total_time
+    tavg_specbudgx(i,j,k) % dvdx = tavg_specbudgx(i,j,k) % dvdx / tavg_total_time
+    tavg_specbudgx(i,j,k) % dvdy = tavg_specbudgx(i,j,k) % dvdy / tavg_total_time
+    tavg_specbudgx(i,j,k) % dvdz = tavg_specbudgx(i,j,k) % dvdz / tavg_total_time
+    tavg_specbudgx(i,j,k) % dwdx = tavg_specbudgx(i,j,k) % dwdx / tavg_total_time
+    tavg_specbudgx(i,j,k) % dwdy = tavg_specbudgx(i,j,k) % dwdy / tavg_total_time
+    tavg_specbudgx(i,j,k) % dwdz = tavg_specbudgx(i,j,k) % dwdz / tavg_total_time
+
+    tavg_specbudgx(i,j,k) % dpdx = tavg_specbudgx(i,j,k) % dpdx / tavg_total_time
+    tavg_specbudgx(i,j,k) % dpdy = tavg_specbudgx(i,j,k) % dpdy / tavg_total_time
+    tavg_specbudgx(i,j,k) % dpdz = tavg_specbudgx(i,j,k) % dpdz / tavg_total_time
+
+    tavg_specbudgx(i,j,k) % uh_dudxh = tavg_specbudgx(i,j,k) % uh_dudxh / tavg_total_time
+    tavg_specbudgx(i,j,k) % uh_dudyh = tavg_specbudgx(i,j,k) % uh_dudyh / tavg_total_time
+    tavg_specbudgx(i,j,k) % uh_dudzh = tavg_specbudgx(i,j,k) % uh_dudzh / tavg_total_time
+    tavg_specbudgx(i,j,k) % uh_dvdxh = tavg_specbudgx(i,j,k) % uh_dvdxh / tavg_total_time
+    tavg_specbudgx(i,j,k) % uh_dvdyh = tavg_specbudgx(i,j,k) % uh_dvdyh / tavg_total_time
+    tavg_specbudgx(i,j,k) % uh_dvdzh = tavg_specbudgx(i,j,k) % uh_dvdzh / tavg_total_time
+    tavg_specbudgx(i,j,k) % uh_dwdxh = tavg_specbudgx(i,j,k) % uh_dwdxh / tavg_total_time
+    tavg_specbudgx(i,j,k) % uh_dwdyh = tavg_specbudgx(i,j,k) % uh_dwdyh / tavg_total_time
+    tavg_specbudgx(i,j,k) % uh_dwdzh = tavg_specbudgx(i,j,k) % uh_dwdzh / tavg_total_time
+
+    tavg_specbudgx(i,j,k) % vh_dudxh = tavg_specbudgx(i,j,k) % vh_dudxh / tavg_total_time
+    tavg_specbudgx(i,j,k) % vh_dudyh = tavg_specbudgx(i,j,k) % vh_dudyh / tavg_total_time
+    tavg_specbudgx(i,j,k) % vh_dudzh = tavg_specbudgx(i,j,k) % vh_dudzh / tavg_total_time
+    tavg_specbudgx(i,j,k) % vh_dvdxh = tavg_specbudgx(i,j,k) % vh_dvdxh / tavg_total_time
+    tavg_specbudgx(i,j,k) % vh_dvdyh = tavg_specbudgx(i,j,k) % vh_dvdyh / tavg_total_time
+    tavg_specbudgx(i,j,k) % vh_dvdzh = tavg_specbudgx(i,j,k) % vh_dvdzh / tavg_total_time
+    tavg_specbudgx(i,j,k) % vh_dwdxh = tavg_specbudgx(i,j,k) % vh_dwdxh / tavg_total_time
+    tavg_specbudgx(i,j,k) % vh_dwdyh = tavg_specbudgx(i,j,k) % vh_dwdyh / tavg_total_time
+    tavg_specbudgx(i,j,k) % vh_dwdzh = tavg_specbudgx(i,j,k) % vh_dwdzh / tavg_total_time
+
+    tavg_specbudgx(i,j,k) % wh_dudxh = tavg_specbudgx(i,j,k) % wh_dudxh / tavg_total_time
+    tavg_specbudgx(i,j,k) % wh_dudyh = tavg_specbudgx(i,j,k) % wh_dudyh / tavg_total_time
+    tavg_specbudgx(i,j,k) % wh_dudzh = tavg_specbudgx(i,j,k) % wh_dudzh / tavg_total_time
+    tavg_specbudgx(i,j,k) % wh_dvdxh = tavg_specbudgx(i,j,k) % wh_dvdxh / tavg_total_time
+    tavg_specbudgx(i,j,k) % wh_dvdyh = tavg_specbudgx(i,j,k) % wh_dvdyh / tavg_total_time
+    tavg_specbudgx(i,j,k) % wh_dvdzh = tavg_specbudgx(i,j,k) % wh_dvdzh / tavg_total_time
+    tavg_specbudgx(i,j,k) % wh_dwdxh = tavg_specbudgx(i,j,k) % wh_dwdxh / tavg_total_time
+    tavg_specbudgx(i,j,k) % wh_dwdyh = tavg_specbudgx(i,j,k) % wh_dwdyh / tavg_total_time
+    tavg_specbudgx(i,j,k) % wh_dwdzh = tavg_specbudgx(i,j,k) % wh_dwdzh / tavg_total_time
+
+    tavg_specbudgx(i,j,k) % uxux = tavg_specbudgx(i,j,k) % uxux / tavg_total_time
+    tavg_specbudgx(i,j,k) % uyuy = tavg_specbudgx(i,j,k) % uyuy / tavg_total_time
+    tavg_specbudgx(i,j,k) % uzuz = tavg_specbudgx(i,j,k) % uzuz / tavg_total_time
+    tavg_specbudgx(i,j,k) % vxvx = tavg_specbudgx(i,j,k) % vxvx / tavg_total_time
+    tavg_specbudgx(i,j,k) % vyvy = tavg_specbudgx(i,j,k) % vyvy / tavg_total_time
+    tavg_specbudgx(i,j,k) % vzvz = tavg_specbudgx(i,j,k) % vzvz / tavg_total_time
+    tavg_specbudgx(i,j,k) % wxwx = tavg_specbudgx(i,j,k) % wxwx / tavg_total_time
+    tavg_specbudgx(i,j,k) % wywy = tavg_specbudgx(i,j,k) % wywy / tavg_total_time
+    tavg_specbudgx(i,j,k) % wzwz = tavg_specbudgx(i,j,k) % wzwz / tavg_total_time
+
+    tavg_specbudgx(i,j,k) % uxvx = tavg_specbudgx(i,j,k) % uxvx / tavg_total_time
+    tavg_specbudgx(i,j,k) % uyvy = tavg_specbudgx(i,j,k) % uyvy / tavg_total_time
+    tavg_specbudgx(i,j,k) % uzvz = tavg_specbudgx(i,j,k) % uzvz / tavg_total_time
+    tavg_specbudgx(i,j,k) % uxwx = tavg_specbudgx(i,j,k) % uxwx / tavg_total_time
+    tavg_specbudgx(i,j,k) % uywy = tavg_specbudgx(i,j,k) % uywy / tavg_total_time
+    tavg_specbudgx(i,j,k) % uzwz = tavg_specbudgx(i,j,k) % uzwz / tavg_total_time
+    tavg_specbudgx(i,j,k) % vxwx = tavg_specbudgx(i,j,k) % vxwx / tavg_total_time
+    tavg_specbudgx(i,j,k) % vywy = tavg_specbudgx(i,j,k) % vywy / tavg_total_time
+    tavg_specbudgx(i,j,k) % vzwz = tavg_specbudgx(i,j,k) % vzwz / tavg_total_time
+
+    tavg_specbudgx(i,j,k) % pdudx = tavg_specbudgx(i,j,k) % pdudx / tavg_total_time
+    tavg_specbudgx(i,j,k) % pdudy = tavg_specbudgx(i,j,k) % pdudy / tavg_total_time
+    tavg_specbudgx(i,j,k) % pdudz = tavg_specbudgx(i,j,k) % pdudz / tavg_total_time
+    tavg_specbudgx(i,j,k) % pdvdx = tavg_specbudgx(i,j,k) % pdvdx / tavg_total_time
+    tavg_specbudgx(i,j,k) % pdvdy = tavg_specbudgx(i,j,k) % pdvdy / tavg_total_time
+    tavg_specbudgx(i,j,k) % pdvdz = tavg_specbudgx(i,j,k) % pdvdz / tavg_total_time
+    tavg_specbudgx(i,j,k) % pdwdx = tavg_specbudgx(i,j,k) % pdwdx / tavg_total_time
+    tavg_specbudgx(i,j,k) % pdwdy = tavg_specbudgx(i,j,k) % pdwdy / tavg_total_time
+    tavg_specbudgx(i,j,k) % pdwdz = tavg_specbudgx(i,j,k) % pdwdz / tavg_total_time
+
+    tavg_specbudgx(i,j,k) % udpdx = tavg_specbudgx(i,j,k) % udpdx / tavg_total_time
+    tavg_specbudgx(i,j,k) % udpdy = tavg_specbudgx(i,j,k) % udpdy / tavg_total_time
+    tavg_specbudgx(i,j,k) % udpdz = tavg_specbudgx(i,j,k) % udpdz / tavg_total_time
+    tavg_specbudgx(i,j,k) % vdpdx = tavg_specbudgx(i,j,k) % vdpdx / tavg_total_time
+    tavg_specbudgx(i,j,k) % vdpdy = tavg_specbudgx(i,j,k) % vdpdy / tavg_total_time
+    tavg_specbudgx(i,j,k) % vdpdz = tavg_specbudgx(i,j,k) % vdpdz / tavg_total_time
+    tavg_specbudgx(i,j,k) % wdpdx = tavg_specbudgx(i,j,k) % wdpdx / tavg_total_time
+    tavg_specbudgx(i,j,k) % wdpdy = tavg_specbudgx(i,j,k) % wdpdy / tavg_total_time
+    tavg_specbudgx(i,j,k) % wdpdz = tavg_specbudgx(i,j,k) % wdpdz / tavg_total_time
+
+    tavg_specbudgx(i,j,k) % lapu = tavg_specbudgx(i,j,k) % lapu / tavg_total_time
+    tavg_specbudgx(i,j,k) % lapv = tavg_specbudgx(i,j,k) % lapv / tavg_total_time
+    tavg_specbudgx(i,j,k) % lapw = tavg_specbudgx(i,j,k) % lapw / tavg_total_time
+
+    tavg_specbudgx(i,j,k) % ulapu = tavg_specbudgx(i,j,k) % ulapu / tavg_total_time
+    tavg_specbudgx(i,j,k) % ulapv = tavg_specbudgx(i,j,k) % ulapv / tavg_total_time
+    tavg_specbudgx(i,j,k) % ulapw = tavg_specbudgx(i,j,k) % ulapw / tavg_total_time
+    tavg_specbudgx(i,j,k) % vlapu = tavg_specbudgx(i,j,k) % vlapu / tavg_total_time
+    tavg_specbudgx(i,j,k) % vlapv = tavg_specbudgx(i,j,k) % vlapv / tavg_total_time
+    tavg_specbudgx(i,j,k) % vlapw = tavg_specbudgx(i,j,k) % vlapw / tavg_total_time
+    tavg_specbudgx(i,j,k) % wlapu = tavg_specbudgx(i,j,k) % wlapu / tavg_total_time
+    tavg_specbudgx(i,j,k) % wlapv = tavg_specbudgx(i,j,k) % wlapv / tavg_total_time
+    tavg_specbudgx(i,j,k) % wlapw = tavg_specbudgx(i,j,k) % wlapw / tavg_total_time
+
+
+#endif
 end do 
 end do
 
@@ -4301,79 +5034,79 @@ call mpi_sync_real_array( tavg_budget(1:nx,1:ny,lbz:nz)%wlapw, 0, MPI_SYNC_DOWNU
 ! Write all the 3D data
 #ifdef PPCGNS
 ! Write CGNS Data
-call write_parallel_cgns (fname_vel ,nx, ny, nz - nz_end, nz_tot,              &
-    (/ 1, 1,   (nz-1)*coord + 1 /),                                            &
-    (/ nx, ny, (nz-1)*(coord+1) + 1 - nz_end /),                               &
-    x(1:nx) , y(1:ny) , z(1:(nz-nz_end) ), 3,                                  &
-    (/ 'VelocityX', 'VelocityY', 'VelocityZ' /),                               &
-    (/ tavg(1:nx,1:ny,1:nz - nz_end) % u,                                      &
-       tavg(1:nx,1:ny,1:nz - nz_end) % v,                                      &
+call write_parallel_cgns (fname_vel ,nx, ny, nz - nz_end, nz_tot,           &
+    (/ 1, 1,   (nz-1)*coord + 1 /),                                         &
+    (/ nx, ny, (nz-1)*(coord+1) + 1 - nz_end /),                            &
+    x(1:nx) , y(1:ny) , z(1:(nz-nz_end) ), 3,                               &
+    (/ 'VelocityX', 'VelocityY', 'VelocityZ' /),                            &
+    (/ tavg(1:nx,1:ny,1:nz - nz_end) % u,                                   &
+       tavg(1:nx,1:ny,1:nz - nz_end) % v,                                   &
        tavg(1:nx,1:ny,1:nz- nz_end) % w_uv /) )
 
-call write_parallel_cgns (fname_velw ,nx, ny, nz - nz_end, nz_tot,             &
-    (/ 1, 1,   (nz-1)*coord + 1 /),                                            &
-    (/ nx, ny, (nz-1)*(coord+1) + 1 - nz_end /),                               &
-    x(1:nx) , y(1:ny) , zw(1:(nz-nz_end) ),                                    &
+call write_parallel_cgns (fname_velw ,nx, ny, nz - nz_end, nz_tot,          &
+    (/ 1, 1,   (nz-1)*coord + 1 /),                                         &
+    (/ nx, ny, (nz-1)*(coord+1) + 1 - nz_end /),                            &
+    x(1:nx) , y(1:ny) , zw(1:(nz-nz_end) ),                                 &
     1, (/ 'VelocityZ' /), (/ tavg(1:nx,1:ny,1:nz- nz_end) % w /) )
 
-!call write_parallel_cgns(fname_vel2,nx,ny,nz- nz_end,nz_tot,                   &
-!    (/ 1, 1,   (nz-1)*coord + 1 /),                                            &
-!    (/ nx, ny, (nz-1)*(coord+1) + 1 - nz_end /),                               &
-!    x(1:nx) , y(1:ny) , zw(1:(nz-nz_end) ), 6,                                 &
+!call write_parallel_cgns(fname_vel2,nx,ny,nz- nz_end,nz_tot,               &
+!    (/ 1, 1,   (nz-1)*coord + 1 /),                                        &
+!    (/ nx, ny, (nz-1)*(coord+1) + 1 - nz_end /),                           &
+!    x(1:nx) , y(1:ny) , zw(1:(nz-nz_end) ), 6,                             &
 !    (/ 'Mean--uu', 'Mean--vv', 'Mean--ww','Mean--uw','Mean--vw','Mean--uv'/),  &
-!    (/ tavg(1:nx,1:ny,1:nz- nz_end) % u2,                                      &
-!       tavg(1:nx,1:ny,1:nz- nz_end) % v2,                                      &
-!       tavg(1:nx,1:ny,1:nz- nz_end) % w2,                                      &
-!       tavg(1:nx,1:ny,1:nz- nz_end) % uw,                                      &
-!       tavg(1:nx,1:ny,1:nz- nz_end) % vw,                                      &
+!    (/ tavg(1:nx,1:ny,1:nz- nz_end) % u2,                                  &
+!       tavg(1:nx,1:ny,1:nz- nz_end) % v2,                                  &
+!       tavg(1:nx,1:ny,1:nz- nz_end) % w2,                                  &
+!       tavg(1:nx,1:ny,1:nz- nz_end) % uw,                                  &
+!       tavg(1:nx,1:ny,1:nz- nz_end) % vw,                                  &
 !       tavg(1:nx,1:ny,1:nz- nz_end) % uv /) )
 
-call write_parallel_cgns(fname_tau,nx,ny,nz- nz_end,nz_tot,                    &
-    (/ 1, 1,   (nz-1)*coord + 1 /),                                            &
-    (/ nx, ny, (nz-1)*(coord+1) + 1 - nz_end /),                               &
-    x(1:nx) , y(1:ny) , zw(1:(nz-nz_end) ), 6,                                 &
-    (/ 'Tau--txx', 'Tau--txy', 'Tau--tyy','Tau--txz','Tau--tyz','Tau--tzz'/),  &
-    (/ tavg(1:nx,1:ny,1:nz- nz_end) % txx,                                     &
-       tavg(1:nx,1:ny,1:nz- nz_end) % txy,                                     &
-       tavg(1:nx,1:ny,1:nz- nz_end) % tyy,                                     &
-       tavg(1:nx,1:ny,1:nz- nz_end) % txz,                                     &
-       tavg(1:nx,1:ny,1:nz- nz_end) % tyz,                                     &
+call write_parallel_cgns(fname_tau,nx,ny,nz- nz_end,nz_tot,                 &
+    (/ 1, 1,   (nz-1)*coord + 1 /),                                         &
+    (/ nx, ny, (nz-1)*(coord+1) + 1 - nz_end /),                            &
+    x(1:nx) , y(1:ny) , zw(1:(nz-nz_end) ), 6,                              &
+    (/ 'Tau--txx', 'Tau--txy', 'Tau--tyy','Tau--txz','Tau--tyz','Tau--tzz'/),&
+    (/ tavg(1:nx,1:ny,1:nz- nz_end) % txx,                                  &
+       tavg(1:nx,1:ny,1:nz- nz_end) % txy,                                  &
+       tavg(1:nx,1:ny,1:nz- nz_end) % tyy,                                  &
+       tavg(1:nx,1:ny,1:nz- nz_end) % txz,                                  &
+       tavg(1:nx,1:ny,1:nz- nz_end) % tyz,                                  &
        tavg(1:nx,1:ny,1:nz- nz_end) % tzz /) )
 
-call write_parallel_cgns(fname_pres,nx,ny,nz- nz_end,nz_tot,                   &
-   (/ 1, 1,   (nz-1)*coord + 1 /),                                             &
-   (/ nx, ny, (nz-1)*(coord+1) + 1 - nz_end /),                                &
-   x(1:nx) , y(1:ny) , zw(1:(nz-nz_end) ), 1,                                  &
-   (/ 'pressure' /),                                                           &
+call write_parallel_cgns(fname_pres,nx,ny,nz- nz_end,nz_tot,                &
+   (/ 1, 1,   (nz-1)*coord + 1 /),                                          &
+   (/ nx, ny, (nz-1)*(coord+1) + 1 - nz_end /),                             &
+   x(1:nx) , y(1:ny) , zw(1:(nz-nz_end) ), 1,                               &
+   (/ 'pressure' /),                                                        &
    (/ tavg(1:nx,1:ny,1:nz- nz_end) % p /) )
 
-!call write_parallel_cgns(fname_f,nx,ny,nz- nz_end,nz_tot,                      &
-!    (/ 1, 1,   (nz-1)*coord + 1 /),                                            &
-!    (/ nx, ny, (nz-1)*(coord+1) + 1 - nz_end /),                               &
-!    x(1:nx) , y(1:ny) , zw(1:(nz-nz_end) ), 3,                                 &
-!    (/ 'bodyForX', 'bodyForY', 'bodyForZ' /),                                  &
-!    (/ tavg(1:nx,1:ny,1:nz- nz_end) % fx,                                      &
-!       tavg(1:nx,1:ny,1:nz- nz_end) % fy,                                      &
+!call write_parallel_cgns(fname_f,nx,ny,nz- nz_end,nz_tot,                  &
+!    (/ 1, 1,   (nz-1)*coord + 1 /),                                        &
+!    (/ nx, ny, (nz-1)*(coord+1) + 1 - nz_end /),                           &
+!    x(1:nx) , y(1:ny) , zw(1:(nz-nz_end) ), 3,                             &
+!    (/ 'bodyForX', 'bodyForY', 'bodyForZ' /),                              &
+!    (/ tavg(1:nx,1:ny,1:nz- nz_end) % fx,                                  &
+!       tavg(1:nx,1:ny,1:nz- nz_end) % fy,                                  &
 !       tavg(1:nx,1:ny,1:nz- nz_end) % fz /) )
 
-!call write_parallel_cgns(fname_velgrad,nx,ny,nz- nz_end,nz_tot,                &
-!    (/ 1, 1,   (nz-1)*coord + 1 /),                                            &
-!    (/ nx, ny, (nz-1)*(coord+1) + 1 - nz_end /),                               &
-!    x(1:nx) , y(1:ny) , z(1:(nz-nz_end) ), 9,                                  &
-!    (/ 'dudx', 'dudy', 'dudz','dvdx','dvdy','dvdz','dwdx','dwdy','dwdz'/),     &
-!    (/ tavg(1:nx,1:ny,1:nz- nz_end) % dudx,                                    &
-!       tavg(1:nx,1:ny,1:nz- nz_end) % dudy,                                    &
-!       tavg(1:nx,1:ny,1:nz- nz_end) % dudz,                                    &
-!       tavg(1:nx,1:ny,1:nz- nz_end) % dvdx,                                    &
-!       tavg(1:nx,1:ny,1:nz- nz_end) % dvdy,                                    &
-!       tavg(1:nx,1:ny,1:nz- nz_end) % dvdz,                                    &
-!       tavg(1:nx,1:ny,1:nz- nz_end) % dwdx,                                    &
-!       tavg(1:nx,1:ny,1:nz- nz_end) % dwdy,                                    &
+!call write_parallel_cgns(fname_velgrad,nx,ny,nz- nz_end,nz_tot,            &
+!    (/ 1, 1,   (nz-1)*coord + 1 /),                                        &
+!    (/ nx, ny, (nz-1)*(coord+1) + 1 - nz_end /),                           &
+!    x(1:nx) , y(1:ny) , z(1:(nz-nz_end) ), 9,                              &
+!    (/ 'dudx', 'dudy', 'dudz','dvdx','dvdy','dvdz','dwdx','dwdy','dwdz'/), &
+!    (/ tavg(1:nx,1:ny,1:nz- nz_end) % dudx,                                &
+!       tavg(1:nx,1:ny,1:nz- nz_end) % dudy,                                &
+!       tavg(1:nx,1:ny,1:nz- nz_end) % dudz,                                &
+!       tavg(1:nx,1:ny,1:nz- nz_end) % dvdx,                                &
+!       tavg(1:nx,1:ny,1:nz- nz_end) % dvdy,                                &
+!       tavg(1:nx,1:ny,1:nz- nz_end) % dvdz,                                &
+!       tavg(1:nx,1:ny,1:nz- nz_end) % dwdx,                                &
+!       tavg(1:nx,1:ny,1:nz- nz_end) % dwdy,                                &
 !       tavg(1:nx,1:ny,1:nz- nz_end) % dwdz /) )
 
 #else
 ! Write binary data
-open(unit=13, file=fname_vel, form='unformatted', convert=write_endian,        &
+open(unit=13, file=fname_vel, form='unformatted', convert=write_endian,     &
     access='direct', recl=nx*ny*nz*rprec)
 write(13,rec=1) tavg(:nx,:ny,1:nz)%u
 write(13,rec=2) tavg(:nx,:ny,1:nz)%v
@@ -4381,12 +5114,12 @@ write(13,rec=3) tavg(:nx,:ny,1:nz)%w_uv
 close(13)
 
 ! Write binary data
-open(unit=13, file=fname_velw, form='unformatted', convert=write_endian,       &
+open(unit=13, file=fname_velw, form='unformatted', convert=write_endian,    &
     access='direct', recl=nx*ny*nz*rprec)
 write(13,rec=1) tavg(:nx,:ny,1:nz)%w
 close(13)
 
-!open(unit=13, file=fname_vel2, form='unformatted', convert=write_endian,       &
+!open(unit=13, file=fname_vel2, form='unformatted', convert=write_endian,   &
 !    access='direct', recl=nx*ny*nz*rprec)
 !write(13,rec=1) tavg(:nx,:ny,1:nz)%u2
 !write(13,rec=2) tavg(:nx,:ny,1:nz)%v2
@@ -4396,7 +5129,7 @@ close(13)
 !write(13,rec=6) tavg(:nx,:ny,1:nz)%uv
 !close(13)
 
-open(unit=13, file=fname_tau, form='unformatted', convert=write_endian,        &
+open(unit=13, file=fname_tau, form='unformatted', convert=write_endian,     &
     access='direct', recl=nx*ny*nz*rprec)
 write(13,rec=1) tavg(:nx,:ny,1:nz)%txx
 write(13,rec=2) tavg(:nx,:ny,1:nz)%txy
@@ -4406,19 +5139,19 @@ write(13,rec=5) tavg(:nx,:ny,1:nz)%tyz
 write(13,rec=6) tavg(:nx,:ny,1:nz)%tzz
 close(13)
 
-open(unit=13, file=fname_pres, form='unformatted', convert=write_endian,       &
+open(unit=13, file=fname_pres, form='unformatted', convert=write_endian,    &
     access='direct', recl=nx*ny*nz*rprec)
 write(13,rec=1) tavg(:nx,:ny,1:nz)%p
 close(13)
 
-!open(unit=13, file=fname_f, form='unformatted', convert=write_endian,          &
+!open(unit=13, file=fname_f, form='unformatted', convert=write_endian,       &
 !    access='direct', recl=nx*ny*nz*rprec)
 !write(13,rec=1) tavg(:nx,:ny,1:nz)%fx
 !write(13,rec=2) tavg(:nx,:ny,1:nz)%fy
 !write(13,rec=3) tavg(:nx,:ny,1:nz)%fz
 !close(13)
 
-!open(unit=13, file=fname_velgrad, form='unformatted', convert=write_endian,    &
+!open(unit=13, file=fname_velgrad, form='unformatted', convert=write_endian, &
 !    access='direct', recl=nx*ny*nz*rprec)
 !write(13,rec=1) tavg(:nx,:ny,1:nz)%dudx
 !write(13,rec=2) tavg(:nx,:ny,1:nz)%dudy
@@ -4446,20 +5179,20 @@ rs = rs_compute(tavg , lbz)
 
 #ifdef PPCGNS
 ! Write CGNS data
-call write_parallel_cgns(fname_rs,nx,ny,nz- nz_end,nz_tot,                     &
-    (/ 1, 1,   (nz-1)*coord + 1 /),                                            &
-    (/ nx, ny, (nz-1)*(coord+1) + 1 - nz_end /),                               &
-    x(1:nx) , y(1:ny) , z(1:(nz-nz_end) ), 6,                                  &
-    (/ 'Meanupup', 'Meanvpvp', 'Meanwpwp','Meanupwp','Meanvpwp','Meanupvp'/),  &
-    (/ rs(1:nx,1:ny,1:nz- nz_end) % up2,                                       &
-    rs(1:nx,1:ny,1:nz- nz_end) % vp2,                                          &
-    rs(1:nx,1:ny,1:nz- nz_end) % wp2,                                          &
-    rs(1:nx,1:ny,1:nz- nz_end) % upwp,                                         &
-    rs(1:nx,1:ny,1:nz- nz_end) % vpwp,                                         &
+call write_parallel_cgns(fname_rs,nx,ny,nz- nz_end,nz_tot,                  &
+    (/ 1, 1,   (nz-1)*coord + 1 /),                                         &
+    (/ nx, ny, (nz-1)*(coord+1) + 1 - nz_end /),                            &
+    x(1:nx) , y(1:ny) , z(1:(nz-nz_end) ), 6,                               &
+    (/ 'Meanupup', 'Meanvpvp', 'Meanwpwp','Meanupwp','Meanvpwp','Meanupvp'/),&
+    (/ rs(1:nx,1:ny,1:nz- nz_end) % up2,                                    &
+    rs(1:nx,1:ny,1:nz- nz_end) % vp2,                                       &
+    rs(1:nx,1:ny,1:nz- nz_end) % wp2,                                       &
+    rs(1:nx,1:ny,1:nz- nz_end) % upwp,                                      &
+    rs(1:nx,1:ny,1:nz- nz_end) % vpwp,                                      &
     rs(1:nx,1:ny,1:nz- nz_end) % upvp /) )
 #else
 ! Write binary data
-open(unit=13, file=fname_rs, form='unformatted', convert=write_endian,         &
+open(unit=13, file=fname_rs, form='unformatted', convert=write_endian,      &
     access='direct',recl=nx*ny*nz*rprec)
 write(13,rec=1) rs(:nx,:ny,1:nz)%up2
 write(13,rec=2) rs(:nx,:ny,1:nz)%vp2
@@ -4474,24 +5207,24 @@ deallocate(rs)
 
 #ifdef PPOUTPUT_SGS
 #ifdef PPCGNS
-call write_parallel_cgns(fname_cs,nx,ny,nz- nz_end,nz_tot,                     &
-    (/ 1, 1,   (nz-1)*coord + 1 /),                                            &
-    (/ nx, ny, (nz-1)*(coord+1) + 1 - nz_end /),                               &
-    x(1:nx) , y(1:ny) , zw(1:(nz-nz_end) ), 1,                                 &
+call write_parallel_cgns(fname_cs,nx,ny,nz- nz_end,nz_tot,                  &
+    (/ 1, 1,   (nz-1)*coord + 1 /),                                         &
+    (/ nx, ny, (nz-1)*(coord+1) + 1 - nz_end /),                            &
+    x(1:nx) , y(1:ny) , zw(1:(nz-nz_end) ), 1,                              &
     (/ 'Cs_Coeff'/),  (/ tavg(1:nx,1:ny,1:nz- nz_end) % cs_opt2 /) )
 
-call write_parallel_cgns(fname_sgs,nx,ny,nz- nz_end,nz_tot,                    &
-    (/ 1, 1,   (nz-1)*coord + 1 /),                                            &
-    (/ nx, ny, (nz-1)*(coord+1) + 1 - nz_end /),                               &
-    x(1:nx) , y(1:ny) , zw(1:(nz-nz_end) ), 1,                                 &
+call write_parallel_cgns(fname_sgs,nx,ny,nz- nz_end,nz_tot,                 &
+    (/ 1, 1,   (nz-1)*coord + 1 /),                                         &
+    (/ nx, ny, (nz-1)*(coord+1) + 1 - nz_end /),                            &
+    x(1:nx) , y(1:ny) , zw(1:(nz-nz_end) ), 1,                              &
     (/ 'SGS_eddy '/),  (/ tavg_sgs(1:nx,1:ny,1:nz- nz_end) % Nu_t /) )
 #else
-open(unit=13, file=fname_cs, form='unformatted', convert=write_endian,         &
+open(unit=13, file=fname_cs, form='unformatted', convert=write_endian,      &
     access='direct', recl=nx*ny*nz*rprec)
 write(13,rec=1) tavg_sgs(:nx,:ny,1:nz)%cs_opt2
 close(13)
 
-open(unit=13, file=fname_sgs, form='unformatted', convert=write_endian,        &
+open(unit=13, file=fname_sgs, form='unformatted', convert=write_endian,     &
     access='direct', recl=nx*ny*nz*rprec)
 write(13,rec=1) tavg_sgs(:nx,:ny,1:nz)%Nu_t
 close(13)
@@ -4583,21 +5316,21 @@ call write_parallel_cgns(fname_ryz,nx,ny,nz- nz_end,nz_tot,                 &
     budget(1:nx,1:ny,1:nz- nz_end) % prodyz,                                &
     budget(1:nx,1:ny,1:nz- nz_end) % pdissyz /) )
 
-!call write_parallel_cgns(fname_mke,nx,ny,nz- nz_end,nz_tot,                    &
-!    (/ 1, 1,   (nz-1)*coord + 1 /),                                            &
-!    (/ nx, ny, (nz-1)*(coord+1) + 1 - nz_end /),                               &
-!    x(1:nx) , y(1:ny) , z(1:(nz-nz_end) ), 6,                                  &
-!    (/ 'madv', 'mtfluc', 'mtpres', 'mtvisc', 'mpdiss', 'mdiss'/),              &
-!    (/ budget(1:nx,1:ny,1:nz- nz_end) % madv,                                  &
-!    budget(1:nx,1:ny,1:nz- nz_end) % mtfluc,                                   &
-!    budget(1:nx,1:ny,1:nz- nz_end) % mtpres,                                   &
-!    budget(1:nx,1:ny,1:nz- nz_end) % mtvisc,                                   &
-!    budget(1:nx,1:ny,1:nz- nz_end) % mpdiss,                                   &
+!call write_parallel_cgns(fname_mke,nx,ny,nz- nz_end,nz_tot,                 &
+!    (/ 1, 1,   (nz-1)*coord + 1 /),                                         &
+!    (/ nx, ny, (nz-1)*(coord+1) + 1 - nz_end /),                            &
+!    x(1:nx) , y(1:ny) , z(1:(nz-nz_end) ), 6,                               &
+!    (/ 'madv', 'mtfluc', 'mtpres', 'mtvisc', 'mpdiss', 'mdiss'/),           &
+!    (/ budget(1:nx,1:ny,1:nz- nz_end) % madv,                               &
+!    budget(1:nx,1:ny,1:nz- nz_end) % mtfluc,                                &
+!    budget(1:nx,1:ny,1:nz- nz_end) % mtpres,                                &
+!    budget(1:nx,1:ny,1:nz- nz_end) % mtvisc,                                &
+!    budget(1:nx,1:ny,1:nz- nz_end) % mpdiss,                                &
 !    budget(1:nx,1:ny,1:nz- nz_end) % mdiss /) )
 
 #else
 ! Write binary data
-open(unit=13, file=fname_rxx, form='unformatted', convert=write_endian,        &
+open(unit=13, file=fname_rxx, form='unformatted', convert=write_endian,     &
     access='direct', recl=nx*ny*nz*rprec)
 write(13,rec=1) budget(:nx,:ny,1:nz)%advxx
 write(13,rec=2) budget(:nx,:ny,1:nz)%tflucxx
@@ -4608,7 +5341,7 @@ write(13,rec=6) budget(:nx,:ny,1:nz)%prodxx
 write(13,rec=7) budget(:nx,:ny,1:nz)%pdissxx
 close(13)
 
-open(unit=13, file=fname_ryy, form='unformatted', convert=write_endian,        &
+open(unit=13, file=fname_ryy, form='unformatted', convert=write_endian,     &
     access='direct', recl=nx*ny*nz*rprec)
 write(13,rec=1) budget(:nx,:ny,1:nz)%advyy
 write(13,rec=2) budget(:nx,:ny,1:nz)%tflucyy
@@ -4619,7 +5352,7 @@ write(13,rec=6) budget(:nx,:ny,1:nz)%prodyy
 write(13,rec=7) budget(:nx,:ny,1:nz)%pdissyy
 close(13)
 
-open(unit=13, file=fname_rzz, form='unformatted', convert=write_endian,        &
+open(unit=13, file=fname_rzz, form='unformatted', convert=write_endian,     &
     access='direct', recl=nx*ny*nz*rprec)
 write(13,rec=1) budget(:nx,:ny,1:nz)%advzz
 write(13,rec=2) budget(:nx,:ny,1:nz)%tfluczz
@@ -4630,7 +5363,7 @@ write(13,rec=6) budget(:nx,:ny,1:nz)%prodzz
 write(13,rec=7) budget(:nx,:ny,1:nz)%pdisszz
 close(13)
 
-open(unit=13, file=fname_rxy, form='unformatted', convert=write_endian,        &
+open(unit=13, file=fname_rxy, form='unformatted', convert=write_endian,     &
     access='direct', recl=nx*ny*nz*rprec)
 write(13,rec=1) budget(:nx,:ny,1:nz)%advxy
 write(13,rec=2) budget(:nx,:ny,1:nz)%tflucxy
@@ -4641,7 +5374,7 @@ write(13,rec=6) budget(:nx,:ny,1:nz)%prodxy
 write(13,rec=7) budget(:nx,:ny,1:nz)%pdissxy
 close(13)
 
-open(unit=13, file=fname_rxz, form='unformatted', convert=write_endian,        &
+open(unit=13, file=fname_rxz, form='unformatted', convert=write_endian,     &
     access='direct', recl=nx*ny*nz*rprec)
 write(13,rec=1) budget(:nx,:ny,1:nz)%advxz
 write(13,rec=2) budget(:nx,:ny,1:nz)%tflucxz
@@ -4652,7 +5385,7 @@ write(13,rec=6) budget(:nx,:ny,1:nz)%prodxz
 write(13,rec=7) budget(:nx,:ny,1:nz)%pdissxz
 close(13)
 
-open(unit=13, file=fname_ryz, form='unformatted', convert=write_endian,        &
+open(unit=13, file=fname_ryz, form='unformatted', convert=write_endian,     &
     access='direct', recl=nx*ny*nz*rprec)
 write(13,rec=1) budget(:nx,:ny,1:nz)%advyz
 write(13,rec=2) budget(:nx,:ny,1:nz)%tflucyz
@@ -4663,7 +5396,7 @@ write(13,rec=6) budget(:nx,:ny,1:nz)%prodyz
 write(13,rec=7) budget(:nx,:ny,1:nz)%pdissyz
 close(13)
 
-!open(unit=13, file=fname_mke, form='unformatted', convert=write_endian,        &
+!open(unit=13, file=fname_mke, form='unformatted', convert=write_endian,    &
 !    access='direct', recl=nx*ny*nz*rprec)
 !write(13,rec=1) budget(:nx,:ny,1:nz)%madv
 !write(13,rec=2) budget(:nx,:ny,1:nz)%mtfluc
@@ -4689,52 +5422,52 @@ turbspecy = turbspec_compute(tavg_turbspecy, lbz)
 ! Write CGNS data
 
 ! Position variable needs to be corrected!
-call write_parallel_cgns(fname_sxvel,nx/2+1,ny,nz- nz_end,nz_tot,             &
-    (/ 1, 1,   (nz-1)*coord + 1 /),                                           &
-    (/ nx/2+1, ny, (nz-1)*(coord+1) + 1 - nz_end /),                          &
-    x(1:nx/2+1) , y(1:ny) , z(1:(nz-nz_end) ), 6,                             &
-    (/ 'sxuu', 'sxvv', 'sxww', 'sxuv', 'sxuw', 'sxvw'/),                      &
-    (/ turbspecx(1:nx/2+1,1:ny,1:nz- nz_end) % upup,                          &
-    turbspecx(1:nx/2+1,1:ny,1:nz- nz_end) % vpvp,                             &
-    turbspecx(1:nx/2+1,1:ny,1:nz- nz_end) % wpwp,                             &
-    turbspecx(1:nx/2+1,1:ny,1:nz- nz_end) % upvp,                             &
-    turbspecx(1:nx/2+1,1:ny,1:nz- nz_end) % upwp,                             &
+call write_parallel_cgns(fname_sxvel,nx/2+1,ny,nz- nz_end,nz_tot,           &
+    (/ 1, 1,   (nz-1)*coord + 1 /),                                         &
+    (/ nx/2+1, ny, (nz-1)*(coord+1) + 1 - nz_end /),                        &
+    x(1:nx/2+1) , y(1:ny) , z(1:(nz-nz_end) ), 6,                           &
+    (/ 'sxuu', 'sxvv', 'sxww', 'sxuv', 'sxuw', 'sxvw'/),                    &
+    (/ turbspecx(1:nx/2+1,1:ny,1:nz- nz_end) % upup,                        &
+    turbspecx(1:nx/2+1,1:ny,1:nz- nz_end) % vpvp,                           &
+    turbspecx(1:nx/2+1,1:ny,1:nz- nz_end) % wpwp,                           &
+    turbspecx(1:nx/2+1,1:ny,1:nz- nz_end) % upvp,                           &
+    turbspecx(1:nx/2+1,1:ny,1:nz- nz_end) % upwp,                           &
     turbspecx(1:nx/2+1,1:ny,1:nz- nz_end) % vpwp /) )
 
-call write_parallel_cgns(fname_sxvort,nx/2+1,ny,nz- nz_end,nz_tot,            &
-    (/ 1, 1,   (nz-1)*coord + 1 /),                                           &
-    (/ nx/2+1, ny, (nz-1)*(coord+1) + 1 - nz_end /),                          &
-    x(1:nx/2+1) , y(1:ny) , z(1:(nz-nz_end) ), 3,                             &
-    (/ 'sxvortx', 'sxvorty', 'sxvortz'/),                                     &
-    (/ turbspecx(1:nx/2+1,1:ny,1:nz- nz_end) % vortxp2,                       &
-    turbspecx(1:nx/2+1,1:ny,1:nz- nz_end) % vortyp2,                          &
+call write_parallel_cgns(fname_sxvort,nx/2+1,ny,nz- nz_end,nz_tot,          &
+    (/ 1, 1,   (nz-1)*coord + 1 /),                                         &
+    (/ nx/2+1, ny, (nz-1)*(coord+1) + 1 - nz_end /),                        &
+    x(1:nx/2+1) , y(1:ny) , z(1:(nz-nz_end) ), 3,                           &
+    (/ 'sxvortx', 'sxvorty', 'sxvortz'/),                                   &
+    (/ turbspecx(1:nx/2+1,1:ny,1:nz- nz_end) % vortxp2,                     &
+    turbspecx(1:nx/2+1,1:ny,1:nz- nz_end) % vortyp2,                        &
     turbspecx(1:nx/2+1,1:ny,1:nz- nz_end) % vortzp2 /) )
 
-call write_parallel_cgns(fname_syvel,nx,ny/2+1,nz- nz_end,nz_tot,             &
-    (/ 1, 1,   (nz-1)*coord + 1 /),                                           &
-    (/ nx, ny/2+1, (nz-1)*(coord+1) + 1 - nz_end /),                          &
-    x(1:nx) , y(1:ny/2+1) , z(1:(nz-nz_end) ), 6,                             &
-    (/ 'syuu', 'syvv', 'syww', 'syuv', 'syuw', 'syvw'/),                      &
-    (/ turbspecy(1:nx,1:ny/2+1,1:nz- nz_end) % upup,                          &
-    turbspecy(1:nx,1:ny/2+1,1:nz- nz_end) % vpvp,                             &
-    turbspecy(1:nx,1:ny/2+1,1:nz- nz_end) % wpwp,                             &
-    turbspecy(1:nx,1:ny/2+1,1:nz- nz_end) % upvp,                             &
-    turbspecy(1:nx,1:ny/2+1,1:nz- nz_end) % upwp,                             &
+call write_parallel_cgns(fname_syvel,nx,ny/2+1,nz- nz_end,nz_tot,           &
+    (/ 1, 1,   (nz-1)*coord + 1 /),                                         &
+    (/ nx, ny/2+1, (nz-1)*(coord+1) + 1 - nz_end /),                        &
+    x(1:nx) , y(1:ny/2+1) , z(1:(nz-nz_end) ), 6,                           &
+    (/ 'syuu', 'syvv', 'syww', 'syuv', 'syuw', 'syvw'/),                    &
+    (/ turbspecy(1:nx,1:ny/2+1,1:nz- nz_end) % upup,                        &
+    turbspecy(1:nx,1:ny/2+1,1:nz- nz_end) % vpvp,                           &
+    turbspecy(1:nx,1:ny/2+1,1:nz- nz_end) % wpwp,                           &
+    turbspecy(1:nx,1:ny/2+1,1:nz- nz_end) % upvp,                           &
+    turbspecy(1:nx,1:ny/2+1,1:nz- nz_end) % upwp,                           &
     turbspecy(1:nx,1:ny/2+1,1:nz- nz_end) % vpwp /) )
 
-call write_parallel_cgns(fname_syvort,nx,ny/2+1,nz- nz_end,nz_tot,            &
-    (/ 1, 1,   (nz-1)*coord + 1 /),                                           &
-    (/ nx, ny/2+1, (nz-1)*(coord+1) + 1 - nz_end /),                          &
-    x(1:nx) , y(1:ny/2+1) , z(1:(nz-nz_end) ), 3,                             &
-    (/ 'syvortx', 'syvorty', 'syvortz'/),                                     &
-    (/ turbspecy(1:nx,1:ny/2+1,1:nz- nz_end) % vortxp2,                       &
-    turbspecy(1:nx,1:ny/2+1,1:nz- nz_end) % vortyp2,                          &
+call write_parallel_cgns(fname_syvort,nx,ny/2+1,nz- nz_end,nz_tot,          &
+    (/ 1, 1,   (nz-1)*coord + 1 /),                                         &
+    (/ nx, ny/2+1, (nz-1)*(coord+1) + 1 - nz_end /),                        &
+    x(1:nx) , y(1:ny/2+1) , z(1:(nz-nz_end) ), 3,                           &
+    (/ 'syvortx', 'syvorty', 'syvortz'/),                                   &
+    (/ turbspecy(1:nx,1:ny/2+1,1:nz- nz_end) % vortxp2,                     &
+    turbspecy(1:nx,1:ny/2+1,1:nz- nz_end) % vortyp2,                        &
     turbspecy(1:nx,1:ny/2+1,1:nz- nz_end) % vortzp2 /) )
 
 #else
 ! Write binary data
 
-open(unit=13, file=fname_sxvel, form='unformatted', convert=write_endian,      &
+open(unit=13, file=fname_sxvel, form='unformatted', convert=write_endian,   &
     access='direct', recl=(nx/2+1)*ny*nz*rprec)
 write(13,rec=1) turbspecx(:nx/2+1,:ny,1:nz)%upup
 write(13,rec=2) turbspecx(:nx/2+1,:ny,1:nz)%vpvp
@@ -4744,14 +5477,14 @@ write(13,rec=5) turbspecx(:nx/2+1,:ny,1:nz)%upwp
 write(13,rec=6) turbspecx(:nx/2+1,:ny,1:nz)%vpwp
 close(13)
 
-open(unit=13, file=fname_sxvort, form='unformatted', convert=write_endian,     &
+open(unit=13, file=fname_sxvort, form='unformatted', convert=write_endian,  &
     access='direct', recl=(nx/2+1)*ny*nz*rprec)
 write(13,rec=1) turbspecx(:nx/2+1,:ny,1:nz)%vortxp2
 write(13,rec=2) turbspecx(:nx/2+1,:ny,1:nz)%vortyp2
 write(13,rec=3) turbspecx(:nx/2+1,:ny,1:nz)%vortzp2
 close(13)
 
-open(unit=13, file=fname_syvel, form='unformatted', convert=write_endian,      &
+open(unit=13, file=fname_syvel, form='unformatted', convert=write_endian,   &
     access='direct', recl=nx*(ny/2+1)*nz*rprec)
 write(13,rec=1) turbspecy(:nx,:ny/2+1,1:nz)%upup
 write(13,rec=2) turbspecy(:nx,:ny/2+1,1:nz)%vpvp
@@ -4761,18 +5494,104 @@ write(13,rec=5) turbspecy(:nx,:ny/2+1,1:nz)%upwp
 write(13,rec=6) turbspecy(:nx,:ny/2+1,1:nz)%vpwp
 close(13)
 
-open(unit=13, file=fname_syvort, form='unformatted', convert=write_endian,     &
+open(unit=13, file=fname_syvort, form='unformatted', convert=write_endian,  &
     access='direct', recl=nx*(ny/2+1)*nz*rprec)
 write(13,rec=1) turbspecy(:nx,:ny/2+1,1:nz)%vortxp2
 write(13,rec=2) turbspecy(:nx,:ny/2+1,1:nz)%vortyp2
 write(13,rec=3) turbspecy(:nx,:ny/2+1,1:nz)%vortzp2
 close(13)
 
-deallocate(turbspecx)
-deallocate(turbspecy)
+! Deallocate after spectral budget calculations
+!deallocate(turbspecx)
+!deallocate(turbspecy)
 
 #endif
 
+#endif
+
+#ifdef PPOUTPUT_SPECBUDG
+! Write spectral budget data
+allocate(specbudgx(nx/2+1,ny,lbz:nz))
+specbudgx = specbudg_compute(tavg_specbudgx, turbspecx, tavg_turbspecx, tavg_budget, tavg, lbz)
+
+#ifdef PPCGNS
+! Not ready
+#else
+! Write binary data
+open(unit=13, file=fname_sxuu, form='unformatted', convert=write_endian,     &
+    access='direct', recl=(nx/2+1)*ny*nz*rprec)
+write(13,rec=1) specbudgx(:nx/2+1,:ny,1:nz)%advxx
+write(13,rec=2) specbudgx(:nx/2+1,:ny,1:nz)%tflucxx
+write(13,rec=3) specbudgx(:nx/2+1,:ny,1:nz)%tpresxx
+write(13,rec=4) specbudgx(:nx/2+1,:ny,1:nz)%pstrainxx
+write(13,rec=5) specbudgx(:nx/2+1,:ny,1:nz)%tviscxx
+write(13,rec=6) specbudgx(:nx/2+1,:ny,1:nz)%prodxx
+write(13,rec=7) specbudgx(:nx/2+1,:ny,1:nz)%pdissxx
+close(13)
+
+open(unit=13, file=fname_sxvv, form='unformatted', convert=write_endian,     &
+    access='direct', recl=(nx/2+1)*ny*nz*rprec)
+write(13,rec=1) specbudgx(:nx/2+1,:ny,1:nz)%advyy
+write(13,rec=2) specbudgx(:nx/2+1,:ny,1:nz)%tflucyy
+write(13,rec=3) specbudgx(:nx/2+1,:ny,1:nz)%tpresyy
+write(13,rec=4) specbudgx(:nx/2+1,:ny,1:nz)%pstrainyy
+write(13,rec=5) specbudgx(:nx/2+1,:ny,1:nz)%tviscyy
+write(13,rec=6) specbudgx(:nx/2+1,:ny,1:nz)%prodyy
+write(13,rec=7) specbudgx(:nx/2+1,:ny,1:nz)%pdissyy
+close(13)
+
+open(unit=13, file=fname_sxww, form='unformatted', convert=write_endian,     &
+    access='direct', recl=(nx/2+1)*ny*nz*rprec)
+write(13,rec=1) specbudgx(:nx/2+1,:ny,1:nz)%advzz
+write(13,rec=2) specbudgx(:nx/2+1,:ny,1:nz)%tfluczz
+write(13,rec=3) specbudgx(:nx/2+1,:ny,1:nz)%tpreszz
+write(13,rec=4) specbudgx(:nx/2+1,:ny,1:nz)%pstrainzz
+write(13,rec=5) specbudgx(:nx/2+1,:ny,1:nz)%tvisczz
+write(13,rec=6) specbudgx(:nx/2+1,:ny,1:nz)%prodzz
+write(13,rec=7) specbudgx(:nx/2+1,:ny,1:nz)%pdisszz
+close(13)
+
+open(unit=13, file=fname_sxuv, form='unformatted', convert=write_endian,     &
+    access='direct', recl=(nx/2+1)*ny*nz*rprec)
+write(13,rec=1) specbudgx(:nx/2+1,:ny,1:nz)%advxy
+write(13,rec=2) specbudgx(:nx/2+1,:ny,1:nz)%tflucxy
+write(13,rec=3) specbudgx(:nx/2+1,:ny,1:nz)%tpresxy
+write(13,rec=4) specbudgx(:nx/2+1,:ny,1:nz)%pstrainxy
+write(13,rec=5) specbudgx(:nx/2+1,:ny,1:nz)%tviscxy
+write(13,rec=6) specbudgx(:nx/2+1,:ny,1:nz)%prodxy
+write(13,rec=7) specbudgx(:nx/2+1,:ny,1:nz)%pdissxy
+close(13)
+
+open(unit=13, file=fname_sxuw, form='unformatted', convert=write_endian,     &
+    access='direct', recl=(nx/2+1)*ny*nz*rprec)
+write(13,rec=1) specbudgx(:nx/2+1,:ny,1:nz)%advxz
+write(13,rec=2) specbudgx(:nx/2+1,:ny,1:nz)%tflucxz
+write(13,rec=3) specbudgx(:nx/2+1,:ny,1:nz)%tpresxz
+write(13,rec=4) specbudgx(:nx/2+1,:ny,1:nz)%pstrainxz
+write(13,rec=5) specbudgx(:nx/2+1,:ny,1:nz)%tviscxz
+write(13,rec=6) specbudgx(:nx/2+1,:ny,1:nz)%prodxz
+write(13,rec=7) specbudgx(:nx/2+1,:ny,1:nz)%pdissxz
+close(13)
+
+open(unit=13, file=fname_sxvw, form='unformatted', convert=write_endian,     &
+    access='direct', recl=(nx/2+1)*ny*nz*rprec)
+write(13,rec=1) specbudgx(:nx/2+1,:ny,1:nz)%advyz
+write(13,rec=2) specbudgx(:nx/2+1,:ny,1:nz)%tflucyz
+write(13,rec=3) specbudgx(:nx/2+1,:ny,1:nz)%tpresyz
+write(13,rec=4) specbudgx(:nx/2+1,:ny,1:nz)%pstrainyz
+write(13,rec=5) specbudgx(:nx/2+1,:ny,1:nz)%tviscyz
+write(13,rec=6) specbudgx(:nx/2+1,:ny,1:nz)%prodyz
+write(13,rec=7) specbudgx(:nx/2+1,:ny,1:nz)%pdissyz
+close(13)
+#endif
+
+deallocate(specbudgx)
+
+#endif
+
+#ifdef PPOUTPUT_TURBSEC
+deallocate(turbspecx)
+deallocate(turbspecy)
 #endif
 
 #ifdef PPMPI
@@ -4804,6 +5623,10 @@ use stat_defs, only : tavg_budget
 use param, only : checkpoint_tavg_turbspec_file
 use stat_defs, only : tavg_turbspecx, tavg_turbspecy
 #endif
+#ifdef PPOUTPUT_SPECBUDG
+use param, only : checkpoint_tavg_specbudg_file
+use stat_defs, only : tavg_specbudgx
+#endif
 
 implicit none
 
@@ -4815,7 +5638,7 @@ call string_concat( fname, '.c', coord)
 #endif
 
 !  Write data to tavg.out
-open(1, file=fname, action='write', position='rewind',form='unformatted',      &
+open(1, file=fname, action='write', position='rewind',form='unformatted',   &
     convert=write_endian)
 write(1) tavg_total_time
 write(1) tavg
@@ -4827,7 +5650,7 @@ fname = checkpoint_tavg_sgs_file
 call string_concat( fname, '.c', coord)
 #endif
 !  Write data to tavg_sgs.out
-open(1, file=fname, action='write', position='rewind',form='unformatted',      &
+open(1, file=fname, action='write', position='rewind',form='unformatted',   &
     convert=write_endian)
 write(1) tavg_total_time
 write(1) tavg_sgs
@@ -4840,7 +5663,7 @@ fname = checkpoint_tavg_budget_file
 call string_concat( fname, '.c', coord)
 #endif
 !  Write data to tavg_budget.out
-open(1, file=fname, action='write', position='rewind',form='unformatted',      &
+open(1, file=fname, action='write', position='rewind',form='unformatted',   &
     convert=write_endian)
 write(1) tavg_total_time
 write(1) tavg_budget
@@ -4853,11 +5676,24 @@ fname = checkpoint_tavg_turbspec_file
 call string_concat( fname, '.c', coord)
 #endif
 !  Write data to tavg_turbspec.out
-open(1, file=fname, action='write', position='rewind',form='unformatted',      &
+open(1, file=fname, action='write', position='rewind',form='unformatted',   &
     convert=write_endian)
 write(1) tavg_total_time
 write(1) tavg_turbspecx
 write(1) tavg_turbspecy
+close(1)
+#endif
+
+#ifdef PPOUTPUT_SPECBUDG
+fname = checkpoint_tavg_specbudg_file
+#ifdef PPMPI
+call string_concat( fname, '.c', coord)
+#endif
+!  Write data to tavg_specbudg.out
+open(1, file=fname, action='write', position='rewind',form='unformatted',   &
+    convert=write_endian)
+write(1) tavg_total_time
+write(1) tavg_specbudgx
 close(1)
 #endif
 
