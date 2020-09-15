@@ -637,6 +637,8 @@ real(rprec), dimension(nz) :: gmu_avg, gmv_avg, gmw_avg, du, dv, dw
 real(rprec), dimension(nxp+2,ny,lbz:nz) :: dtxdx, dtydy, dtzdz,         &
     dtxdx2, dtydy2, dtzdz2, dtxdx3, dtydy3, dtzdz3
 
+real(rprec), dimension(nxp+2,ny,lbz:nz) :: uF_avg, vF_avg, wF_avg
+
 ! Save previous timestep's RHS
 rhs_gmx_f = rhs_gmx
 rhs_gmy_f = rhs_gmy
@@ -798,19 +800,19 @@ div_gmty(:,:,nz) = BOGUS
 
 ! Move variables to big domain
 if (fourier) then
-    if (total_advec) then
-        ! Transform RNL velocities to physical domain, same grid size as GMT
-        call wave2physF( u, uF )
-        call wave2physF( v, vF )
-        call wave2physF( w, wF )
-        call to_big(uF, u_big)
-        call to_big(vF, v_big)
-        call to_big(wF, w_big)
-    else !! not total_advec, using streamwise mean
-        call to_big_fourier(u, u_big)
-        call to_big_fourier(v, v_big)
-        call to_big_fourier(w, w_big)
+    ! Transform RNL velocities to physical domain, same grid size as GMT
+    call wave2physF( u, uF )
+    call wave2physF( v, vF )
+    call wave2physF( w, wF )
+    if (.not. total_advec) then !! using streamwise mean to advec
+        ! Overwrite uF,vF,wF with streamwise mean, will be overwritten later
+        call x_avg_mfm( uF )
+        call x_avg_mfm( vF )
+        call x_avg_mfm( wF )
     endif
+    call to_big(uF, u_big)
+    call to_big(vF, v_big)
+    call to_big(wF, w_big)
 else !! not fourier
     call to_big(u, u_big)
     call to_big(v, v_big)
@@ -832,193 +834,95 @@ const = 1._rprec/(nxp2*ny2)
 
 ! Compute advective term in x-GMT
 ! Interpolate w and dudz onto uv-grid
-if ((fourier) .and. (.not. total_advec)) then
-    ! Remember u,v,w(kx,y,z) after to_big_fourier routine
-    ! Using streamwise constant mean (kx=0) to advect generalized momentum
-    do jy = 1, ny2
-        if (coord == 0) then
-            ! Bottom wall take w(jz=1) = 0
-            temp_big(:,jy,1) = const*(u_big(1,jy,1)*dgmudx_big(:,jy,1) +     &
-                v_big(1,jy,1)*dgmudy_big(:,jy,1) +                           &
-                0.5_rprec*w_big(1,jy,2)*dgmudz_big(:,jy,2))
-            jz_min = 2
-        else
-            jz_min = 1
-        endif
-
-        if (coord == nproc-1) then
-            ! Top wall take w(jz=nz) = 0
-            temp_big(:,jy,nz-1) = const*(u_big(1,jy,nz-1)*dgmudx_big(:,jy,nz-1) +   &
-                v_big(1,jy,nz-1)*dgmudy_big(:,jy,nz-1) +                    &
-                0.5_rprec*w_big(1,jy,nz-1)*dgmudz_big(:,jy,nz-1))
-            jz_max = nz-2
-        else
-            jz_max = nz-1
-        endif
-
-        ! For entire domain
-        do jz = jz_min, jz_max
-            temp_big(:,jy,jz) = const*(u_big(1,jy,jz)*dgmudx_big(:,jy,jz) + &
-                v_big(1,jy,jz)*dgmudy_big(:,jy,jz) +                        &
-                0.5_rprec*(w_big(1,jy,jz+1)*dgmudz_big(:,jy,jz+1) +         &
-                w_big(1,jy,jz)*dgmudz_big(:,jy,jz)))
-        enddo
-    enddo
-else !! either (.not. fourier) or (fourier .and. total_advec)
-    if (coord == 0) then
-        ! Bottom wall take w(jz=1) = 0
-        temp_big(:,:,1) = const*(u_big(:,:,1)*dgmudx_big(:,:,1) +      &
-            v_big(:,:,1)*dgmudy_big(:,:,1) +                           &
-            0.5_rprec*w_big(:,:,2)*dgmudz_big(:,:,2))
-        jz_min = 2
-    else
-        jz_min = 1
-    endif
-
-    if (coord == nproc-1) then
-        ! Top wall take w(jz=nz) = 0
-        temp_big(:,:,nz-1) = const*(u_big(:,:,nz-1)*dgmudx_big(:,:,nz-1) +   &
-            v_big(:,:,nz-1)*dgmudy_big(:,:,nz-1) +                           &
-            0.5_rprec*w_big(:,:,nz-1)*dgmudz_big(:,:,nz-1))
-        jz_max = nz-2
-    else
-        jz_max = nz-1
-    endif
-
-    ! For entire domain
-    do jz = jz_min, jz_max
-        temp_big(:,:,jz) = const*(u_big(:,:,jz)*dgmudx_big(:,:,jz) +      &
-            v_big(:,:,jz)*dgmudy_big(:,:,jz) +                            &
-            0.5_rprec*(w_big(:,:,jz+1)*dgmudz_big(:,:,jz+1) +             &
-            w_big(:,:,jz)*dgmudz_big(:,:,jz)))
-    enddo
+if (coord == 0) then
+    ! Bottom wall take w(jz=1) = 0
+    temp_big(:,:,1) = const*(u_big(:,:,1)*dgmudx_big(:,:,1) +      &
+        v_big(:,:,1)*dgmudy_big(:,:,1) +                           &
+        0.5_rprec*w_big(:,:,2)*dgmudz_big(:,:,2))
+    jz_min = 2
+else
+    jz_min = 1
 endif
+
+if (coord == nproc-1) then
+    ! Top wall take w(jz=nz) = 0
+    temp_big(:,:,nz-1) = const*(u_big(:,:,nz-1)*dgmudx_big(:,:,nz-1) +   &
+        v_big(:,:,nz-1)*dgmudy_big(:,:,nz-1) +                           &
+        0.5_rprec*w_big(:,:,nz-1)*dgmudz_big(:,:,nz-1))
+    jz_max = nz-2
+else
+    jz_max = nz-1
+endif
+
+! For entire domain
+do jz = jz_min, jz_max
+    temp_big(:,:,jz) = const*(u_big(:,:,jz)*dgmudx_big(:,:,jz) +      &
+        v_big(:,:,jz)*dgmudy_big(:,:,jz) +                            &
+        0.5_rprec*(w_big(:,:,jz+1)*dgmudz_big(:,:,jz+1) +             &
+        w_big(:,:,jz)*dgmudz_big(:,:,jz)))
+enddo
 
 ! Move temp_big into RHSx for GMT and make small
 call to_small(temp_big, rhs_gmx)
 
 ! Compute advective term in y-GMT
 ! Interpolate w and dvdz onto uv-grid
-if ((fourier) .and. (.not. total_advec)) then
-    ! Remember u,v,w(kx,y,z) after to_big_fourier routine
-    ! Using streamwise constant mean (kx=0) to advect generalized momentum
-    do jy = 1, ny2
-        if (coord == 0) then
-            ! Bottom wall take w(jz=1) = 0
-            temp_big(:,jy,1) = const*(u_big(1,jy,1)*dgmvdx_big(:,jy,1) +    &
-                v_big(1,jy,1)*dgmvdy_big(:,jy,1) +                          &
-                0.5_rprec*w_big(1,jy,2)*dgmvdz_big(:,jy,2))
-            jz_min = 2
-        else
-            jz_min = 1
-        endif
-
-        if (coord == nproc-1) then
-            ! Top wall take w(jz=nz) = 0
-            temp_big(:,jy,nz-1) = const*(u_big(1,jy,nz-1)*dgmvdx_big(:,jy,nz-1) +   &
-                v_big(1,jy,nz-1)*dgmvdy_big(:,jy,nz-1) +                  &
-                0.5_rprec*w_big(1,jy,nz-1)*dgmvdz_big(:,jy,nz-1))
-            jz_max = nz-2
-        else
-            jz_max = nz-1
-        endif
-
-        ! For entire domain
-        do jz = jz_min, jz_max
-            temp_big(:,jy,jz) = const*(u_big(1,jy,jz)*dgmvdx_big(:,jy,jz) + &
-                v_big(1,jy,jz)*dgmvdy_big(:,jy,jz) +                        &
-                0.5_rprec*(w_big(1,jy,jz+1)*dgmvdz_big(:,jy,jz+1) +         &
-                w_big(1,jy,jz)*dgmvdz_big(:,jy,jz)))
-        enddo
-    enddo
-else !! either (.not. fourier) or (fourier .and. total_advec)
-    if (coord == 0) then
-        ! Bottom wall take w(jz=1) = 0
-        temp_big(:,:,1) = const*(u_big(:,:,1)*dgmvdx_big(:,:,1) +      &
-            v_big(:,:,1)*dgmvdy_big(:,:,1) +                           &
-            0.5_rprec*w_big(:,:,2)*dgmvdz_big(:,:,2))
-        jz_min = 2
-    else
-        jz_min = 1
-    endif
-
-    if (coord == nproc-1) then
-        ! Top wall take w(jz=nz) = 0
-        temp_big(:,:,nz-1) = const*(u_big(:,:,nz-1)*dgmvdx_big(:,:,nz-1) +   &
-            v_big(:,:,nz-1)*dgmvdy_big(:,:,nz-1) +                           &
-            0.5_rprec*w_big(:,:,nz-1)*dgmvdz_big(:,:,nz-1))
-        jz_max = nz-2
-    else
-        jz_max = nz-1
-    endif
-
-   ! For entire domain
-    do  jz = jz_min, jz_max
-        temp_big(:,:,jz) = const*(u_big(:,:,jz)*dgmvdx_big(:,:,jz) +      &
-            v_big(:,:,jz)*dgmvdy_big(:,:,jz) +                            &
-            0.5_rprec*(w_big(:,:,jz+1)*dgmvdz_big(:,:,jz+1) +             &
-            w_big(:,:,jz)*dgmvdz_big(:,:,jz)))
-    enddo
+if (coord == 0) then
+    ! Bottom wall take w(jz=1) = 0
+    temp_big(:,:,1) = const*(u_big(:,:,1)*dgmvdx_big(:,:,1) +      &
+        v_big(:,:,1)*dgmvdy_big(:,:,1) +                           &
+        0.5_rprec*w_big(:,:,2)*dgmvdz_big(:,:,2))
+    jz_min = 2
+else
+    jz_min = 1
 endif
+
+if (coord == nproc-1) then
+    ! Top wall take w(jz=nz) = 0
+    temp_big(:,:,nz-1) = const*(u_big(:,:,nz-1)*dgmvdx_big(:,:,nz-1) +   &
+        v_big(:,:,nz-1)*dgmvdy_big(:,:,nz-1) +                           &
+        0.5_rprec*w_big(:,:,nz-1)*dgmvdz_big(:,:,nz-1))
+    jz_max = nz-2
+else
+    jz_max = nz-1
+endif
+
+! For entire domain
+do  jz = jz_min, jz_max
+    temp_big(:,:,jz) = const*(u_big(:,:,jz)*dgmvdx_big(:,:,jz) +      &
+        v_big(:,:,jz)*dgmvdy_big(:,:,jz) +                            &
+        0.5_rprec*(w_big(:,:,jz+1)*dgmvdz_big(:,:,jz+1) +             &
+        w_big(:,:,jz)*dgmvdz_big(:,:,jz)))
+enddo
 
 ! Move temp_big into RHSy for GMT and make small
 call to_small(temp_big, rhs_gmy)
 
 ! Compute advective term in z-GMT
 ! Interpolate u, v, and dwdz onto w-grid
-if ((fourier) .and. (.not. total_advec)) then
-    ! Remember u,v,w(kx,y,z) after to_big_fourier routine
-    ! Using streamwise constant mean (kx=0) to advect generalized momentum
-    if (coord == 0) then
-        ! Bottom wall take w(jz=1) = dwdx(jz=1) = dwdy(jz=1) = 0
-        temp_big(:,:,1) = 0._rprec
-        jz_min = 2
-    else
-        jz_min = 1
-    endif
-
-    if (coord == nproc-1) then
-        ! Top wall take w(jz=nz) = dwdx(jz=1) = dwdy(jz=1) = 0
-        temp_big(:,:,nz) = 0._rprec
-        jz_max = nz-1
-    else
-        jz_max = nz-1
-    endif
-
-    ! For entire domain
-    do jy = 1, ny2
-        do jz = jz_min, jz_max
-            temp_big(:,jy,jz) = const*(                                                &
-                0.5_rprec*(u_big(1,jy,jz)+u_big(1,jy,jz-1))*dgmwdx_big(:,jy,jz) +      &
-                0.5_rprec*(v_big(1,jy,jz)+v_big(1,jy,jz-1))*dgmwdy_big(:,jy,jz) +      &
-                w_big(1,jy,jz)*0.5_rprec*(dgmwdz_big(:,jy,jz)+dgmwdz_big(:,jy,jz-1)))
-        enddo
-    enddo
-else !! either (.not. fourier) or (fourier .and. total_advec)
-    if (coord == 0) then
-        ! Bottom wall take w(jz=1) = dwdx(jz=1) = dwdy(jz=1) = 0
-        temp_big(:,:,1) = 0._rprec
-        jz_min = 2
-    else
-        jz_min = 1
-    endif
-
-    if (coord == nproc-1) then
-        ! Top wall take w(jz=nz) = dwdx(jz=1) = dwdy(jz=1) = 0
-        temp_big(:,:,nz) = 0._rprec
-        jz_max = nz-1
-    else
-        jz_max = nz-1
-    endif
-
-    ! For entire domain
-    do jz = jz_min, jz_max
-        temp_big(:,:,jz) = const*(                                           &
-            0.5_rprec*(u_big(:,:,jz)+u_big(:,:,jz-1))*dgmwdx_big(:,:,jz) +   &
-            0.5_rprec*(v_big(:,:,jz)+v_big(:,:,jz-1))*dgmwdy_big(:,:,jz) +   &
-            w_big(:,:,jz)*0.5_rprec*(dgmwdz_big(:,:,jz)+dgmwdz_big(:,:,jz-1)))
-    enddo
+if (coord == 0) then
+    ! Bottom wall take w(jz=1) = dwdx(jz=1) = dwdy(jz=1) = 0
+    temp_big(:,:,1) = 0._rprec
+    jz_min = 2
+else
+    jz_min = 1
 endif
+
+if (coord == nproc-1) then
+    ! Top wall take w(jz=nz) = dwdx(jz=1) = dwdy(jz=1) = 0
+    temp_big(:,:,nz) = 0._rprec
+    jz_max = nz-1
+else
+    jz_max = nz-1
+endif
+
+! For entire domain
+do jz = jz_min, jz_max
+    temp_big(:,:,jz) = const*(                                           &
+        0.5_rprec*(u_big(:,:,jz)+u_big(:,:,jz-1))*dgmwdx_big(:,:,jz) +   &
+        0.5_rprec*(v_big(:,:,jz)+v_big(:,:,jz-1))*dgmwdy_big(:,:,jz) +   &
+        w_big(:,:,jz)*0.5_rprec*(dgmwdz_big(:,:,jz)+dgmwdz_big(:,:,jz-1)))
+enddo
 
 ! Move temp_big into RHSz for GMT and make small
 call to_small(temp_big, rhs_gmz)
@@ -2183,5 +2087,42 @@ j_big_s = ny2 - ny_h + 2
 cc(:nxp,j_s:ny) = cc_big(:nxp,j_big_s:ny2)
 
 end subroutine gmt_unpadd
+
+!*****************************************************************************
+subroutine x_avg_mfm( vel )
+!*****************************************************************************
+!
+! This function provides the streamwise averaged value of the velocity field.
+! 
+! This function is copied from x_avg in functions.f90 with modifications to
+! input/outputs.
+! 
+! The input should be in physical space with size nxp+2, also the input is
+! over-written and outputted.
+!
+
+use types, only: rprec
+use param, only: nxp, ny, lbz, nz
+
+implicit none
+real(rprec), dimension(nxp+2,ny,lbz:nz), intent(inout)  :: vel
+real(rprec), dimension(ny,lbz:nz) :: vel_sum
+integer :: i
+
+vel_sum = 0._rprec
+
+do i = 1, nxp
+    vel_sum = vel_sum + vel(i,:,:)
+enddo
+
+vel_sum = vel_sum / real(nxp,rprec)
+
+! Overwrite input, then output streamwise mean field
+do i = 1, nxp
+    vel(i,:,:) = vel_sum
+enddo
+
+
+end subroutine x_avg_mfm
 
 end module mfm
