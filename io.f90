@@ -3709,15 +3709,25 @@ implicit none
 integer :: jx, jy, jz
 real(rprec), dimension(ld,ny,lbz:nz) :: u_w, v_w
 real(rprec), dimension(ld,ny,lbz:nz) :: vortx, vorty, vortz
+real(rprec), dimension(nx) :: upx, vpx, wpx
+real(rprec), dimension(nx) :: vortxpx, vortypx, vortzpx
 complex(rprec), dimension(nx/2+1) :: ufx, vfx, wfx
 complex(rprec), dimension(nx/2+1) :: vortxfx, vortyfx, vortzfx
+real(rprec), dimension(ny) :: upy, vpy, wpy
+real(rprec), dimension(ny) :: vortxpy, vortypy, vortzpy
 complex(rprec), dimension(ny/2+1) :: ufy, vfy, wfy
 complex(rprec), dimension(ny/2+1) :: vortxfy, vortyfy, vortzfy
+real(rprec) :: const1, const2
 #ifdef PPOUTPUT_SPECBUDG
 real(rprec), dimension(ld,ny,lbz:nz) :: p_w, pres_real
 real(rprec), dimension(ld,ny,lbz:nz) :: dpdx_real, dpdy_real, dpdz_real
 real(rprec), dimension(ld,ny,lbz:nz) :: dudx_w, dudy_w, dvdx_w, dvdy_w, dwdz_w
 real(rprec), dimension(ld,ny,lbz:nz) :: divtx_w, divty_w
+real(rprec), dimension(nx) :: dudxpx, dudypx, dudzpx,                     &
+    dvdxpx, dvdypx, dvdzpx, dwdxpx, dwdypx, dwdzpx,                       &
+    ppx, dpdxpx, dpdypx, dpdzpx, divtxpx, divtypx, divtzpx,               &
+    ududxpx, vdudypx, wdudzpx, udvdxpx, vdvdypx, wdvdzpx,                 &
+    udwdxpx, vdwdypx, wdwdzpx
 complex(rprec), dimension(nx/2+1) :: dudxfx, dudyfx, dudzfx,              &
     dvdxfx, dvdyfx, dvdzfx, dwdxfx, dwdyfx, dwdzfx,                       &
     pfx, dpdxfx, dpdyfx, dpdzfx, divtxfx, divtyfx, divtzfx,               &
@@ -3726,8 +3736,14 @@ complex(rprec), dimension(nx/2+1) :: dudxfx, dudyfx, dudzfx,              &
 #endif
 
 !real(rprec), dimension(ld,ny,lbz:nz) :: vel, vort
+!real(rprec), dimension(nx) :: velpx, vortpx
 !complex(rprec), dimension(nx/2+1) :: velfx, vortfx
+!real(rprec), dimension(nx) :: velpy, vortpy
 !complex(rprec), dimension(ny/2+1) :: velfy, vortfy
+
+! Set normalization constants
+const1 = 1._rprec / nx
+const2 = 1._rprec / ny
 
 #ifdef PPOUTPUT_SPECBUDG
 ! Prepare variables that need to be interpolated onto the w-grid
@@ -3841,42 +3857,80 @@ dpdz_real(1:nx,1:ny,lbz:nz) = dpdz_real(1:nx,1:ny,lbz:nz)                   &
 do jy = 1, ny
 do jz = 1, nz
 
+    ! Normalize
+    upx = const1 * u_w(1:nx,jy,jz)
+    vpx = const1 * v_w(1:nx,jy,jz)
+    wpx = const1 * w(1:nx,jy,jz)
+    !velpx = const1 * vel(1:nx,jy,jz)
+    vortxpx = const1 * vortx(1:nx,jy,jz)
+    vortypx = const1 * vorty(1:nx,jy,jz)
+    vortzpx = const1 * vortz(1:nx,jy,jz)
+    !vortpx = const1 * vort(1:nx,jy,jz)
+
     ! Take 1d transform, x --> kx
-    call dfftw_execute_dft_r2c( forw_x, u_w(:,jy,jz),     ufx )
-    call dfftw_execute_dft_r2c( forw_x, v_w(:,jy,jz),     vfx )
-    call dfftw_execute_dft_r2c( forw_x, w(:,jy,jz),     wfx )
-    !call dfftw_execute_dft_r2c( forw_x, vel(:,jy,jz),   velfx )
-    call dfftw_execute_dft_r2c( forw_x, vortx(:,jy,jz), vortxfx )
-    call dfftw_execute_dft_r2c( forw_x, vorty(:,jy,jz), vortyfx )
-    call dfftw_execute_dft_r2c( forw_x, vortz(:,jy,jz), vortzfx )
-    !call dfftw_execute_dft_r2c( forw_x, vort(:,jy,jz),  vortfx )
+    call dfftw_execute_dft_r2c( forw_x, upx,     ufx )
+    call dfftw_execute_dft_r2c( forw_x, vpx,     vfx )
+    call dfftw_execute_dft_r2c( forw_x, wpx,     wfx )
+    !call dfftw_execute_dft_r2c( forw_x, velpx,   velfx )
+    call dfftw_execute_dft_r2c( forw_x, vortxpx, vortxfx )
+    call dfftw_execute_dft_r2c( forw_x, vortypx, vortyfx )
+    call dfftw_execute_dft_r2c( forw_x, vortzpx, vortzfx )
+    !call dfftw_execute_dft_r2c( forw_x, vortpx,  vortfx )
 
 #ifdef PPOUTPUT_SPECBUDG
-    call dfftw_execute_dft_r2c( forw_x, pres_real(:,jy,jz), pfx )
-    call dfftw_execute_dft_r2c( forw_x, dpdx_real(:,jy,jz), dpdxfx )
-    call dfftw_execute_dft_r2c( forw_x, dpdy_real(:,jy,jz), dpdyfx )
-    call dfftw_execute_dft_r2c( forw_x, dpdz_real(:,jy,jz), dpdzfx )
-    call dfftw_execute_dft_r2c( forw_x, dudx_w(:,jy,jz), dudxfx )
-    call dfftw_execute_dft_r2c( forw_x, dudy_w(:,jy,jz), dudyfx )
-    call dfftw_execute_dft_r2c( forw_x, dudz(:,jy,jz), dudzfx )
-    call dfftw_execute_dft_r2c( forw_x, dvdx_w(:,jy,jz), dvdxfx )
-    call dfftw_execute_dft_r2c( forw_x, dvdy_w(:,jy,jz), dvdyfx )
-    call dfftw_execute_dft_r2c( forw_x, dvdz(:,jy,jz), dvdzfx )
-    call dfftw_execute_dft_r2c( forw_x, dwdx(:,jy,jz), dwdxfx )
-    call dfftw_execute_dft_r2c( forw_x, dwdy(:,jy,jz), dwdyfx )
-    call dfftw_execute_dft_r2c( forw_x, dwdz_w(:,jy,jz), dwdzfx )
-    call dfftw_execute_dft_r2c( forw_x, divtx_w(:,jy,jz), divtxfx )
-    call dfftw_execute_dft_r2c( forw_x, divty_w(:,jy,jz), divtyfx )
-    call dfftw_execute_dft_r2c( forw_x, divtz(:,jy,jz), divtzfx )
-    call dfftw_execute_dft_r2c( forw_x, u_w(:,jy,jz)*dudx_w(:,jy,jz), ududxfx )
-    call dfftw_execute_dft_r2c( forw_x, v_w(:,jy,jz)*dudy_w(:,jy,jz), vdudyfx )
-    call dfftw_execute_dft_r2c( forw_x, w(:,jy,jz)*dudz(:,jy,jz), wdudzfx )
-    call dfftw_execute_dft_r2c( forw_x, u_w(:,jy,jz)*dvdx_w(:,jy,jz), udvdxfx )
-    call dfftw_execute_dft_r2c( forw_x, v_w(:,jy,jz)*dvdy_w(:,jy,jz), vdvdyfx )
-    call dfftw_execute_dft_r2c( forw_x, w(:,jy,jz)*dvdz(:,jy,jz), wdvdzfx )
-    call dfftw_execute_dft_r2c( forw_x, u_w(:,jy,jz)*dwdx(:,jy,jz), udwdxfx )
-    call dfftw_execute_dft_r2c( forw_x, v_w(:,jy,jz)*dwdy(:,jy,jz), vdwdyfx )
-    call dfftw_execute_dft_r2c( forw_x, w(:,jy,jz)*dwdz_w(:,jy,jz), wdwdzfx )
+    ! Normalize
+    ppx = const1 * pres_real(1:nx,jy,jz)
+    dpdxpx = const1 * dpdx_real(1:nx,jy,jz)
+    dpdypx = const1 * dpdx_real(1:nx,jy,jz)
+    dpdzpx = const1 * dpdx_real(1:nx,jy,jz)
+    dudxpx = const1 * dudx_w(1:nx,jy,jz)
+    dudypx = const1 * dudy_w(1:nx,jy,jz)
+    dudzpx = const1 * dudz(1:nx,jy,jz)
+    dvdxpx = const1 * dvdx_w(1:nx,jy,jz)
+    dvdypx = const1 * dvdy_w(1:nx,jy,jz)
+    dvdzpx = const1 * dvdz(1:nx,jy,jz)
+    dwdxpx = const1 * dwdx(1:nx,jy,jz)
+    dwdypx = const1 * dwdy(1:nx,jy,jz)
+    dwdzpx = const1 * dwdz_w(1:nx,jy,jz)
+    divtxpx = const1 * divtx_w(1:nx,jy,jz)
+    divtypx = const1 * divty_w(1:nx,jy,jz)
+    divtzpx = const1 * divtz(1:nx,jy,jz)
+    ududxpx = const1 * u_w(1:nx,jy,jz)*dudx_w(1:nx,jy,jz)
+    vdudypx = const1 * v_w(1:nx,jy,jz)*dudy_w(1:nx,jy,jz)
+    wdudzpx = const1 * w(1:nx,jy,jz)*dudz(1:nx,jy,jz)
+    udvdxpx = const1 * u_w(1:nx,jy,jz)*dvdx_w(1:nx,jy,jz)
+    vdvdypx = const1 * v_w(1:nx,jy,jz)*dvdy_w(1:nx,jy,jz)
+    wdvdzpx = const1 * w(1:nx,jy,jz)*dvdz(1:nx,jy,jz)
+    udwdxpx = const1 * u_w(1:nx,jy,jz)*dwdx(1:nx,jy,jz)
+    vdwdypx = const1 * v_w(1:nx,jy,jz)*dwdy(1:nx,jy,jz)
+    wdwdzpx = const1 * w(1:nx,jy,jz)*dwdz_w(1:nx,jy,jz)
+
+    ! Take 1d transform, x --> kx
+    call dfftw_execute_dft_r2c( forw_x, ppx, pfx )
+    call dfftw_execute_dft_r2c( forw_x, dpdxpx, dpdxfx )
+    call dfftw_execute_dft_r2c( forw_x, dpdypx, dpdyfx )
+    call dfftw_execute_dft_r2c( forw_x, dpdzpx, dpdzfx )
+    call dfftw_execute_dft_r2c( forw_x, dudxpx, dudxfx )
+    call dfftw_execute_dft_r2c( forw_x, dudypx, dudyfx )
+    call dfftw_execute_dft_r2c( forw_x, dudzpx, dudzfx )
+    call dfftw_execute_dft_r2c( forw_x, dvdxpx, dvdxfx )
+    call dfftw_execute_dft_r2c( forw_x, dvdypx, dvdyfx )
+    call dfftw_execute_dft_r2c( forw_x, dvdzpx, dvdzfx )
+    call dfftw_execute_dft_r2c( forw_x, dwdxpx, dwdxfx )
+    call dfftw_execute_dft_r2c( forw_x, dwdypx, dwdyfx )
+    call dfftw_execute_dft_r2c( forw_x, dwdzpx, dwdzfx )
+    call dfftw_execute_dft_r2c( forw_x, divtxpx, divtxfx )
+    call dfftw_execute_dft_r2c( forw_x, divtypx, divtyfx )
+    call dfftw_execute_dft_r2c( forw_x, divtzpx, divtzfx )
+    call dfftw_execute_dft_r2c( forw_x, ududxpx, ududxfx )
+    call dfftw_execute_dft_r2c( forw_x, vdudypx, vdudyfx )
+    call dfftw_execute_dft_r2c( forw_x, wdudzpx, wdudzfx )
+    call dfftw_execute_dft_r2c( forw_x, udvdxpx, udvdxfx )
+    call dfftw_execute_dft_r2c( forw_x, vdvdypx, vdvdyfx )
+    call dfftw_execute_dft_r2c( forw_x, wdvdzpx, wdvdzfx )
+    call dfftw_execute_dft_r2c( forw_x, udwdxpx, udwdxfx )
+    call dfftw_execute_dft_r2c( forw_x, vdwdypx, vdwdyfx )
+    call dfftw_execute_dft_r2c( forw_x, wdwdzpx, wdwdzfx )
 #endif
 
     ! Multiply together and time-average
@@ -4205,15 +4259,25 @@ end do
 do jx = 1, nx
 do jz = 1, nz
 
+    ! Normalize
+    upy = const2 * u_w(jx,1:ny,jz)
+    vpy = const2 * v_w(jx,1:ny,jz)
+    wpy = const2 * w(jx,1:ny,jz)
+    !velpy = const2 * vel(jx,1:ny,jz)
+    vortxpy = const2 * vortx(jx,1:ny,jz)
+    vortypy = const2 * vorty(jx,1:ny,jz)
+    vortzpy = const2 * vortz(jx,1:ny,jz)
+    !vortpy = const2 * vort(jx,1:ny,jz)
+
     ! Take 1d transform, y --> ky
-    call dfftw_execute_dft_r2c( forw_y, u_w(jx,:,jz),     ufy )
-    call dfftw_execute_dft_r2c( forw_y, v_w(jx,:,jz),     vfy )
-    call dfftw_execute_dft_r2c( forw_y, w(jx,:,jz),     wfy )
-    !call dfftw_execute_dft_r2c( forw_y, vel(jx,:,jz),   velfy )
-    call dfftw_execute_dft_r2c( forw_y, vortx(jx,:,jz), vortxfy )
-    call dfftw_execute_dft_r2c( forw_y, vorty(jx,:,jz), vortyfy )
-    call dfftw_execute_dft_r2c( forw_y, vortz(jx,:,jz), vortzfy )
-    !call dfftw_execute_dft_r2c( forw_y, vort(jx,:,jz),  vortfy )
+    call dfftw_execute_dft_r2c( forw_y, upy,     ufy )
+    call dfftw_execute_dft_r2c( forw_y, vpy,     vfy )
+    call dfftw_execute_dft_r2c( forw_y, wpy,     wfy )
+    !call dfftw_execute_dft_r2c( forw_y, velpy,   velfy )
+    call dfftw_execute_dft_r2c( forw_y, vortxpy, vortxfy )
+    call dfftw_execute_dft_r2c( forw_y, vortypy, vortyfy )
+    call dfftw_execute_dft_r2c( forw_y, vortzpy, vortzfy )
+    !call dfftw_execute_dft_r2c( forw_y, vortpy,  vortfy )
 
     ! Multiply together and time-average
     do jy = 1, ny/2 + 1

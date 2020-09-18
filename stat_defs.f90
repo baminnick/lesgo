@@ -1116,6 +1116,33 @@ end do
 
 ! ---------------------------- Prepare Output --------------------------------
 ! Move all terms to the RHS
+e % advxx = - e % advxx
+e % advyy = - e % advyy
+e % advzz = - e % advzz
+e % advxy = - e % advxy
+e % advxz = - e % advxz
+e % advyz = - e % advyz
+
+e % tflucxx = - e % tflucxx
+e % tflucyy = - e % tflucyy
+e % tfluczz = - e % tfluczz
+e % tflucxy = - e % tflucxy
+e % tflucxz = - e % tflucxz
+e % tflucyz = - e % tflucyz
+
+e % tpresxx = - e % tpresxx
+e % tpresyy = - e % tpresyy
+e % tpreszz = - e % tpreszz
+e % tpresxy = - e % tpresxy
+e % tpresxz = - e % tpresxz
+e % tpresyz = - e % tpresyz
+
+e % pdissxx = - e % pdissxx
+e % pdissyy = - e % pdissyy
+e % pdisszz = - e % pdisszz
+e % pdissxy = - e % pdissxy
+e % pdissxz = - e % pdissxz
+e % pdissyz = - e % pdissyz
 
 end function specbudg_compute
 #endif
