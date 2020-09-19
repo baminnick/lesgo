@@ -3464,11 +3464,11 @@ if (coord == 0 .and. lbc_mom > 0) then
     ! No-slip
     u_w(:,:,1) = 0._rprec
     v_w(:,:,1) = 0._rprec
-    dudx(:,:,1) = 0._rprec
-    dudy(:,:,1) = 0._rprec
-    dvdx(:,:,1) = 0._rprec
-    dvdy(:,:,1) = 0._rprec
-    dwdz(:,:,1) = 0._rprec
+    dudx_w(:,:,1) = 0._rprec
+    dudy_w(:,:,1) = 0._rprec
+    dvdx_w(:,:,1) = 0._rprec
+    dvdy_w(:,:,1) = 0._rprec
+    dwdz_w(:,:,1) = 0._rprec
 
     ! No penetration
     w(:,:,1) = 0._rprec
@@ -3479,11 +3479,11 @@ if (coord == nproc-1 .and. ubc_mom > 0) then
     ! No-slip
     u_w(:,:,nz) = 0._rprec
     v_w(:,:,nz) = 0._rprec
-    dudx(:,:,nz) = 0._rprec
-    dudy(:,:,nz) = 0._rprec
-    dvdx(:,:,nz) = 0._rprec
-    dvdy(:,:,nz) = 0._rprec
-    dwdz(:,:,nz) = 0._rprec
+    dudx_w(:,:,nz) = 0._rprec
+    dudy_w(:,:,nz) = 0._rprec
+    dvdx_w(:,:,nz) = 0._rprec
+    dvdy_w(:,:,nz) = 0._rprec
+    dwdz_w(:,:,nz) = 0._rprec
 
     ! No penetration
     w(:,:,nz) = 0._rprec
@@ -3692,7 +3692,7 @@ subroutine tavg_turbspec_compute
 ! Additional quantities for the spectral budget are also computed here.
 ! 
 use types, only: rprec 
-use param, only: nx, ny, nz, lbz
+use param, only: nx, ny, nz, lbz, coord, ubc_mom, lbc_mom
 use sim_param, only: u, v, w, dwdy, dvdz, dudz, dwdx, dvdx, dudy
 use stat_defs, only: tavg_dt, tavg_turbspecx, tavg_turbspecy
 use fft
@@ -3789,6 +3789,38 @@ dwdz_w(1:nx,1:ny,lbz:nz) = interp_to_w_grid(dwdz_w(1:nx,1:ny,lbz:nz), lbz)
 p_w(1:nx,1:ny,lbz:nz) = interp_to_w_grid(p(1:nx,1:ny,lbz:nz), lbz)
 divtx_w(1:nx,1:ny,lbz:nz) = interp_to_w_grid(divtx(1:nx,1:ny,lbz:nz), lbz)
 divty_w(1:nx,1:ny,lbz:nz) = interp_to_w_grid(divty(1:nx,1:ny,lbz:nz), lbz)
+
+! Enforce no penetration and no-slip
+if (coord == 0 .and. lbc_mom > 0) then
+    ! No-slip
+    u_w(:,:,1) = 0._rprec
+    v_w(:,:,1) = 0._rprec
+    dudx_w(:,:,1) = 0._rprec
+    dudy_w(:,:,1) = 0._rprec
+    dvdx_w(:,:,1) = 0._rprec
+    dvdy_w(:,:,1) = 0._rprec
+    dwdz_w(:,:,1) = 0._rprec
+
+    ! No penetration
+    w(:,:,1) = 0._rprec
+    dwdx(:,:,1) = 0._rprec
+    dwdy(:,:,1) = 0._rprec
+end if
+if (coord == nproc-1 .and. ubc_mom > 0) then
+    ! No-slip
+    u_w(:,:,nz) = 0._rprec
+    v_w(:,:,nz) = 0._rprec
+    dudx_w(:,:,nz) = 0._rprec
+    dudy_w(:,:,nz) = 0._rprec
+    dvdx_w(:,:,nz) = 0._rprec
+    dvdy_w(:,:,nz) = 0._rprec
+    dwdz_w(:,:,nz) = 0._rprec
+
+    ! No penetration
+    w(:,:,nz) = 0._rprec
+    dwdx(:,:,nz) = 0._rprec
+    dwdy(:,:,nz) = 0._rprec
+ end if
 
 ! Remove energy from dynamic simulation pressure for static pressure
 pres_real(:,:,:) = 0._rprec
