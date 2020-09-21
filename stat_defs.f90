@@ -733,6 +733,7 @@ function specbudg_compute( a, b, bb, c, d, lbz2 ) result( e )
 ! Compute the spectral budget. All quantities should be on the w-grid.
 ! 
 use param, only: nu_molec
+use param, only : coord
 implicit none
 integer, intent(in) :: lbz2
 type(tavg_specbudg_t), dimension(:,:,lbz2:), intent(in) :: a
@@ -1028,10 +1029,10 @@ e(i,j,k) % advxx = u_avg(1,j,k)*real(conjg(Cududx) + Cududx)       &
     + w_avg(1,j,k)*real(conjg(Cududz) + Cududz)
 e(i,j,k) % advyy = u_avg(1,j,k)*real(conjg(Cvdvdx) + Cvdvdx)       &
     + v_avg(1,j,k)*real(conjg(Cvdvdy) + Cvdvdy)                    &
-    + w_avg(1,j,k)*real(conjg(Cvdvdz) + Cududz)
-e(i,j,k) % advzz = u_avg(1,j,k)*real(conjg(Cwdwdx) + Cududx)       &
+    + w_avg(1,j,k)*real(conjg(Cvdvdz) + Cvdvdz)
+e(i,j,k) % advzz = u_avg(1,j,k)*real(conjg(Cwdwdx) + Cwdwdx)       &
     + v_avg(1,j,k)*real(conjg(Cwdwdy) + Cwdwdy)                    &
-    + w_avg(1,j,k)*real(conjg(Cwdwdz) + Cududz)
+    + w_avg(1,j,k)*real(conjg(Cwdwdz) + Cwdwdz)
 e(i,j,k) % advxy = u_avg(1,j,k)*real(conjg(Cvdudx) + Cudvdx)       &
     + v_avg(1,j,k)*real(conjg(Cvdudy) + Cudvdy)                    &
     + w_avg(1,j,k)*real(conjg(Cvdudz) + Cudvdz)
@@ -1043,18 +1044,18 @@ e(i,j,k) % advyz = u_avg(1,j,k)*real(conjg(Cwdvdx) + Cvdwdx)       &
     + w_avg(1,j,k)*real(conjg(Cwdvdz) + Cvdwdz)
 
 ! Transport by fluctuations, d(ui*uj*uk)dxk = ui*uk*dujdxk + uj*uk*duidxk
-e(i,j,k) % tflucxx = real( Cuududx + conjg(Cuududx) + &
+e(i,j,k) % tflucxx = real( Cuududx + conjg(Cuududx) +               &
     Cuvdudy + conjg(Cuvdudy) + Cuwdudz + conjg(Cuwdudz) )
-e(i,j,k) % tflucyy = real( Cvudvdx + conjg(Cvudvdx) + &
+e(i,j,k) % tflucyy = real( Cvudvdx + conjg(Cvudvdx) +               &
     Cvvdvdy + conjg(Cvvdvdy) + Cvwdvdz + conjg(Cvwdvdz) )
-e(i,j,k) % tfluczz = real( Cwudwdx + conjg(Cwudwdx) + &
+e(i,j,k) % tfluczz = real( Cwudwdx + conjg(Cwudwdx) +               &
     Cwvdwdy + conjg(Cwvdwdy) + Cwwdwdz + conjg(Cwwdwdz) )
-e(i,j,k) % tflucxy = real( Cvududx + conjg(Cvududx) + &
-    Cvvdudy + conjg(Cvvdudy) + Cvwdudz + conjg(Cvwdudz) )
-e(i,j,k) % tflucxz = real( Cwududx + conjg(Cwududx) + &
-    Cwvdudy + conjg(Cwvdudy) + Cwwdudz + conjg(Cwwdudz) )
-e(i,j,k) % tflucyz = real( Cwudvdx + conjg(Cwudvdx) + &
-    Cwvdvdy + conjg(Cwvdvdy) + Cwwdvdz + conjg(Cwwdvdz) )
+e(i,j,k) % tflucxy = real( Cvududx + conjg(Cuudvdx) +               &
+    Cvvdudy + conjg(Cuvdvdy) + Cvwdudz + conjg(Cuwdvdz) )
+e(i,j,k) % tflucxz = real( Cwududx + conjg(Cuudwdx) +               &
+    Cwvdudy + conjg(Cuvdwdy) + Cwwdudz + conjg(Cuwdwdz) )
+e(i,j,k) % tflucyz = real( Cwudvdx + conjg(Cvudwdx) +               &
+    Cwvdvdy + conjg(Cvvdwdy) + Cwwdvdz + conjg(Cvwdwdz) )
 
 ! Pressure-Strain, 2*p*sij = p*(dujdxi + duidxj)
 e(i,j,k) % pstrainxx = real( conjg(Cudpdx) + Cudpdx )
@@ -1076,20 +1077,20 @@ e(i,j,k) % tpresyz = real( Cpdwdy + conjg(Cpdvdz) + conjg(Cwdpdy) + Cvdpdz )
 
 ! Production Rate, -(Rik*dUjdxk + Rjk*dUidxk)
 ! Multiplying by kx=0 mode time-average here
-e(i,j,k) % prodxx = -2.0_rprec*( b(i,j,k)%upup * dudx_avg(1,j,k) +       &
+e(i,j,k) % prodxx = -2.0_rprec*( b(i,j,k)%upup * dudx_avg(1,j,k) +                       &
     b(i,j,k)%upvp * dudy_avg(1,j,k) + b(i,j,k)%upwp * dudz_avg(1,j,k) )
-e(i,j,k) % prodyy = -2.0_rprec*( b(i,j,k)%upvp * dvdx_avg(1,j,k) +       &
+e(i,j,k) % prodyy = -2.0_rprec*( b(i,j,k)%upvp * dvdx_avg(1,j,k) +                       &
     b(i,j,k)%vpvp * dvdy_avg(1,j,k) + b(i,j,k)%vpwp * dvdz_avg(1,j,k) )
-e(i,j,k) % prodzz = -2.0_rprec*( b(i,j,k)%upwp * dwdx_avg(1,j,k) +       &
+e(i,j,k) % prodzz = -2.0_rprec*( b(i,j,k)%upwp * dwdx_avg(1,j,k) +                       &
     b(i,j,k)%vpwp * dwdy_avg(1,j,k) + b(i,j,k)%wpwp * dwdz_avg(1,j,k) )
 e(i,j,k) % prodxy = -(b(i,j,k)%upup * dvdx_avg(1,j,k) + b(i,j,k)%upvp*dudx_avg(1,j,k) +  &
-    b(i,j,k)%upvp * dvdy_avg(1,j,k) + b(i,j,k)%vpvp * dudy_avg(1,j,k) +  &
+    b(i,j,k)%upvp * dvdy_avg(1,j,k) + b(i,j,k)%vpvp * dudy_avg(1,j,k) +                  &
     b(i,j,k)%upwp * dvdz_avg(1,j,k) + b(i,j,k)%vpwp * dudz_avg(1,j,k) )
 e(i,j,k) % prodxz = -(b(i,j,k)%upup * dwdx_avg(1,j,k) + b(i,j,k)%upwp*dudx_avg(1,j,k) +  &
-    b(i,j,k)%upvp * dwdy_avg(1,j,k) + b(i,j,k)%vpwp * dudy_avg(1,j,k) +  &
+    b(i,j,k)%upvp * dwdy_avg(1,j,k) + b(i,j,k)%vpwp * dudy_avg(1,j,k) +                  &
     b(i,j,k)%upwp * dwdz_avg(1,j,k) + b(i,j,k)%wpwp * dudz_avg(1,j,k) )
 e(i,j,k) % prodyz = -(b(i,j,k)%upvp * dwdx_avg(1,j,k) + b(i,j,k)%upwp*dvdx_avg(1,j,k) +  &
-    b(i,j,k)%vpvp * dwdy_avg(1,j,k) + b(i,j,k)%vpwp * dvdy_avg(1,j,k) +  &
+    b(i,j,k)%vpvp * dwdy_avg(1,j,k) + b(i,j,k)%vpwp * dvdy_avg(1,j,k) +                  &
     b(i,j,k)%vpwp * dwdz_avg(1,j,k) + b(i,j,k)%wpwp * dvdz_avg(1,j,k) )
 
 ! Pseudo-dissipation, 2*nu*duidxk*dujdxk
