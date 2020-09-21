@@ -1093,26 +1093,24 @@ e(i,j,k) % prodyz = -(b(i,j,k)%upvp * dwdx_avg(1,j,k) + b(i,j,k)%upwp*dvdx_avg(1
     b(i,j,k)%vpwp * dwdz_avg(1,j,k) + b(i,j,k)%wpwp * dvdz_avg(1,j,k) )
 
 ! Pseudo-dissipation, 2*nu*duidxk*dujdxk
-! Note sign change on x-derivative terms, this is because of complex conjg
-! dudx_hat*conjg(dudx_hat) = (kx^2)*uh*conjg(uh), however want -(kx^2)*uh*conjg(uh)
-e(i,j,k) % pdissxx = 2.0_rprec*nu_molec*real(-Cuxux + Cuyuy + Cuzuz)
-e(i,j,k) % pdissyy = 2.0_rprec*nu_molec*real(-Cvxvx + Cvyvy + Cvzvz)
-e(i,j,k) % pdisszz = 2.0_rprec*nu_molec*real(-Cwxwx + Cwywy + Cwzwz)
-e(i,j,k) % pdissxy = 2.0_rprec*nu_molec*real(-Cuxvx + Cuyvy + Cuzvz)
-e(i,j,k) % pdissxz = 2.0_rprec*nu_molec*real(-Cuxwx + Cuywy + Cuzwz)
-e(i,j,k) % pdissyz = 2.0_rprec*nu_molec*real(-Cvxwx + Cvywy + Cvzwz)
+e(i,j,k) % pdissxx = 2.0_rprec*nu_molec*real(Cuxux + Cuyuy + Cuzuz)
+e(i,j,k) % pdissyy = 2.0_rprec*nu_molec*real(Cvxvx + Cvyvy + Cvzvz)
+e(i,j,k) % pdisszz = 2.0_rprec*nu_molec*real(Cwxwx + Cwywy + Cwzwz)
+e(i,j,k) % pdissxy = 2.0_rprec*nu_molec*real(Cuxvx + Cuyvy + Cuzvz)
+e(i,j,k) % pdissxz = 2.0_rprec*nu_molec*real(Cuxwx + Cuywy + Cuzwz)
+e(i,j,k) % pdissyz = 2.0_rprec*nu_molec*real(Cvxwx + Cvywy + Cvzwz)
 
 ! Transport by viscous diffusion
 ! Cuilapuj already multiplied by viscosity because divtxj was used
 ! Change sign of Cuilapuj because of how divtxj is set up
-! Note: note including x-derivative terms because already included in lapui terms
-! 
-e(i,j,k) % tviscxx = 2.0_rprec*nu_molec*real(Cuyuy + Cuzuz) - real( conjg(Culapu) + Culapu )
-e(i,j,k) % tviscyy = 2.0_rprec*nu_molec*real(Cvyvy + Cvzvz) - real( conjg(Cvlapv) + Cvlapv )
-e(i,j,k) % tvisczz = 2.0_rprec*nu_molec*real(Cwywy + Cwzwz) - real( conjg(Cwlapw) + Cwlapw )
-e(i,j,k) % tviscxy = 2.0_rprec*nu_molec*real(Cuyvy + Cuzvz) - real( conjg(Cvlapu) + Culapv )
-e(i,j,k) % tviscxz = 2.0_rprec*nu_molec*real(Cuywy + Cuzwz) - real( conjg(Cwlapu) + Culapw )
-e(i,j,k) % tviscyz = 2.0_rprec*nu_molec*real(Cvywy + Cvzwz) - real( conjg(Cwlapv) + Cvlapw )
+! Note: lapui terms include x-deriveration terms from pseudo-dissipation
+!       which need to be canceled, which is why Cuxux terms have different sign
+e(i,j,k) % tviscxx = 2.0_rprec*nu_molec*real(-Cuxux + Cuyuy + Cuzuz) - real( conjg(Culapu) + Culapu )
+e(i,j,k) % tviscyy = 2.0_rprec*nu_molec*real(-Cvxvx + Cvyvy + Cvzvz) - real( conjg(Cvlapv) + Cvlapv )
+e(i,j,k) % tvisczz = 2.0_rprec*nu_molec*real(-Cwxwx + Cwywy + Cwzwz) - real( conjg(Cwlapw) + Cwlapw )
+e(i,j,k) % tviscxy = 2.0_rprec*nu_molec*real(-Cuxvx + Cuyvy + Cuzvz) - real( conjg(Cvlapu) + Culapv )
+e(i,j,k) % tviscxz = 2.0_rprec*nu_molec*real(-Cuxwx + Cuywy + Cuzwz) - real( conjg(Cwlapu) + Culapw )
+e(i,j,k) % tviscyz = 2.0_rprec*nu_molec*real(-Cvxwx + Cvywy + Cvzwz) - real( conjg(Cwlapv) + Cvlapw )
 
 end do
 end do

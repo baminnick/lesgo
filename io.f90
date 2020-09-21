@@ -1422,6 +1422,9 @@ use sim_param, only : u, v, w, txz, tyz
 use sim_param, only : dudx, dudy, dudz, dvdx, dvdy, dvdz, dwdx, dwdy, dwdz
 #ifdef PPOUTPUT_BUDGET
 use sim_param, only : p, dpdx, dpdy, dpdz, divtx, divty, divtz
+#ifdef PPCNDIFF
+use sim_param, only : txx, txy, tyy, tzz
+#endif
 #endif
 implicit none
 
@@ -1440,6 +1443,15 @@ if (tavg_calc) then
 
         ! Are we at the beginning or a multiple of nstart?
         if ( mod(jt_total-tavg_nstart,tavg_nskip)==0 ) then
+
+#ifdef PPOUTPUT_BUDGET 
+#ifdef PPCNDIFF
+            ! Re-calculate stress-divergence terms since this was only partially done
+            ! when using the Crank-Nicolson scheme
+            call divstress_uv(divtx, divty, txx, txy, txz, tyy, tyz)
+            call divstress_w(divtz, txz, tyz, tzz)
+#endif
+#endif
 
             if (fourier) then
                 call wave2phys( u, lbz )
