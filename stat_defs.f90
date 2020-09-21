@@ -1057,12 +1057,15 @@ e(i,j,k) % tflucyz = real( Cwudvdx + conjg(Cvudwdx) +               &
     Cwvdvdy + conjg(Cvvdwdy) + Cwwdvdz + conjg(Cvwdwdz) )
 
 ! Pressure-Strain, 2*p*sij = p*(dujdxi + duidxj)
+! x-derivative terms have no transport, only pressure-strain
+! yz-derivative terms have both transport and strain components
+! after having applied the product rule
 e(i,j,k) % pstrainxx = real( conjg(Cudpdx) + Cudpdx )
-e(i,j,k) % pstrainyy = real( Cpdvdy + conjg(Cpdvdy) )
-e(i,j,k) % pstrainzz = real( Cpdwdz + conjg(Cpdwdz) )
+e(i,j,k) % pstrainyy = -real( Cpdvdy + conjg(Cpdvdy) )
+e(i,j,k) % pstrainzz = -real( Cpdwdz + conjg(Cpdwdz) )
 e(i,j,k) % pstrainxy = real( conjg(Cvdpdx) - conjg(Cpdudy) )
 e(i,j,k) % pstrainxz = real( conjg(Cwdpdx) - conjg(Cpdudz) )
-e(i,j,k) % pstrainyz = real( Cpdwdy + conjg(Cpdvdz) )
+e(i,j,k) % pstrainyz = -real( Cpdwdy + conjg(Cpdvdz) )
 
 ! Transport by pressure-velocity, d(p*(Iik+ui*Ijk))dxk = d(p*uj)dxi + d(p*ui)dxj
 ! Terms that involve ddx have been transformed and contribute as a source 
@@ -1138,6 +1141,13 @@ e % prodzz = - e % prodzz
 e % prodxy = - e % prodxy
 e % prodxz = - e % prodxz
 e % prodyz = - e % prodyz
+
+e % pstrainxx = - e % pstrainxx
+e % pstrainyy = - e % pstrainyy
+e % pstrainzz = - e % pstrainzz
+e % pstrainxy = - e % pstrainxy
+e % pstrainxz = - e % pstrainxz
+e % pstrainyz = - e % pstrainyz
 
 e % tpresxx = - e % tpresxx
 e % tpresyy = - e % tpresyy
