@@ -733,7 +733,6 @@ function specbudg_compute( a, b, bb, c, d, lbz2 ) result( e )
 ! Compute the spectral budget. All quantities should be on the w-grid.
 ! 
 use param, only: nu_molec
-use param, only : coord
 implicit none
 integer, intent(in) :: lbz2
 type(tavg_specbudg_t), dimension(:,:,lbz2:), intent(in) :: a
@@ -1077,19 +1076,19 @@ e(i,j,k) % tpresyz = real( Cpdwdy + conjg(Cpdvdz) + conjg(Cwdpdy) + Cvdpdz )
 
 ! Production Rate, -(Rik*dUjdxk + Rjk*dUidxk)
 ! Multiplying by kx=0 mode time-average here
-e(i,j,k) % prodxx = -2.0_rprec*( b(i,j,k)%upup * dudx_avg(1,j,k) +                       &
+e(i,j,k) % prodxx = 2.0_rprec*( b(i,j,k)%upup * dudx_avg(1,j,k) +                        &
     b(i,j,k)%upvp * dudy_avg(1,j,k) + b(i,j,k)%upwp * dudz_avg(1,j,k) )
-e(i,j,k) % prodyy = -2.0_rprec*( b(i,j,k)%upvp * dvdx_avg(1,j,k) +                       &
+e(i,j,k) % prodyy = 2.0_rprec*( b(i,j,k)%upvp * dvdx_avg(1,j,k) +                        &
     b(i,j,k)%vpvp * dvdy_avg(1,j,k) + b(i,j,k)%vpwp * dvdz_avg(1,j,k) )
-e(i,j,k) % prodzz = -2.0_rprec*( b(i,j,k)%upwp * dwdx_avg(1,j,k) +                       &
+e(i,j,k) % prodzz = 2.0_rprec*( b(i,j,k)%upwp * dwdx_avg(1,j,k) +                        &
     b(i,j,k)%vpwp * dwdy_avg(1,j,k) + b(i,j,k)%wpwp * dwdz_avg(1,j,k) )
-e(i,j,k) % prodxy = -(b(i,j,k)%upup * dvdx_avg(1,j,k) + b(i,j,k)%upvp*dudx_avg(1,j,k) +  &
+e(i,j,k) % prodxy = (b(i,j,k)%upup * dvdx_avg(1,j,k) + b(i,j,k)%upvp*dudx_avg(1,j,k) +   &
     b(i,j,k)%upvp * dvdy_avg(1,j,k) + b(i,j,k)%vpvp * dudy_avg(1,j,k) +                  &
     b(i,j,k)%upwp * dvdz_avg(1,j,k) + b(i,j,k)%vpwp * dudz_avg(1,j,k) )
-e(i,j,k) % prodxz = -(b(i,j,k)%upup * dwdx_avg(1,j,k) + b(i,j,k)%upwp*dudx_avg(1,j,k) +  &
+e(i,j,k) % prodxz = (b(i,j,k)%upup * dwdx_avg(1,j,k) + b(i,j,k)%upwp*dudx_avg(1,j,k) +   &
     b(i,j,k)%upvp * dwdy_avg(1,j,k) + b(i,j,k)%vpwp * dudy_avg(1,j,k) +                  &
     b(i,j,k)%upwp * dwdz_avg(1,j,k) + b(i,j,k)%wpwp * dudz_avg(1,j,k) )
-e(i,j,k) % prodyz = -(b(i,j,k)%upvp * dwdx_avg(1,j,k) + b(i,j,k)%upwp*dvdx_avg(1,j,k) +  &
+e(i,j,k) % prodyz = (b(i,j,k)%upvp * dwdx_avg(1,j,k) + b(i,j,k)%upwp*dvdx_avg(1,j,k) +   &
     b(i,j,k)%vpvp * dwdy_avg(1,j,k) + b(i,j,k)%vpwp * dvdy_avg(1,j,k) +                  &
     b(i,j,k)%vpwp * dwdz_avg(1,j,k) + b(i,j,k)%wpwp * dvdz_avg(1,j,k) )
 
@@ -1132,6 +1131,13 @@ e % tfluczz = - e % tfluczz
 e % tflucxy = - e % tflucxy
 e % tflucxz = - e % tflucxz
 e % tflucyz = - e % tflucyz
+
+e % prodxx = - e % prodxx
+e % prodyy = - e % prodyy
+e % prodzz = - e % prodzz
+e % prodxy = - e % prodxy
+e % prodxz = - e % prodxz
+e % prodyz = - e % prodyz
 
 e % tpresxx = - e % tpresxx
 e % tpresyy = - e % tpresyy

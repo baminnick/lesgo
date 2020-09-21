@@ -4812,8 +4812,10 @@ do i = 1, Nx/2 + 1
     !tavg_turbspecx(i,j,k) % vort2 = tavg_turbspecx(i,j,k) % vort2 / tavg_total_time
 
 #ifdef PPOUTPUT_SPECBUDG
+    ! Mean pressure
     tavg_specbudgx(i,j,k) % p = tavg_specbudgx(i,j,k) % p / tavg_total_time
 
+    ! Mean velocity gradient
     tavg_specbudgx(i,j,k) % dudx = tavg_specbudgx(i,j,k) % dudx / tavg_total_time
     tavg_specbudgx(i,j,k) % dudy = tavg_specbudgx(i,j,k) % dudy / tavg_total_time
     tavg_specbudgx(i,j,k) % dudz = tavg_specbudgx(i,j,k) % dudz / tavg_total_time
@@ -4824,10 +4826,34 @@ do i = 1, Nx/2 + 1
     tavg_specbudgx(i,j,k) % dwdy = tavg_specbudgx(i,j,k) % dwdy / tavg_total_time
     tavg_specbudgx(i,j,k) % dwdz = tavg_specbudgx(i,j,k) % dwdz / tavg_total_time
 
+    ! Mean velGrad-velGrad product, duidxk*dujdxk, i=j
+    tavg_specbudgx(i,j,k) % uxux = tavg_specbudgx(i,j,k) % uxux / tavg_total_time
+    tavg_specbudgx(i,j,k) % uyuy = tavg_specbudgx(i,j,k) % uyuy / tavg_total_time
+    tavg_specbudgx(i,j,k) % uzuz = tavg_specbudgx(i,j,k) % uzuz / tavg_total_time
+    tavg_specbudgx(i,j,k) % vxvx = tavg_specbudgx(i,j,k) % vxvx / tavg_total_time
+    tavg_specbudgx(i,j,k) % vyvy = tavg_specbudgx(i,j,k) % vyvy / tavg_total_time
+    tavg_specbudgx(i,j,k) % vzvz = tavg_specbudgx(i,j,k) % vzvz / tavg_total_time
+    tavg_specbudgx(i,j,k) % wxwx = tavg_specbudgx(i,j,k) % wxwx / tavg_total_time
+    tavg_specbudgx(i,j,k) % wywy = tavg_specbudgx(i,j,k) % wywy / tavg_total_time
+    tavg_specbudgx(i,j,k) % wzwz = tavg_specbudgx(i,j,k) % wzwz / tavg_total_time
+
+    ! Mean velGrad-velGrad product, duidxk*dujdxk, i/=j
+    tavg_specbudgx(i,j,k) % uxvx = tavg_specbudgx(i,j,k) % uxvx / tavg_total_time
+    tavg_specbudgx(i,j,k) % uyvy = tavg_specbudgx(i,j,k) % uyvy / tavg_total_time
+    tavg_specbudgx(i,j,k) % uzvz = tavg_specbudgx(i,j,k) % uzvz / tavg_total_time
+    tavg_specbudgx(i,j,k) % uxwx = tavg_specbudgx(i,j,k) % uxwx / tavg_total_time
+    tavg_specbudgx(i,j,k) % uywy = tavg_specbudgx(i,j,k) % uywy / tavg_total_time
+    tavg_specbudgx(i,j,k) % uzwz = tavg_specbudgx(i,j,k) % uzwz / tavg_total_time
+    tavg_specbudgx(i,j,k) % vxwx = tavg_specbudgx(i,j,k) % vxwx / tavg_total_time
+    tavg_specbudgx(i,j,k) % vywy = tavg_specbudgx(i,j,k) % vywy / tavg_total_time
+    tavg_specbudgx(i,j,k) % vzwz = tavg_specbudgx(i,j,k) % vzwz / tavg_total_time
+
+    ! Mean pressure gradients, dpdxi
     tavg_specbudgx(i,j,k) % dpdx = tavg_specbudgx(i,j,k) % dpdx / tavg_total_time
     tavg_specbudgx(i,j,k) % dpdy = tavg_specbudgx(i,j,k) % dpdy / tavg_total_time
     tavg_specbudgx(i,j,k) % dpdz = tavg_specbudgx(i,j,k) % dpdz / tavg_total_time
 
+    ! Mean velocity * velocity gradient product, ui_hat*dujdxk_hat
     tavg_specbudgx(i,j,k) % uh_dudxh = tavg_specbudgx(i,j,k) % uh_dudxh / tavg_total_time
     tavg_specbudgx(i,j,k) % uh_dudyh = tavg_specbudgx(i,j,k) % uh_dudyh / tavg_total_time
     tavg_specbudgx(i,j,k) % uh_dudzh = tavg_specbudgx(i,j,k) % uh_dudzh / tavg_total_time
@@ -4858,36 +4884,49 @@ do i = 1, Nx/2 + 1
     tavg_specbudgx(i,j,k) % wh_dwdyh = tavg_specbudgx(i,j,k) % wh_dwdyh / tavg_total_time
     tavg_specbudgx(i,j,k) % wh_dwdzh = tavg_specbudgx(i,j,k) % wh_dwdzh / tavg_total_time
 
-    tavg_specbudgx(i,j,k) % uxux = tavg_specbudgx(i,j,k) % uxux / tavg_total_time
-    tavg_specbudgx(i,j,k) % uyuy = tavg_specbudgx(i,j,k) % uyuy / tavg_total_time
-    tavg_specbudgx(i,j,k) % uzuz = tavg_specbudgx(i,j,k) % uzuz / tavg_total_time
-    tavg_specbudgx(i,j,k) % vxvx = tavg_specbudgx(i,j,k) % vxvx / tavg_total_time
-    tavg_specbudgx(i,j,k) % vyvy = tavg_specbudgx(i,j,k) % vyvy / tavg_total_time
-    tavg_specbudgx(i,j,k) % vzvz = tavg_specbudgx(i,j,k) % vzvz / tavg_total_time
-    tavg_specbudgx(i,j,k) % wxwx = tavg_specbudgx(i,j,k) % wxwx / tavg_total_time
-    tavg_specbudgx(i,j,k) % wywy = tavg_specbudgx(i,j,k) % wywy / tavg_total_time
-    tavg_specbudgx(i,j,k) % wzwz = tavg_specbudgx(i,j,k) % wzwz / tavg_total_time
+    ! Mean velocity * velocity gradient product, uk*duidxk_hat
+    tavg_specbudgx(i,j,k) % ududxh = tavg_specbudgx(i,j,k) % ududxh / tavg_total_time
+    tavg_specbudgx(i,j,k) % vdudyh = tavg_specbudgx(i,j,k) % vdudyh / tavg_total_time
+    tavg_specbudgx(i,j,k) % wdudzh = tavg_specbudgx(i,j,k) % wdudzh / tavg_total_time
+    tavg_specbudgx(i,j,k) % udvdxh = tavg_specbudgx(i,j,k) % udvdxh / tavg_total_time
+    tavg_specbudgx(i,j,k) % vdvdyh = tavg_specbudgx(i,j,k) % vdvdyh / tavg_total_time
+    tavg_specbudgx(i,j,k) % wdvdzh = tavg_specbudgx(i,j,k) % wdvdzh / tavg_total_time
+    tavg_specbudgx(i,j,k) % udwdxh = tavg_specbudgx(i,j,k) % udwdxh / tavg_total_time
+    tavg_specbudgx(i,j,k) % vdwdyh = tavg_specbudgx(i,j,k) % vdwdyh / tavg_total_time
+    tavg_specbudgx(i,j,k) % wdwdzh = tavg_specbudgx(i,j,k) % wdwdzh / tavg_total_time
 
-    tavg_specbudgx(i,j,k) % uxvx = tavg_specbudgx(i,j,k) % uxvx / tavg_total_time
-    tavg_specbudgx(i,j,k) % uyvy = tavg_specbudgx(i,j,k) % uyvy / tavg_total_time
-    tavg_specbudgx(i,j,k) % uzvz = tavg_specbudgx(i,j,k) % uzvz / tavg_total_time
-    tavg_specbudgx(i,j,k) % uxwx = tavg_specbudgx(i,j,k) % uxwx / tavg_total_time
-    tavg_specbudgx(i,j,k) % uywy = tavg_specbudgx(i,j,k) % uywy / tavg_total_time
-    tavg_specbudgx(i,j,k) % uzwz = tavg_specbudgx(i,j,k) % uzwz / tavg_total_time
-    tavg_specbudgx(i,j,k) % vxwx = tavg_specbudgx(i,j,k) % vxwx / tavg_total_time
-    tavg_specbudgx(i,j,k) % vywy = tavg_specbudgx(i,j,k) % vywy / tavg_total_time
-    tavg_specbudgx(i,j,k) % vzwz = tavg_specbudgx(i,j,k) % vzwz / tavg_total_time
+    ! Mean vel * vel * vel gradient product, uj_hat*(uk*duidxk)_hat
+    tavg_specbudgx(i,j,k) % uh_ududxh = tavg_specbudgx(i,j,k)%uh_ududxh / tavg_total_time
+    tavg_specbudgx(i,j,k) % uh_vdudyh = tavg_specbudgx(i,j,k)%uh_vdudyh / tavg_total_time
+    tavg_specbudgx(i,j,k) % uh_wdudzh = tavg_specbudgx(i,j,k)%uh_wdudzh / tavg_total_time
+    tavg_specbudgx(i,j,k) % vh_ududxh = tavg_specbudgx(i,j,k)%vh_ududxh / tavg_total_time
+    tavg_specbudgx(i,j,k) % vh_vdudyh = tavg_specbudgx(i,j,k)%vh_vdudyh / tavg_total_time
+    tavg_specbudgx(i,j,k) % vh_wdudzh = tavg_specbudgx(i,j,k)%vh_wdudzh / tavg_total_time
+    tavg_specbudgx(i,j,k) % wh_ududxh = tavg_specbudgx(i,j,k)%wh_ududxh / tavg_total_time
+    tavg_specbudgx(i,j,k) % wh_vdudyh = tavg_specbudgx(i,j,k)%wh_vdudyh / tavg_total_time
+    tavg_specbudgx(i,j,k) % wh_wdudzh = tavg_specbudgx(i,j,k)%wh_wdudzh / tavg_total_time
 
-    tavg_specbudgx(i,j,k) % pdudx = tavg_specbudgx(i,j,k) % pdudx / tavg_total_time
-    tavg_specbudgx(i,j,k) % pdudy = tavg_specbudgx(i,j,k) % pdudy / tavg_total_time
-    tavg_specbudgx(i,j,k) % pdudz = tavg_specbudgx(i,j,k) % pdudz / tavg_total_time
-    tavg_specbudgx(i,j,k) % pdvdx = tavg_specbudgx(i,j,k) % pdvdx / tavg_total_time
-    tavg_specbudgx(i,j,k) % pdvdy = tavg_specbudgx(i,j,k) % pdvdy / tavg_total_time
-    tavg_specbudgx(i,j,k) % pdvdz = tavg_specbudgx(i,j,k) % pdvdz / tavg_total_time
-    tavg_specbudgx(i,j,k) % pdwdx = tavg_specbudgx(i,j,k) % pdwdx / tavg_total_time
-    tavg_specbudgx(i,j,k) % pdwdy = tavg_specbudgx(i,j,k) % pdwdy / tavg_total_time
-    tavg_specbudgx(i,j,k) % pdwdz = tavg_specbudgx(i,j,k) % pdwdz / tavg_total_time
+    tavg_specbudgx(i,j,k) % uh_udvdxh = tavg_specbudgx(i,j,k)%uh_udvdxh / tavg_total_time
+    tavg_specbudgx(i,j,k) % uh_vdvdyh = tavg_specbudgx(i,j,k)%uh_vdvdyh / tavg_total_time
+    tavg_specbudgx(i,j,k) % uh_wdvdzh = tavg_specbudgx(i,j,k)%uh_wdvdzh / tavg_total_time
+    tavg_specbudgx(i,j,k) % vh_udvdxh = tavg_specbudgx(i,j,k)%vh_udvdxh / tavg_total_time
+    tavg_specbudgx(i,j,k) % vh_vdvdyh = tavg_specbudgx(i,j,k)%vh_vdvdyh / tavg_total_time
+    tavg_specbudgx(i,j,k) % vh_wdvdzh = tavg_specbudgx(i,j,k)%vh_wdvdzh / tavg_total_time
+    tavg_specbudgx(i,j,k) % wh_udvdxh = tavg_specbudgx(i,j,k)%wh_udvdxh / tavg_total_time
+    tavg_specbudgx(i,j,k) % wh_vdvdyh = tavg_specbudgx(i,j,k)%wh_vdvdyh / tavg_total_time
+    tavg_specbudgx(i,j,k) % wh_wdvdzh = tavg_specbudgx(i,j,k)%wh_wdvdzh / tavg_total_time
 
+    tavg_specbudgx(i,j,k) % uh_udwdxh = tavg_specbudgx(i,j,k)%uh_udwdxh / tavg_total_time
+    tavg_specbudgx(i,j,k) % uh_vdwdyh = tavg_specbudgx(i,j,k)%uh_vdwdyh / tavg_total_time
+    tavg_specbudgx(i,j,k) % uh_wdwdzh = tavg_specbudgx(i,j,k)%uh_wdwdzh / tavg_total_time
+    tavg_specbudgx(i,j,k) % vh_udwdxh = tavg_specbudgx(i,j,k)%vh_udwdxh / tavg_total_time
+    tavg_specbudgx(i,j,k) % vh_vdwdyh = tavg_specbudgx(i,j,k)%vh_vdwdyh / tavg_total_time
+    tavg_specbudgx(i,j,k) % vh_wdwdzh = tavg_specbudgx(i,j,k)%vh_wdwdzh / tavg_total_time
+    tavg_specbudgx(i,j,k) % wh_udwdxh = tavg_specbudgx(i,j,k)%wh_udwdxh / tavg_total_time
+    tavg_specbudgx(i,j,k) % wh_vdwdyh = tavg_specbudgx(i,j,k)%wh_vdwdyh / tavg_total_time
+    tavg_specbudgx(i,j,k) % wh_wdwdzh = tavg_specbudgx(i,j,k)%wh_wdwdzh / tavg_total_time
+
+    ! Mean velocity * pressure gradient product, ui*dpdxj
     tavg_specbudgx(i,j,k) % udpdx = tavg_specbudgx(i,j,k) % udpdx / tavg_total_time
     tavg_specbudgx(i,j,k) % udpdy = tavg_specbudgx(i,j,k) % udpdy / tavg_total_time
     tavg_specbudgx(i,j,k) % udpdz = tavg_specbudgx(i,j,k) % udpdz / tavg_total_time
@@ -4898,10 +4937,23 @@ do i = 1, Nx/2 + 1
     tavg_specbudgx(i,j,k) % wdpdy = tavg_specbudgx(i,j,k) % wdpdy / tavg_total_time
     tavg_specbudgx(i,j,k) % wdpdz = tavg_specbudgx(i,j,k) % wdpdz / tavg_total_time
 
+    ! Mean pressure * velocity gradient product, p*duidxj
+    tavg_specbudgx(i,j,k) % pdudx = tavg_specbudgx(i,j,k) % pdudx / tavg_total_time
+    tavg_specbudgx(i,j,k) % pdudy = tavg_specbudgx(i,j,k) % pdudy / tavg_total_time
+    tavg_specbudgx(i,j,k) % pdudz = tavg_specbudgx(i,j,k) % pdudz / tavg_total_time
+    tavg_specbudgx(i,j,k) % pdvdx = tavg_specbudgx(i,j,k) % pdvdx / tavg_total_time
+    tavg_specbudgx(i,j,k) % pdvdy = tavg_specbudgx(i,j,k) % pdvdy / tavg_total_time
+    tavg_specbudgx(i,j,k) % pdvdz = tavg_specbudgx(i,j,k) % pdvdz / tavg_total_time
+    tavg_specbudgx(i,j,k) % pdwdx = tavg_specbudgx(i,j,k) % pdwdx / tavg_total_time
+    tavg_specbudgx(i,j,k) % pdwdy = tavg_specbudgx(i,j,k) % pdwdy / tavg_total_time
+    tavg_specbudgx(i,j,k) % pdwdz = tavg_specbudgx(i,j,k) % pdwdz / tavg_total_time
+
+    ! Mean Laplacian, nu*lap(uj)
     tavg_specbudgx(i,j,k) % lapu = tavg_specbudgx(i,j,k) % lapu / tavg_total_time
     tavg_specbudgx(i,j,k) % lapv = tavg_specbudgx(i,j,k) % lapv / tavg_total_time
     tavg_specbudgx(i,j,k) % lapw = tavg_specbudgx(i,j,k) % lapw / tavg_total_time
 
+    ! Mean Vel-Laplacian, nu*ui*lap(uj)
     tavg_specbudgx(i,j,k) % ulapu = tavg_specbudgx(i,j,k) % ulapu / tavg_total_time
     tavg_specbudgx(i,j,k) % ulapv = tavg_specbudgx(i,j,k) % ulapv / tavg_total_time
     tavg_specbudgx(i,j,k) % ulapw = tavg_specbudgx(i,j,k) % ulapw / tavg_total_time
