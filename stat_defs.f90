@@ -73,7 +73,7 @@ end type rs_t
 
 #ifdef PPMFM
 type tavg_mfm_t
-    real(rprec) :: gmu, gmv, gmw_uv
+    real(rprec) :: gmu, gmv, gmw_uv, u, v, w_uv
     real(rprec) :: u1v1, u1v2, u1v3, u2v1, u2v2, u2v3, u3v1, u3v2, u3v3
 end type tavg_mfm_t
 
@@ -378,12 +378,11 @@ end function rs_compute
 
 #ifdef PPMFM
 !******************************************************************************
-function rs_mfm_compute( a, b, lbz2) result(c)
+function rs_mfm_compute( a, lbz2) result(c)
 !******************************************************************************
 implicit none
 integer, intent(in) :: lbz2
 type(tavg_mfm_t), dimension(:,:,lbz2:), intent(in) :: a
-type(tavg_t), dimension(:,:,lbz2:), intent(in) :: b
 type(rs_mfm_t), allocatable, dimension(:,:,:) :: c
 
 integer :: ubx, uby, ubz
@@ -395,15 +394,15 @@ ubz=ubound(a,3)
 allocate(c(ubx,uby,lbz2:ubz))
 
 !! All on the uv grid
-c % u1v1 = a % u1v1 - b % u * a % gmu
-c % u1v2 = a % u1v2 - b % u * a % gmv
-c % u1v3 = a % u1v3 - b % u * a % gmw_uv
-c % u2v1 = a % u2v1 - b % v * a % gmu
-c % u2v2 = a % u2v2 - b % v * a % gmv
-c % u2v3 = a % u2v3 - b % v * a % gmw_uv
-c % u3v1 = a % u3v1 - b % w_uv * a % gmu
-c % u3v2 = a % u3v2 - b % w_uv * a % gmv
-c % u3v3 = a % u3v3 - b % w_uv * a % gmw_uv
+c % u1v1 = a % u1v1 - a % u * a % gmu
+c % u1v2 = a % u1v2 - a % u * a % gmv
+c % u1v3 = a % u1v3 - a % u * a % gmw_uv
+c % u2v1 = a % u2v1 - a % v * a % gmu
+c % u2v2 = a % u2v2 - a % v * a % gmv
+c % u2v3 = a % u2v3 - a % v * a % gmw_uv
+c % u3v1 = a % u3v1 - a % w_uv * a % gmu
+c % u3v2 = a % u3v2 - a % w_uv * a % gmv
+c % u3v3 = a % u3v3 - a % w_uv * a % gmw_uv
 
 end function rs_mfm_compute
 #endif

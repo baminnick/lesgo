@@ -2471,6 +2471,10 @@ if( tavg_calc ) then
         tavg_mfm(i,j,k) % gmv = 0._rprec
         tavg_mfm(i,j,k) % gmw_uv = 0._rprec
 
+        tavg_mfm(i,j,k) % u = 0._rprec
+        tavg_mfm(i,j,k) % v = 0._rprec
+        tavg_mfm(i,j,k) % w_uv = 0._rprec
+
         tavg_mfm(i,j,k) % u1v1 = 0._rprec
         tavg_mfm(i,j,k) % u1v2 = 0._rprec
         tavg_mfm(i,j,k) % u1v3 = 0._rprec
@@ -3086,7 +3090,7 @@ do i = 1, nxp !! note it's nxp here not nx
     if (fourier) then
         u_p = uF(i,j,k)
         v_p = vF(i,j,k)
-        w_p = wF(i,j,k)
+        w_p = wF(i,j,k) !! was interpolated then transformed
     else
         u_p = u(i,j,k)
         v_p = v(i,j,k)
@@ -3100,6 +3104,11 @@ do i = 1, nxp !! note it's nxp here not nx
     tavg_mfm(i,j,k) % gmu = tavg_mfm(i,j,k) % gmu + gmu_p * tavg_dt !! uv grid
     tavg_mfm(i,j,k) % gmv = tavg_mfm(i,j,k) % gmv + gmv_p * tavg_dt !! uv grid
     tavg_mfm(i,j,k) % gmw_uv = tavg_mfm(i,j,k) % gmw_uv + gmw_p * tavg_dt !! uv grid
+
+    ! Also storing u,v,w variables in tavg_mfm because of fourier mode
+    tavg_mfm(i,j,k) % u = tavg_mfm(i,j,k) % u + u_p * tavg_dt !! uv grid
+    tavg_mfm(i,j,k) % v = tavg_mfm(i,j,k) % v + v_p * tavg_dt !! uv grid
+    tavg_mfm(i,j,k) % w_uv = tavg_mfm(i,j,k) % w_uv + w_p * tavg_dt !! uv grid
 
     tavg_mfm(i,j,k) % u1v1 = tavg_mfm(i,j,k) % u1v1 + u_p * gmu_p * tavg_dt !! uv grid
     tavg_mfm(i,j,k) % u1v2 = tavg_mfm(i,j,k) % u1v2 + u_p * gmv_p * tavg_dt !! uv grid
@@ -3870,10 +3879,10 @@ do j = 1, Ny
 do i = 1, Nx
     tavg(i,j,k) % u    = tavg(i,j,k) % u    / tavg_total_time
     tavg(i,j,k) % v    = tavg(i,j,k) % v    / tavg_total_time
-    tavg(i,j,k) % w_uv = tavg(i,j,k) % w    / tavg_total_time
+    tavg(i,j,k) % w_uv = tavg(i,j,k) % w_uv / tavg_total_time
     tavg(i,j,k) % u_w  = tavg(i,j,k) % u_w  / tavg_total_time
-    tavg(i,j,k) % v_w  = tavg(i,j,k) % u_w  / tavg_total_time
-    tavg(i,j,k) % w    = tavg(i,j,k) % w_uv / tavg_total_time
+    tavg(i,j,k) % v_w  = tavg(i,j,k) % v_w  / tavg_total_time
+    tavg(i,j,k) % w    = tavg(i,j,k) % w    / tavg_total_time
     tavg(i,j,k) % u2   = tavg(i,j,k) % u2   / tavg_total_time
     tavg(i,j,k) % v2   = tavg(i,j,k) % v2   / tavg_total_time
     tavg(i,j,k) % w2   = tavg(i,j,k) % w2   / tavg_total_time
@@ -3911,6 +3920,10 @@ do i = 1, Nxp
     tavg_mfm(i,j,k) % gmu = tavg_mfm(i,j,k) % gmu / tavg_total_time
     tavg_mfm(i,j,k) % gmv = tavg_mfm(i,j,k) % gmv / tavg_total_time
     tavg_mfm(i,j,k) % gmw_uv = tavg_mfm(i,j,k) % gmw_uv / tavg_total_time
+
+    tavg_mfm(i,j,k) % u = tavg_mfm(i,j,k) % u / tavg_total_time
+    tavg_mfm(i,j,k) % v = tavg_mfm(i,j,k) % v / tavg_total_time
+    tavg_mfm(i,j,k) % w_uv = tavg_mfm(i,j,k) % w_uv / tavg_total_time
 
     tavg_mfm(i,j,k) % u1v1 = tavg_mfm(i,j,k) % u1v1 / tavg_total_time
     tavg_mfm(i,j,k) % u1v2 = tavg_mfm(i,j,k) % u1v2 / tavg_total_time
@@ -4193,6 +4206,9 @@ call mpi_sync_real_array( tavg(1:nx,1:ny,lbz:nz)%fx, 0, MPI_SYNC_DOWNUP )
 call mpi_sync_real_array(tavg_mfm(1:nxp,1:ny,lbz:nz)%gmu,0,MPI_SYNC_DOWNUP)
 call mpi_sync_real_array(tavg_mfm(1:nxp,1:ny,lbz:nz)%gmv,0,MPI_SYNC_DOWNUP)
 call mpi_sync_real_array(tavg_mfm(1:nxp,1:ny,lbz:nz)%gmw_uv,0,MPI_SYNC_DOWNUP)
+call mpi_sync_real_array(tavg_mfm(1:nxp,1:ny,lbz:nz)%u,0,MPI_SYNC_DOWNUP)
+call mpi_sync_real_array(tavg_mfm(1:nxp,1:ny,lbz:nz)%v,0,MPI_SYNC_DOWNUP)
+call mpi_sync_real_array(tavg_mfm(1:nxp,1:ny,lbz:nz)%w_uv,0,MPI_SYNC_DOWNUP)
 call mpi_sync_real_array(tavg_mfm(1:nxp,1:ny,lbz:nz)%u1v1,0,MPI_SYNC_DOWNUP)
 call mpi_sync_real_array(tavg_mfm(1:nxp,1:ny,lbz:nz)%u1v2,0,MPI_SYNC_DOWNUP)
 call mpi_sync_real_array(tavg_mfm(1:nxp,1:ny,lbz:nz)%u1v3,0,MPI_SYNC_DOWNUP)
@@ -4552,7 +4568,7 @@ deallocate(rs)
 
 #ifdef PPMFM
 allocate(rs_mfm(nxp,ny,lbz:nz))
-rs_mfm = rs_mfm_compute(tavg_mfm, tavg, lbz)
+rs_mfm = rs_mfm_compute(tavg_mfm, lbz)
 
 #ifdef PPCGNS
 ! Write CGNS data
