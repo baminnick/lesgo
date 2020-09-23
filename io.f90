@@ -1426,6 +1426,10 @@ use sim_param, only : dudx, dudy, dudz, dvdx, dvdy, dvdz, dwdx, dwdy, dwdz
 #ifdef PPOUTPUT_BUDGET
 use sim_param, only : p, dpdx, dpdy, dpdz, divtx, divty, divtz
 #endif
+#ifdef PPMFM
+use derivatives, only : wave2physF
+use sim_param, only : uF, vF, wF
+#endif
 implicit none
 
 ! Determine if we are to checkpoint intermediate times
@@ -1445,6 +1449,13 @@ if (tavg_calc) then
         if ( mod(jt_total-tavg_nstart,tavg_nskip)==0 ) then
 
             if (fourier) then
+#ifdef PPMFM
+                ! MFM requires velocity field info on nxp sized grid
+                call wave2physF( u, uF )
+                call wave2physF( v, vF )
+                call wave2physF( w, wF )
+#endif
+
                 call wave2phys( u, lbz )
                 call wave2phys( v, lbz )
                 call wave2phys( w, lbz )
@@ -2989,6 +3000,7 @@ real(rprec), allocatable, dimension(:,:,:) :: dwdx_uv, dwdy_uv, dudz_uv, dvdz_uv
 #ifdef PPMFM
 real(rprec) :: gmu_p, gmv_p, gmw_p
 real(rprec), allocatable, dimension(:,:,:) :: gmw_uv
+real(rprec), allocatable, dimension(:,:,:) :: wF_uv
 #endif
 
 allocate(w_uv(nx,ny,lbz:nz), u_w(nx,ny,lbz:nz), v_w(nx,ny,lbz:nz))
@@ -2996,6 +3008,7 @@ allocate(pres_real(nx,ny,lbz:nz))
 allocate( dwdx_uv(nx,ny,lbz:nz), dwdy_uv(nx,ny,lbz:nz),                   &
     dudz_uv(nx,ny,lbz:nz), dvdz_uv(nx,ny,lbz:nz) )
 #ifdef PPMFM
+allocate(wF_uv(nxp,ny,lbz))
 allocate(gmw_uv(nxp,ny,lbz:nz))
 #endif
 
@@ -3027,9 +3040,7 @@ if(coord==nproc-1 .and. ubc_mom>0) v_w(:,:,nz) = 0._rprec
 
 #ifdef PPMFM
 if (fourier) then
-    call wave2physF( u, uF )
-    call wave2physF( v, vF )
-    call wave2physF( w_uv, wF )
+    wF_uv(1:nxp,1:ny,lbz:nz) = interp_to_uv_grid(wF(1:nxp,1:ny,lbz:nz), lbz )
 endif
 #endif
 
@@ -3090,7 +3101,7 @@ do i = 1, nxp !! note it's nxp here not nx
     if (fourier) then
         u_p = uF(i,j,k)
         v_p = vF(i,j,k)
-        w_p = wF(i,j,k) !! was interpolated then transformed
+        w_p = wF_uv(i,j,k)
     else
         u_p = u(i,j,k)
         v_p = v(i,j,k)
