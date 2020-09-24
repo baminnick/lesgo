@@ -3008,7 +3008,7 @@ allocate(pres_real(nx,ny,lbz:nz))
 allocate( dwdx_uv(nx,ny,lbz:nz), dwdy_uv(nx,ny,lbz:nz),                   &
     dudz_uv(nx,ny,lbz:nz), dvdz_uv(nx,ny,lbz:nz) )
 #ifdef PPMFM
-allocate(wF_uv(nxp,ny,lbz))
+allocate(wF_uv(nxp,ny,lbz:nz))
 allocate(gmw_uv(nxp,ny,lbz:nz))
 #endif
 
