@@ -2474,7 +2474,7 @@ use stat_defs, only : tavg_budget
 use stat_defs, only : tavg_turbspecx, tavg_turbspecy
 #endif
 #ifdef PPOUTPUT_SPECBUDG
-use stat_defs, only : tavg_specbudgx
+use stat_defs, only : tavg_specbudgx, tavg_specbudgy
 #endif
 
 implicit none
@@ -2518,6 +2518,7 @@ if( tavg_calc ) then
 #endif
 #ifdef PPOUTPUT_SPECBUDG
     allocate(tavg_specbudgx(nx/2+1,ny,lbz:nz))
+    allocate(tavg_specbudgy(nx,ny/2+1,lbz:nz))
 #endif
 
   ! Initialize the derived types tavg and tavg_zplane
@@ -2965,6 +2966,165 @@ if( tavg_calc ) then
     end do
     end do
     end do
+
+    do k = 1, Nz
+    do j = 1, Ny/2+1
+    do i = 1, Nx
+        ! Mean pressure
+        tavg_specbudgy(i,j,k) % p = 0.d0
+
+        ! Mean pressure gradients
+        tavg_specbudgy(i,j,k) % dpdx = 0.d0
+        tavg_specbudgy(i,j,k) % dpdy = 0.d0
+        tavg_specbudgy(i,j,k) % dpdz = 0.d0
+
+        ! Mean velocity gradients
+        tavg_specbudgy(i,j,k) % dudx = 0.d0
+        tavg_specbudgy(i,j,k) % dudy = 0.d0
+        tavg_specbudgy(i,j,k) % dudz = 0.d0
+        tavg_specbudgy(i,j,k) % dvdx = 0.d0
+        tavg_specbudgy(i,j,k) % dvdy = 0.d0
+        tavg_specbudgy(i,j,k) % dvdz = 0.d0
+        tavg_specbudgy(i,j,k) % dwdx = 0.d0
+        tavg_specbudgy(i,j,k) % dwdy = 0.d0
+        tavg_specbudgy(i,j,k) % dwdz = 0.d0
+
+        ! Mean vel-velGrad product, ui_hat*dujdxk_hat
+        tavg_specbudgy(i,j,k) % uh_dudxh = 0.d0
+        tavg_specbudgy(i,j,k) % uh_dudyh = 0.d0
+        tavg_specbudgy(i,j,k) % uh_dudzh = 0.d0
+        tavg_specbudgy(i,j,k) % uh_dvdxh = 0.d0
+        tavg_specbudgy(i,j,k) % uh_dvdyh = 0.d0
+        tavg_specbudgy(i,j,k) % uh_dvdzh = 0.d0
+        tavg_specbudgy(i,j,k) % uh_dwdxh = 0.d0
+        tavg_specbudgy(i,j,k) % uh_dwdyh = 0.d0
+        tavg_specbudgy(i,j,k) % uh_dwdzh = 0.d0
+
+        tavg_specbudgy(i,j,k) % vh_dudxh = 0.d0
+        tavg_specbudgy(i,j,k) % vh_dudyh = 0.d0
+        tavg_specbudgy(i,j,k) % vh_dudzh = 0.d0
+        tavg_specbudgy(i,j,k) % vh_dvdxh = 0.d0
+        tavg_specbudgy(i,j,k) % vh_dvdyh = 0.d0
+        tavg_specbudgy(i,j,k) % vh_dvdzh = 0.d0
+        tavg_specbudgy(i,j,k) % vh_dwdxh = 0.d0
+        tavg_specbudgy(i,j,k) % vh_dwdyh = 0.d0
+        tavg_specbudgy(i,j,k) % vh_dwdzh = 0.d0
+
+        tavg_specbudgy(i,j,k) % wh_dudxh = 0.d0
+        tavg_specbudgy(i,j,k) % wh_dudyh = 0.d0
+        tavg_specbudgy(i,j,k) % wh_dudzh = 0.d0
+        tavg_specbudgy(i,j,k) % wh_dvdxh = 0.d0
+        tavg_specbudgy(i,j,k) % wh_dvdyh = 0.d0
+        tavg_specbudgy(i,j,k) % wh_dvdzh = 0.d0
+        tavg_specbudgy(i,j,k) % wh_dwdxh = 0.d0
+        tavg_specbudgy(i,j,k) % wh_dwdyh = 0.d0
+        tavg_specbudgy(i,j,k) % wh_dwdzh = 0.d0
+
+        ! Mean vel-velGrad product, uk*duidxk_hat
+        tavg_specbudgy(i,j,k) % ududxh = 0.d0
+        tavg_specbudgy(i,j,k) % vdudyh = 0.d0
+        tavg_specbudgy(i,j,k) % wdudzh = 0.d0
+        tavg_specbudgy(i,j,k) % udvdxh = 0.d0
+        tavg_specbudgy(i,j,k) % vdvdyh = 0.d0
+        tavg_specbudgy(i,j,k) % wdvdzh = 0.d0
+        tavg_specbudgy(i,j,k) % udwdxh = 0.d0
+        tavg_specbudgy(i,j,k) % vdwdyh = 0.d0
+        tavg_specbudgy(i,j,k) % wdwdzh = 0.d0
+
+        ! Mean vel-vel-velGrad product, uj_hat*(uk*duidxk)_hat
+        tavg_specbudgy(i,j,k) % uh_ududxh = 0.d0
+        tavg_specbudgy(i,j,k) % uh_vdudyh = 0.d0
+        tavg_specbudgy(i,j,k) % uh_wdudzh = 0.d0
+        tavg_specbudgy(i,j,k) % vh_ududxh = 0.d0
+        tavg_specbudgy(i,j,k) % vh_vdudyh = 0.d0
+        tavg_specbudgy(i,j,k) % vh_wdudzh = 0.d0
+        tavg_specbudgy(i,j,k) % wh_ududxh = 0.d0
+        tavg_specbudgy(i,j,k) % wh_vdudyh = 0.d0
+        tavg_specbudgy(i,j,k) % wh_wdudzh = 0.d0
+
+        tavg_specbudgy(i,j,k) % uh_udvdxh = 0.d0
+        tavg_specbudgy(i,j,k) % uh_vdvdyh = 0.d0
+        tavg_specbudgy(i,j,k) % uh_wdvdzh = 0.d0
+        tavg_specbudgy(i,j,k) % vh_udvdxh = 0.d0
+        tavg_specbudgy(i,j,k) % vh_vdvdyh = 0.d0
+        tavg_specbudgy(i,j,k) % vh_wdvdzh = 0.d0
+        tavg_specbudgy(i,j,k) % wh_udvdxh = 0.d0
+        tavg_specbudgy(i,j,k) % wh_vdvdyh = 0.d0
+        tavg_specbudgy(i,j,k) % wh_wdvdzh = 0.d0
+
+        tavg_specbudgy(i,j,k) % uh_udwdxh = 0.d0
+        tavg_specbudgy(i,j,k) % uh_vdwdyh = 0.d0
+        tavg_specbudgy(i,j,k) % uh_wdwdzh = 0.d0
+        tavg_specbudgy(i,j,k) % vh_udwdxh = 0.d0
+        tavg_specbudgy(i,j,k) % vh_vdwdyh = 0.d0
+        tavg_specbudgy(i,j,k) % vh_wdwdzh = 0.d0
+        tavg_specbudgy(i,j,k) % wh_udwdxh = 0.d0
+        tavg_specbudgy(i,j,k) % wh_vdwdyh = 0.d0
+        tavg_specbudgy(i,j,k) % wh_wdwdzh = 0.d0
+
+        ! Mean velGrad-velGrad product, duidxk*dujdxk, i=j
+        tavg_specbudgy(i,j,k) % uxux = 0.d0
+        tavg_specbudgy(i,j,k) % uyuy = 0.d0
+        tavg_specbudgy(i,j,k) % uzuz = 0.d0
+        tavg_specbudgy(i,j,k) % vxvx = 0.d0
+        tavg_specbudgy(i,j,k) % vyvy = 0.d0
+        tavg_specbudgy(i,j,k) % vzvz = 0.d0
+        tavg_specbudgy(i,j,k) % wxwx = 0.d0
+        tavg_specbudgy(i,j,k) % wywy = 0.d0
+        tavg_specbudgy(i,j,k) % wzwz = 0.d0
+
+        ! Mean velGrad-velGrad product, duidxk*dujdxk, i/=j
+        tavg_specbudgy(i,j,k) % uxvx = 0.d0
+        tavg_specbudgy(i,j,k) % uyvy = 0.d0
+        tavg_specbudgy(i,j,k) % uzvz = 0.d0
+        tavg_specbudgy(i,j,k) % uxwx = 0.d0
+        tavg_specbudgy(i,j,k) % uywy = 0.d0
+        tavg_specbudgy(i,j,k) % uzwz = 0.d0
+        tavg_specbudgy(i,j,k) % vxwx = 0.d0
+        tavg_specbudgy(i,j,k) % vywy = 0.d0
+        tavg_specbudgy(i,j,k) % vzwz = 0.d0
+
+        ! Mean pressure * velocity gradient product, p*dujdxk
+        tavg_specbudgy(i,j,k) % pdudx = 0.d0
+        tavg_specbudgy(i,j,k) % pdudy = 0.d0
+        tavg_specbudgy(i,j,k) % pdudz = 0.d0
+        tavg_specbudgy(i,j,k) % pdvdx = 0.d0
+        tavg_specbudgy(i,j,k) % pdvdy = 0.d0
+        tavg_specbudgy(i,j,k) % pdvdz = 0.d0
+        tavg_specbudgy(i,j,k) % pdwdx = 0.d0
+        tavg_specbudgy(i,j,k) % pdwdy = 0.d0
+        tavg_specbudgy(i,j,k) % pdwdz = 0.d0
+
+        ! Mean velocity * pressure gradient product, uj*dpdxk
+        tavg_specbudgy(i,j,k) % udpdx = 0.d0
+        tavg_specbudgy(i,j,k) % udpdy = 0.d0
+        tavg_specbudgy(i,j,k) % udpdz = 0.d0
+        tavg_specbudgy(i,j,k) % vdpdx = 0.d0
+        tavg_specbudgy(i,j,k) % vdpdy = 0.d0
+        tavg_specbudgy(i,j,k) % vdpdz = 0.d0
+        tavg_specbudgy(i,j,k) % wdpdx = 0.d0
+        tavg_specbudgy(i,j,k) % wdpdy = 0.d0
+        tavg_specbudgy(i,j,k) % wdpdz = 0.d0
+
+        ! Mean Laplacian, nu*lap(uj)
+        tavg_specbudgy(i,j,k) % lapu = 0._rprec
+        tavg_specbudgy(i,j,k) % lapv = 0._rprec
+        tavg_specbudgy(i,j,k) % lapw = 0._rprec
+
+        ! Mean Vel-Laplacian, nu*ui*lap(uj)
+        tavg_specbudgy(i,j,k) % ulapu = 0._rprec
+        tavg_specbudgy(i,j,k) % ulapv = 0._rprec
+        tavg_specbudgy(i,j,k) % ulapw = 0._rprec
+        tavg_specbudgy(i,j,k) % vlapu = 0._rprec
+        tavg_specbudgy(i,j,k) % vlapv = 0._rprec
+        tavg_specbudgy(i,j,k) % vlapw = 0._rprec
+        tavg_specbudgy(i,j,k) % wlapu = 0._rprec
+        tavg_specbudgy(i,j,k) % wlapv = 0._rprec
+        tavg_specbudgy(i,j,k) % wlapw = 0._rprec
+
+    end do
+    end do
+    end do
 #endif
 
 end if
@@ -3075,7 +3235,7 @@ use stat_defs, only : tavg_budget
 use stat_defs, only : tavg_turbspecx, tavg_turbspecy
 #endif
 #ifdef PPOUTPUT_SPECBUDG
-use stat_defs, only : tavg_specbudgx
+use stat_defs, only : tavg_specbudgx, tavg_specbudgy
 #endif
 
 implicit none
@@ -3167,6 +3327,7 @@ else
         convert=read_endian)
     read(1) tavg_total_time
     read(1) tavg_specbudgx
+    read(1) tavg_specbudgy
     close(1)
 #endif
 
@@ -3710,7 +3871,7 @@ use stat_defs, only: tavg_dt, tavg_turbspecx, tavg_turbspecy
 use fft
 use functions, only: interp_to_w_grid
 #ifdef PPOUTPUT_SPECBUDG
-use stat_defs, only: tavg_specbudgx
+use stat_defs, only: tavg_specbudgx, tavg_specbudgy
 use sim_param, only: p, dpdx, dpdy, dpdz, dudx, dvdy, dwdz
 use sim_param, only: divtx, divty, divtz
 use mpi_defs, only: mpi_sync_real_array, MPI_SYNC_DOWNUP
@@ -3745,6 +3906,16 @@ complex(rprec), dimension(nx/2+1) :: dudxfx, dudyfx, dudzfx,              &
     pfx, dpdxfx, dpdyfx, dpdzfx, divtxfx, divtyfx, divtzfx,               &
     ududxfx, vdudyfx, wdudzfx, udvdxfx, vdvdyfx, wdvdzfx,                 &
     udwdxfx, vdwdyfx, wdwdzfx
+real(rprec), dimension(ny) :: dudxpy, dudypy, dudzpy,                     &
+    dvdxpy, dvdypy, dvdzpy, dwdxpy, dwdypy, dwdzpy,                       &
+    ppy, dpdxpy, dpdypy, dpdzpy, divtxpy, divtypy, divtzpy,               &
+    ududxpy, vdudypy, wdudzpy, udvdxpy, vdvdypy, wdvdzpy,                 &
+    udwdxpy, vdwdypy, wdwdzpy
+complex(rprec), dimension(ny/2+1) :: dudxfy, dudyfy, dudzfy,              &
+    dvdxfy, dvdyfy, dvdzfy, dwdxfy, dwdyfy, dwdzfy,                       &
+    pfy, dpdxfy, dpdyfy, dpdzfy, divtxfy, divtyfy, divtzfy,               &
+    ududxfy, vdudyfy, wdudzfy, udvdxfy, vdvdyfy, wdvdzfy,                 &
+    udwdxfy, vdwdyfy, wdwdzfy
 #endif
 
 !real(rprec), dimension(ld,ny,lbz:nz) :: vel, vort
@@ -4323,6 +4494,62 @@ do jz = 1, nz
     call dfftw_execute_dft_r2c( forw_y, vortzpy, vortzfy )
     !call dfftw_execute_dft_r2c( forw_y, vortpy,  vortfy )
 
+#ifdef PPOUTPUT_SPECBUDG
+    ! Normalize
+    ppy = const2 * pres_real(jx,1:ny,jz)
+    dpdxpy = const2 * dpdx_real(jx,1:ny,jz)
+    dpdypy = const2 * dpdx_real(jx,1:ny,jz)
+    dpdzpy = const2 * dpdx_real(jx,1:ny,jz)
+    dudxpy = const2 * dudx_w(jx,1:ny,jz)
+    dudypy = const2 * dudy_w(jx,1:ny,jz)
+    dudzpy = const2 * dudz(jx,1:ny,jz)
+    dvdxpy = const2 * dvdx_w(jx,1:ny,jz)
+    dvdypy = const2 * dvdy_w(jx,1:ny,jz)
+    dvdzpy = const2 * dvdz(jx,1:ny,jz)
+    dwdxpy = const2 * dwdx(jx,1:ny,jz)
+    dwdypy = const2 * dwdy(jx,1:ny,jz)
+    dwdzpy = const2 * dwdz_w(jx,1:ny,jz)
+    divtxpy = const2 * divtx_w(jx,1:ny,jz)
+    divtypy = const2 * divty_w(jx,1:ny,jz)
+    divtzpy = const2 * divtz(jx,1:ny,jz)
+    ududxpy = const2 * u_w(jx,1:ny,jz)*dudx_w(jx,1:ny,jz)
+    vdudypy = const2 * v_w(jx,1:ny,jz)*dudy_w(jx,1:ny,jz)
+    wdudzpy = const2 * w(jx,1:ny,jz)*dudz(jx,1:ny,jz)
+    udvdxpy = const2 * u_w(jx,1:ny,jz)*dvdx_w(jx,1:ny,jz)
+    vdvdypy = const2 * v_w(jx,1:ny,jz)*dvdy_w(jx,1:ny,jz)
+    wdvdzpy = const2 * w(jx,1:ny,jz)*dvdz(jx,1:ny,jz)
+    udwdxpy = const2 * u_w(jx,1:ny,jz)*dwdx(jx,1:ny,jz)
+    vdwdypy = const2 * v_w(jx,1:ny,jz)*dwdy(jx,1:ny,jz)
+    wdwdzpy = const2 * w(jx,1:ny,jz)*dwdz_w(jx,1:ny,jz)
+
+    ! Take 1d transform, y --> ky
+    call dfftw_execute_dft_r2c( forw_y, ppy, pfy )
+    call dfftw_execute_dft_r2c( forw_y, dpdxpy, dpdxfy )
+    call dfftw_execute_dft_r2c( forw_y, dpdypy, dpdyfy )
+    call dfftw_execute_dft_r2c( forw_y, dpdzpy, dpdzfy )
+    call dfftw_execute_dft_r2c( forw_y, dudxpy, dudxfy )
+    call dfftw_execute_dft_r2c( forw_y, dudypy, dudyfy )
+    call dfftw_execute_dft_r2c( forw_y, dudzpy, dudzfy )
+    call dfftw_execute_dft_r2c( forw_y, dvdxpy, dvdxfy )
+    call dfftw_execute_dft_r2c( forw_y, dvdypy, dvdyfy )
+    call dfftw_execute_dft_r2c( forw_y, dvdzpy, dvdzfy )
+    call dfftw_execute_dft_r2c( forw_y, dwdxpy, dwdxfy )
+    call dfftw_execute_dft_r2c( forw_y, dwdypy, dwdyfy )
+    call dfftw_execute_dft_r2c( forw_y, dwdzpy, dwdzfy )
+    call dfftw_execute_dft_r2c( forw_y, divtxpy, divtxfy )
+    call dfftw_execute_dft_r2c( forw_y, divtypy, divtyfy )
+    call dfftw_execute_dft_r2c( forw_y, divtzpy, divtzfy )
+    call dfftw_execute_dft_r2c( forw_y, ududxpy, ududxfy )
+    call dfftw_execute_dft_r2c( forw_y, vdudypy, vdudyfy )
+    call dfftw_execute_dft_r2c( forw_y, wdudzpy, wdudzfy )
+    call dfftw_execute_dft_r2c( forw_y, udvdxpy, udvdxfy )
+    call dfftw_execute_dft_r2c( forw_y, vdvdypy, vdvdyfy )
+    call dfftw_execute_dft_r2c( forw_y, wdvdzpy, wdvdzfy )
+    call dfftw_execute_dft_r2c( forw_y, udwdxpy, udwdxfy )
+    call dfftw_execute_dft_r2c( forw_y, vdwdypy, vdwdyfy )
+    call dfftw_execute_dft_r2c( forw_y, wdwdzpy, wdwdzfy )
+#endif
+
     ! Multiply together and time-average
     do jy = 1, ny/2 + 1
         tavg_turbspecy(jx,jy,jz)%uf = tavg_turbspecy(jx,jy,jz)%uf +       &
@@ -4363,6 +4590,284 @@ do jz = 1, nz
             vortzfy(jy)*conjg(vortzfy(jy))*tavg_dt
         !tavg_turbspecy(jx,jy,jz)%vort2 = tavg_turbspecy(jx,jy,jz)%vort2 +   &
         !    vortfy(jy)*conjg(vortfy(jy))*tavg_dt
+
+#ifdef PPOUTPUT_SPECBUDG
+        ! Mean pressure
+        tavg_specbudgy(jx,jy,jz)%p = tavg_specbudgy(jx,jy,jz)%p + &
+            pfy(jy)*tavg_dt 
+
+        ! Mean velocity gradients, duidxj
+        tavg_specbudgy(jx,jy,jz)%dudx = tavg_specbudgy(jx,jy,jz)%dudx + &
+            dudxfy(jy)*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%dudy = tavg_specbudgy(jx,jy,jz)%dudy + &
+            dudyfy(jy)*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%dudz = tavg_specbudgy(jx,jy,jz)%dudz + &
+            dudzfy(jy)*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%dvdx = tavg_specbudgy(jx,jy,jz)%dvdx + &
+            dvdxfy(jy)*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%dvdy = tavg_specbudgy(jx,jy,jz)%dvdy + &
+            dvdyfy(jy)*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%dvdz = tavg_specbudgy(jx,jy,jz)%dvdz + &
+            dvdzfy(jy)*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%dwdx = tavg_specbudgy(jx,jy,jz)%dwdx + &
+            dwdxfy(jy)*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%dwdy = tavg_specbudgy(jx,jy,jz)%dwdy + &
+            dwdyfy(jy)*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%dwdz = tavg_specbudgy(jx,jy,jz)%dwdz + &
+            dwdzfy(jy)*tavg_dt
+
+        ! Mean velGrad-velGrad product, duidxk*dujdxk, i=j
+        tavg_specbudgy(jx,jy,jz)%uxux = tavg_specbudgy(jx,jy,jz)%uxux + &
+            dudxfy(jy)*conjg(dudxfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%uyuy = tavg_specbudgy(jx,jy,jz)%uyuy + &
+            dudyfy(jy)*conjg(dudyfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%uzuz = tavg_specbudgy(jx,jy,jz)%uzuz + &
+            dudzfy(jy)*conjg(dudzfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%vxvx = tavg_specbudgy(jx,jy,jz)%vxvx + &
+            dvdxfy(jy)*conjg(dvdxfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%vyvy = tavg_specbudgy(jx,jy,jz)%vyvy + &
+            dvdyfy(jy)*conjg(dvdyfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%vzvz = tavg_specbudgy(jx,jy,jz)%vzvz + &
+            dvdzfy(jy)*conjg(dvdzfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%wxwx = tavg_specbudgy(jx,jy,jz)%wxwx + &
+            dwdxfy(jy)*conjg(dwdxfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%wywy = tavg_specbudgy(jx,jy,jz)%wywy + &
+            dwdyfy(jy)*conjg(dwdyfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%wzwz = tavg_specbudgy(jx,jy,jz)%wzwz + &
+            dwdzfy(jy)*conjg(dwdzfy(jy))*tavg_dt
+
+        ! Mean velGrad-velGrad product, duidxk*dujdxk, i/=j
+        tavg_specbudgy(jx,jy,jz)%uxvx = tavg_specbudgy(jx,jy,jz)%uxvx + &
+            dudxfy(jy)*conjg(dvdxfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%uyvy = tavg_specbudgy(jx,jy,jz)%uyvy + &
+            dudyfy(jy)*conjg(dvdyfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%uzvz = tavg_specbudgy(jx,jy,jz)%uzvz + &
+            dudzfy(jy)*conjg(dvdzfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%uxwx = tavg_specbudgy(jx,jy,jz)%uxwx + &
+            dudxfy(jy)*conjg(dwdxfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%uywy = tavg_specbudgy(jx,jy,jz)%uywy + &
+            dudyfy(jy)*conjg(dwdyfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%uzwz = tavg_specbudgy(jx,jy,jz)%uzwz + &
+            dudzfy(jy)*conjg(dwdzfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%vxwx = tavg_specbudgy(jx,jy,jz)%vxwx + &
+            dvdxfy(jy)*conjg(dwdxfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%vywy = tavg_specbudgy(jx,jy,jz)%vywy + &
+            dvdyfy(jy)*conjg(dwdyfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%vzwz = tavg_specbudgy(jx,jy,jz)%vzwz + &
+            dvdzfy(jy)*conjg(dwdzfy(jy))*tavg_dt
+
+        ! Mean pressure gradients, dpdxi
+        tavg_specbudgy(jx,jy,jz)%dpdx = tavg_specbudgy(jx,jy,jz)%dpdx + &
+            dpdxfy(jy)*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%dpdy = tavg_specbudgy(jx,jy,jz)%dpdy + &
+            dpdyfy(jy)*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%dpdz = tavg_specbudgy(jx,jy,jz)%dpdz + &
+            dpdzfy(jy)*tavg_dt
+
+        ! Mean velocity * velocity gradient product, ui_hat*dujdxk_hat
+        tavg_specbudgy(jx,jy,jz)%uh_dudxh = tavg_specbudgy(jx,jy,jz)%uh_dudxh + &
+            ufy(jy)*conjg(dudxfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%uh_dudyh = tavg_specbudgy(jx,jy,jz)%uh_dudyh + &
+            ufy(jy)*conjg(dudyfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%uh_dudzh = tavg_specbudgy(jx,jy,jz)%uh_dudzh + &
+            ufy(jy)*conjg(dudzfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%uh_dvdxh = tavg_specbudgy(jx,jy,jz)%uh_dvdxh + &
+            ufy(jy)*conjg(dvdxfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%uh_dvdyh = tavg_specbudgy(jx,jy,jz)%uh_dvdyh + &
+            ufy(jy)*conjg(dvdyfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%uh_dvdzh = tavg_specbudgy(jx,jy,jz)%uh_dvdzh + &
+            ufy(jy)*conjg(dvdzfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%uh_dwdxh = tavg_specbudgy(jx,jy,jz)%uh_dwdxh + &
+            ufy(jy)*conjg(dwdxfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%uh_dwdyh = tavg_specbudgy(jx,jy,jz)%uh_dwdyh + &
+            ufy(jy)*conjg(dwdyfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%uh_dwdzh = tavg_specbudgy(jx,jy,jz)%uh_dwdzh + &
+            ufy(jy)*conjg(dwdzfy(jy))*tavg_dt
+
+        tavg_specbudgy(jx,jy,jz)%vh_dudxh = tavg_specbudgy(jx,jy,jz)%vh_dudxh + &
+            vfy(jy)*conjg(dudxfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%vh_dudyh = tavg_specbudgy(jx,jy,jz)%vh_dudyh + &
+            vfy(jy)*conjg(dudyfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%vh_dudzh = tavg_specbudgy(jx,jy,jz)%vh_dudzh + &
+            vfy(jy)*conjg(dudzfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%vh_dvdxh = tavg_specbudgy(jx,jy,jz)%vh_dvdxh + &
+            vfy(jy)*conjg(dvdxfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%vh_dvdyh = tavg_specbudgy(jx,jy,jz)%vh_dvdyh + &
+            vfy(jy)*conjg(dvdyfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%vh_dvdzh = tavg_specbudgy(jx,jy,jz)%vh_dvdzh + &
+            vfy(jy)*conjg(dvdzfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%vh_dwdxh = tavg_specbudgy(jx,jy,jz)%vh_dwdxh + &
+            vfy(jy)*conjg(dwdxfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%vh_dwdyh = tavg_specbudgy(jx,jy,jz)%vh_dwdyh + &
+            vfy(jy)*conjg(dwdyfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%vh_dwdzh = tavg_specbudgy(jx,jy,jz)%vh_dwdzh + &
+            vfy(jy)*conjg(dwdzfy(jy))*tavg_dt
+
+        tavg_specbudgy(jx,jy,jz)%wh_dudxh = tavg_specbudgy(jx,jy,jz)%wh_dudxh + &
+            wfy(jy)*conjg(dudxfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%wh_dudyh = tavg_specbudgy(jx,jy,jz)%wh_dudyh + &
+            wfy(jy)*conjg(dudyfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%wh_dudzh = tavg_specbudgy(jx,jy,jz)%wh_dudzh + &
+            wfy(jy)*conjg(dudzfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%wh_dvdxh = tavg_specbudgy(jx,jy,jz)%wh_dvdxh + &
+            wfy(jy)*conjg(dvdxfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%wh_dvdyh = tavg_specbudgy(jx,jy,jz)%wh_dvdyh + &
+            wfy(jy)*conjg(dvdyfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%wh_dvdzh = tavg_specbudgy(jx,jy,jz)%wh_dvdzh + &
+            wfy(jy)*conjg(dvdzfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%wh_dwdxh = tavg_specbudgy(jx,jy,jz)%wh_dwdxh + &
+            wfy(jy)*conjg(dwdxfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%wh_dwdyh = tavg_specbudgy(jx,jy,jz)%wh_dwdyh + &
+            wfy(jy)*conjg(dwdyfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%wh_dwdzh = tavg_specbudgy(jx,jy,jz)%wh_dwdzh + &
+            wfy(jy)*conjg(dwdzfy(jy))*tavg_dt
+
+        ! Mean velocity * velocity gradient product, uk*duidxk_hat
+        tavg_specbudgy(jx,jy,jz)%ududxh = tavg_specbudgy(jx,jy,jz)%ududxh + &
+            ududxfy(jy)*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%vdudyh = tavg_specbudgy(jx,jy,jz)%vdudyh + &
+            vdudyfy(jy)*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%wdudzh = tavg_specbudgy(jx,jy,jz)%wdudzh + &
+            wdudzfy(jy)*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%udvdxh = tavg_specbudgy(jx,jy,jz)%udvdxh + &
+            udvdxfy(jy)*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%vdvdyh = tavg_specbudgy(jx,jy,jz)%vdvdyh + &
+            vdvdyfy(jy)*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%wdvdzh = tavg_specbudgy(jx,jy,jz)%wdvdzh + &
+            wdvdzfy(jy)*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%udwdxh = tavg_specbudgy(jx,jy,jz)%udwdxh + &
+            udwdxfy(jy)*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%vdwdyh = tavg_specbudgy(jx,jy,jz)%vdwdyh + &
+            vdwdyfy(jy)*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%wdwdzh = tavg_specbudgy(jx,jy,jz)%wdwdzh + &
+            wdwdzfy(jy)*tavg_dt
+
+        ! Mean vel * vel * vel gradient product, uj_hat*(uk*duidxk)_hat
+        tavg_specbudgy(jx,jy,jz)%uh_ududxh = tavg_specbudgy(jx,jy,jz)%uh_ududxh + &
+            ufy(jy)*conjg(ududxfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%uh_vdudyh = tavg_specbudgy(jx,jy,jz)%uh_vdudyh + &
+            ufy(jy)*conjg(vdudyfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%uh_wdudzh = tavg_specbudgy(jx,jy,jz)%uh_wdudzh + &
+            ufy(jy)*conjg(wdudzfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%vh_ududxh = tavg_specbudgy(jx,jy,jz)%vh_ududxh + &
+            vfy(jy)*conjg(ududxfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%vh_vdudyh = tavg_specbudgy(jx,jy,jz)%vh_vdudyh + &
+            vfy(jy)*conjg(vdudyfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%vh_wdudzh = tavg_specbudgy(jx,jy,jz)%vh_wdudzh + &
+            vfy(jy)*conjg(wdudzfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%wh_ududxh = tavg_specbudgy(jx,jy,jz)%wh_ududxh + &
+            wfy(jy)*conjg(ududxfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%wh_vdudyh = tavg_specbudgy(jx,jy,jz)%wh_vdudyh + &
+            wfy(jy)*conjg(vdudyfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%wh_wdudzh = tavg_specbudgy(jx,jy,jz)%wh_wdudzh + &
+            wfy(jy)*conjg(wdudzfy(jy))*tavg_dt
+
+        tavg_specbudgy(jx,jy,jz)%uh_udvdxh = tavg_specbudgy(jx,jy,jz)%uh_udvdxh + &
+            ufy(jy)*conjg(udvdxfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%uh_vdvdyh = tavg_specbudgy(jx,jy,jz)%uh_vdvdyh + &
+            ufy(jy)*conjg(vdvdyfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%uh_wdvdzh = tavg_specbudgy(jx,jy,jz)%uh_wdvdzh + &
+            ufy(jy)*conjg(wdvdzfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%vh_udvdxh = tavg_specbudgy(jx,jy,jz)%vh_udvdxh + &
+            vfy(jy)*conjg(udvdxfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%vh_vdvdyh = tavg_specbudgy(jx,jy,jz)%vh_vdvdyh + &
+            vfy(jy)*conjg(vdvdyfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%vh_wdvdzh = tavg_specbudgy(jx,jy,jz)%vh_wdvdzh + &
+            vfy(jy)*conjg(wdvdzfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%wh_udvdxh = tavg_specbudgy(jx,jy,jz)%wh_udvdxh + &
+            wfy(jy)*conjg(udvdxfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%wh_vdvdyh = tavg_specbudgy(jx,jy,jz)%wh_vdvdyh + &
+            wfy(jy)*conjg(vdvdyfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%wh_wdvdzh = tavg_specbudgy(jx,jy,jz)%wh_wdvdzh + &
+            wfy(jy)*conjg(wdvdzfy(jy))*tavg_dt
+
+        tavg_specbudgy(jx,jy,jz)%uh_udwdxh = tavg_specbudgy(jx,jy,jz)%uh_udwdxh + &
+            ufy(jy)*conjg(udwdxfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%uh_vdwdyh = tavg_specbudgy(jx,jy,jz)%uh_vdwdyh + &
+            ufy(jy)*conjg(vdwdyfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%uh_wdwdzh = tavg_specbudgy(jx,jy,jz)%uh_wdwdzh + &
+            ufy(jy)*conjg(wdwdzfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%vh_udwdxh = tavg_specbudgy(jx,jy,jz)%vh_udwdxh + &
+            vfy(jy)*conjg(udwdxfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%vh_vdwdyh = tavg_specbudgy(jx,jy,jz)%vh_vdwdyh + &
+            vfy(jy)*conjg(vdwdyfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%vh_wdwdzh = tavg_specbudgy(jx,jy,jz)%vh_wdwdzh + &
+            vfy(jy)*conjg(wdwdzfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%wh_udwdxh = tavg_specbudgy(jx,jy,jz)%wh_udwdxh + &
+            wfy(jy)*conjg(udwdxfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%wh_vdwdyh = tavg_specbudgy(jx,jy,jz)%wh_vdwdyh + &
+            wfy(jy)*conjg(vdwdyfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%wh_wdwdzh = tavg_specbudgy(jx,jy,jz)%wh_wdwdzh + &
+            wfy(jy)*conjg(wdwdzfy(jy))*tavg_dt
+
+        ! Mean velocity * pressure gradient product, ui*dpdxj
+        tavg_specbudgy(jx,jy,jz)%udpdx = tavg_specbudgy(jx,jy,jz)%udpdx + &
+            ufy(jy)*conjg(dpdxfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%udpdy = tavg_specbudgy(jx,jy,jz)%udpdy + &
+            ufy(jy)*conjg(dpdyfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%udpdz = tavg_specbudgy(jx,jy,jz)%udpdz + &
+            ufy(jy)*conjg(dpdzfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%vdpdx = tavg_specbudgy(jx,jy,jz)%vdpdx + &
+            vfy(jy)*conjg(dpdxfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%vdpdy = tavg_specbudgy(jx,jy,jz)%vdpdy + &
+            vfy(jy)*conjg(dpdyfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%vdpdz = tavg_specbudgy(jx,jy,jz)%vdpdz + &
+            vfy(jy)*conjg(dpdzfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%wdpdx = tavg_specbudgy(jx,jy,jz)%wdpdx + &
+            wfy(jy)*conjg(dpdxfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%wdpdy = tavg_specbudgy(jx,jy,jz)%wdpdy + &
+            wfy(jy)*conjg(dpdyfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%wdpdz = tavg_specbudgy(jx,jy,jz)%wdpdz + &
+            wfy(jy)*conjg(dpdzfy(jy))*tavg_dt
+
+        ! Mean pressure * velocity gradient product, p*duidxj
+        tavg_specbudgy(jx,jy,jz)%pdudx = tavg_specbudgy(jx,jy,jz)%pdudx + &
+            pfy(jy)*conjg(dudxfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%pdudy = tavg_specbudgy(jx,jy,jz)%pdudy + &
+            pfy(jy)*conjg(dudyfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%pdudz = tavg_specbudgy(jx,jy,jz)%pdudz + &
+            pfy(jy)*conjg(dudzfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%pdvdx = tavg_specbudgy(jx,jy,jz)%pdvdx + &
+            pfy(jy)*conjg(dvdxfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%pdvdy = tavg_specbudgy(jx,jy,jz)%pdvdy + &
+            pfy(jy)*conjg(dvdyfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%pdvdz = tavg_specbudgy(jx,jy,jz)%pdvdz + &
+            pfy(jy)*conjg(dvdzfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%pdwdx = tavg_specbudgy(jx,jy,jz)%pdwdx + &
+            pfy(jy)*conjg(dwdxfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%pdwdy = tavg_specbudgy(jx,jy,jz)%pdwdy + &
+            pfy(jy)*conjg(dwdyfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%pdwdz = tavg_specbudgy(jx,jy,jz)%pdwdz + &
+            pfy(jy)*conjg(dwdzfy(jy))*tavg_dt
+
+        ! Mean Laplacian, nu*lap(uj)
+        tavg_specbudgy(jx,jy,jz)%lapu = tavg_specbudgy(jx,jy,jz)%lapu + &
+            divtxfy(jy)*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%lapv = tavg_specbudgy(jx,jy,jz)%lapv + &
+            divtyfy(jy)*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%lapw = tavg_specbudgy(jx,jy,jz)%lapw + &
+            divtzfy(jy)*tavg_dt
+
+        ! Mean Vel-Laplacian, nu*ui*lap(uj)
+        tavg_specbudgy(jx,jy,jz)%ulapu = tavg_specbudgy(jx,jy,jz)%ulapu + &
+            ufy(jy)*conjg(divtxfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%ulapv = tavg_specbudgy(jx,jy,jz)%ulapv + &
+            ufy(jy)*conjg(divtyfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%ulapw = tavg_specbudgy(jx,jy,jz)%ulapw + &
+            ufy(jy)*conjg(divtzfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%vlapu = tavg_specbudgy(jx,jy,jz)%vlapu + &
+            vfy(jy)*conjg(divtxfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%vlapv = tavg_specbudgy(jx,jy,jz)%vlapv + &
+            vfy(jy)*conjg(divtyfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%vlapw = tavg_specbudgy(jx,jy,jz)%vlapw + &
+            vfy(jy)*conjg(divtzfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%wlapu = tavg_specbudgy(jx,jy,jz)%wlapu + &
+            wfy(jy)*conjg(divtxfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%wlapv = tavg_specbudgy(jx,jy,jz)%wlapv + &
+            wfy(jy)*conjg(divtyfy(jy))*tavg_dt
+        tavg_specbudgy(jx,jy,jz)%wlapw = tavg_specbudgy(jx,jy,jz)%wlapw + &
+            wfy(jy)*conjg(divtzfy(jy))*tavg_dt
+#endif
     end do
 
 end do 
@@ -4395,7 +4900,8 @@ use stat_defs, only : turbspec_compute
 #endif
 
 #ifdef PPOUTPUT_SPECBUDG
-use stat_defs, only : tavg_specbudgx, specbudgx, specbudg_compute
+use stat_defs, only : tavg_specbudgx, specbudgx, specbudgx_compute
+use stat_defs, only : tavg_specbudgy, specbudgy, specbudgy_compute
 #endif
 
 #ifdef PPMPI
@@ -4427,6 +4933,7 @@ character(64) :: fname_sxvel, fname_syvel, fname_sxvort, fname_syvort
 
 #ifdef PPOUTPUT_SPECBUDG
 character(64) :: fname_sxuu, fname_sxvv, fname_sxww, fname_sxuv, fname_sxuw, fname_sxvw
+character(64) :: fname_syuu, fname_syvv, fname_syww, fname_syuv, fname_syuw, fname_syvw
 #endif
 
 integer :: i,j,k
@@ -4474,6 +4981,13 @@ fname_sxww = path // 'output/sxww_budg'
 fname_sxuv = path // 'output/sxuv_budg'
 fname_sxuw = path // 'output/sxuw_budg'
 fname_sxvw = path // 'output/sxvw_budg'
+
+fname_syuu = path // 'output/syuu_budg'
+fname_syvv = path // 'output/syvv_budg'
+fname_syww = path // 'output/syww_budg'
+fname_syuv = path // 'output/syuv_budg'
+fname_syuw = path // 'output/syuw_budg'
+fname_syvw = path // 'output/syvw_budg'
 #endif
 
 ! CGNS
@@ -4511,6 +5025,13 @@ call string_concat(fname_sxww, '.cgns')
 call string_concat(fname_sxuv, '.cgns')
 call string_concat(fname_sxuw, '.cgns')
 call string_concat(fname_sxvw, '.cgns')
+
+call string_concat(fname_syuu, '.cgns')
+call string_concat(fname_syvv, '.cgns')
+call string_concat(fname_syww, '.cgns')
+call string_concat(fname_syuv, '.cgns')
+call string_concat(fname_syuw, '.cgns')
+call string_concat(fname_syvw, '.cgns')
 #endif
 ! Binary
 #else
@@ -4552,6 +5073,13 @@ call string_concat(fname_sxww, bin_ext)
 call string_concat(fname_sxuv, bin_ext)
 call string_concat(fname_sxuw, bin_ext)
 call string_concat(fname_sxvw, bin_ext)
+
+call string_concat(fname_syuu, bin_ext)
+call string_concat(fname_syvv, bin_ext)
+call string_concat(fname_syww, bin_ext)
+call string_concat(fname_syuv, bin_ext)
+call string_concat(fname_syuw, bin_ext)
+call string_concat(fname_syvw, bin_ext)
 #endif
 #endif
 
@@ -4992,6 +5520,160 @@ do i = 1, Nx
     tavg_turbspecy(i,j,k) % vorty2 = tavg_turbspecy(i,j,k) % vorty2 / tavg_total_time
     tavg_turbspecy(i,j,k) % vortz2 = tavg_turbspecy(i,j,k) % vortz2 / tavg_total_time
     !tavg_turbspecy(i,j,k) % vort2 = tavg_turbspecy(i,j,k) % vort2 / tavg_total_time
+
+#ifdef PPOUTPUT_SPECBUDG
+    ! Mean pressure
+    tavg_specbudgy(i,j,k) % p = tavg_specbudgy(i,j,k) % p / tavg_total_time
+
+    ! Mean velocity gradient
+    tavg_specbudgy(i,j,k) % dudx = tavg_specbudgy(i,j,k) % dudx / tavg_total_time
+    tavg_specbudgy(i,j,k) % dudy = tavg_specbudgy(i,j,k) % dudy / tavg_total_time
+    tavg_specbudgy(i,j,k) % dudz = tavg_specbudgy(i,j,k) % dudz / tavg_total_time
+    tavg_specbudgy(i,j,k) % dvdx = tavg_specbudgy(i,j,k) % dvdx / tavg_total_time
+    tavg_specbudgy(i,j,k) % dvdy = tavg_specbudgy(i,j,k) % dvdy / tavg_total_time
+    tavg_specbudgy(i,j,k) % dvdz = tavg_specbudgy(i,j,k) % dvdz / tavg_total_time
+    tavg_specbudgy(i,j,k) % dwdx = tavg_specbudgy(i,j,k) % dwdx / tavg_total_time
+    tavg_specbudgy(i,j,k) % dwdy = tavg_specbudgy(i,j,k) % dwdy / tavg_total_time
+    tavg_specbudgy(i,j,k) % dwdz = tavg_specbudgy(i,j,k) % dwdz / tavg_total_time
+
+    ! Mean velGrad-velGrad product, duidxk*dujdxk, i=j
+    tavg_specbudgy(i,j,k) % uxux = tavg_specbudgy(i,j,k) % uxux / tavg_total_time
+    tavg_specbudgy(i,j,k) % uyuy = tavg_specbudgy(i,j,k) % uyuy / tavg_total_time
+    tavg_specbudgy(i,j,k) % uzuz = tavg_specbudgy(i,j,k) % uzuz / tavg_total_time
+    tavg_specbudgy(i,j,k) % vxvx = tavg_specbudgy(i,j,k) % vxvx / tavg_total_time
+    tavg_specbudgy(i,j,k) % vyvy = tavg_specbudgy(i,j,k) % vyvy / tavg_total_time
+    tavg_specbudgy(i,j,k) % vzvz = tavg_specbudgy(i,j,k) % vzvz / tavg_total_time
+    tavg_specbudgy(i,j,k) % wxwx = tavg_specbudgy(i,j,k) % wxwx / tavg_total_time
+    tavg_specbudgy(i,j,k) % wywy = tavg_specbudgy(i,j,k) % wywy / tavg_total_time
+    tavg_specbudgy(i,j,k) % wzwz = tavg_specbudgy(i,j,k) % wzwz / tavg_total_time
+
+    ! Mean velGrad-velGrad product, duidxk*dujdxk, i/=j
+    tavg_specbudgy(i,j,k) % uxvx = tavg_specbudgy(i,j,k) % uxvx / tavg_total_time
+    tavg_specbudgy(i,j,k) % uyvy = tavg_specbudgy(i,j,k) % uyvy / tavg_total_time
+    tavg_specbudgy(i,j,k) % uzvz = tavg_specbudgy(i,j,k) % uzvz / tavg_total_time
+    tavg_specbudgy(i,j,k) % uxwx = tavg_specbudgy(i,j,k) % uxwx / tavg_total_time
+    tavg_specbudgy(i,j,k) % uywy = tavg_specbudgy(i,j,k) % uywy / tavg_total_time
+    tavg_specbudgy(i,j,k) % uzwz = tavg_specbudgy(i,j,k) % uzwz / tavg_total_time
+    tavg_specbudgy(i,j,k) % vxwx = tavg_specbudgy(i,j,k) % vxwx / tavg_total_time
+    tavg_specbudgy(i,j,k) % vywy = tavg_specbudgy(i,j,k) % vywy / tavg_total_time
+    tavg_specbudgy(i,j,k) % vzwz = tavg_specbudgy(i,j,k) % vzwz / tavg_total_time
+
+    ! Mean pressure gradients, dpdxi
+    tavg_specbudgy(i,j,k) % dpdx = tavg_specbudgy(i,j,k) % dpdx / tavg_total_time
+    tavg_specbudgy(i,j,k) % dpdy = tavg_specbudgy(i,j,k) % dpdy / tavg_total_time
+    tavg_specbudgy(i,j,k) % dpdz = tavg_specbudgy(i,j,k) % dpdz / tavg_total_time
+
+    ! Mean velocity * velocity gradient product, ui_hat*dujdxk_hat
+    tavg_specbudgy(i,j,k) % uh_dudxh = tavg_specbudgy(i,j,k) % uh_dudxh / tavg_total_time
+    tavg_specbudgy(i,j,k) % uh_dudyh = tavg_specbudgy(i,j,k) % uh_dudyh / tavg_total_time
+    tavg_specbudgy(i,j,k) % uh_dudzh = tavg_specbudgy(i,j,k) % uh_dudzh / tavg_total_time
+    tavg_specbudgy(i,j,k) % uh_dvdxh = tavg_specbudgy(i,j,k) % uh_dvdxh / tavg_total_time
+    tavg_specbudgy(i,j,k) % uh_dvdyh = tavg_specbudgy(i,j,k) % uh_dvdyh / tavg_total_time
+    tavg_specbudgy(i,j,k) % uh_dvdzh = tavg_specbudgy(i,j,k) % uh_dvdzh / tavg_total_time
+    tavg_specbudgy(i,j,k) % uh_dwdxh = tavg_specbudgy(i,j,k) % uh_dwdxh / tavg_total_time
+    tavg_specbudgy(i,j,k) % uh_dwdyh = tavg_specbudgy(i,j,k) % uh_dwdyh / tavg_total_time
+    tavg_specbudgy(i,j,k) % uh_dwdzh = tavg_specbudgy(i,j,k) % uh_dwdzh / tavg_total_time
+
+    tavg_specbudgy(i,j,k) % vh_dudxh = tavg_specbudgy(i,j,k) % vh_dudxh / tavg_total_time
+    tavg_specbudgy(i,j,k) % vh_dudyh = tavg_specbudgy(i,j,k) % vh_dudyh / tavg_total_time
+    tavg_specbudgy(i,j,k) % vh_dudzh = tavg_specbudgy(i,j,k) % vh_dudzh / tavg_total_time
+    tavg_specbudgy(i,j,k) % vh_dvdxh = tavg_specbudgy(i,j,k) % vh_dvdxh / tavg_total_time
+    tavg_specbudgy(i,j,k) % vh_dvdyh = tavg_specbudgy(i,j,k) % vh_dvdyh / tavg_total_time
+    tavg_specbudgy(i,j,k) % vh_dvdzh = tavg_specbudgy(i,j,k) % vh_dvdzh / tavg_total_time
+    tavg_specbudgy(i,j,k) % vh_dwdxh = tavg_specbudgy(i,j,k) % vh_dwdxh / tavg_total_time
+    tavg_specbudgy(i,j,k) % vh_dwdyh = tavg_specbudgy(i,j,k) % vh_dwdyh / tavg_total_time
+    tavg_specbudgy(i,j,k) % vh_dwdzh = tavg_specbudgy(i,j,k) % vh_dwdzh / tavg_total_time
+
+    tavg_specbudgy(i,j,k) % wh_dudxh = tavg_specbudgy(i,j,k) % wh_dudxh / tavg_total_time
+    tavg_specbudgy(i,j,k) % wh_dudyh = tavg_specbudgy(i,j,k) % wh_dudyh / tavg_total_time
+    tavg_specbudgy(i,j,k) % wh_dudzh = tavg_specbudgy(i,j,k) % wh_dudzh / tavg_total_time
+    tavg_specbudgy(i,j,k) % wh_dvdxh = tavg_specbudgy(i,j,k) % wh_dvdxh / tavg_total_time
+    tavg_specbudgy(i,j,k) % wh_dvdyh = tavg_specbudgy(i,j,k) % wh_dvdyh / tavg_total_time
+    tavg_specbudgy(i,j,k) % wh_dvdzh = tavg_specbudgy(i,j,k) % wh_dvdzh / tavg_total_time
+    tavg_specbudgy(i,j,k) % wh_dwdxh = tavg_specbudgy(i,j,k) % wh_dwdxh / tavg_total_time
+    tavg_specbudgy(i,j,k) % wh_dwdyh = tavg_specbudgy(i,j,k) % wh_dwdyh / tavg_total_time
+    tavg_specbudgy(i,j,k) % wh_dwdzh = tavg_specbudgy(i,j,k) % wh_dwdzh / tavg_total_time
+
+    ! Mean velocity * velocity gradient product, uk*duidxk_hat
+    tavg_specbudgy(i,j,k) % ududxh = tavg_specbudgy(i,j,k) % ududxh / tavg_total_time
+    tavg_specbudgy(i,j,k) % vdudyh = tavg_specbudgy(i,j,k) % vdudyh / tavg_total_time
+    tavg_specbudgy(i,j,k) % wdudzh = tavg_specbudgy(i,j,k) % wdudzh / tavg_total_time
+    tavg_specbudgy(i,j,k) % udvdxh = tavg_specbudgy(i,j,k) % udvdxh / tavg_total_time
+    tavg_specbudgy(i,j,k) % vdvdyh = tavg_specbudgy(i,j,k) % vdvdyh / tavg_total_time
+    tavg_specbudgy(i,j,k) % wdvdzh = tavg_specbudgy(i,j,k) % wdvdzh / tavg_total_time
+    tavg_specbudgy(i,j,k) % udwdxh = tavg_specbudgy(i,j,k) % udwdxh / tavg_total_time
+    tavg_specbudgy(i,j,k) % vdwdyh = tavg_specbudgy(i,j,k) % vdwdyh / tavg_total_time
+    tavg_specbudgy(i,j,k) % wdwdzh = tavg_specbudgy(i,j,k) % wdwdzh / tavg_total_time
+
+    ! Mean vel * vel * vel gradient product, uj_hat*(uk*duidxk)_hat
+    tavg_specbudgy(i,j,k) % uh_ududxh = tavg_specbudgy(i,j,k)%uh_ududxh / tavg_total_time
+    tavg_specbudgy(i,j,k) % uh_vdudyh = tavg_specbudgy(i,j,k)%uh_vdudyh / tavg_total_time
+    tavg_specbudgy(i,j,k) % uh_wdudzh = tavg_specbudgy(i,j,k)%uh_wdudzh / tavg_total_time
+    tavg_specbudgy(i,j,k) % vh_ududxh = tavg_specbudgy(i,j,k)%vh_ududxh / tavg_total_time
+    tavg_specbudgy(i,j,k) % vh_vdudyh = tavg_specbudgy(i,j,k)%vh_vdudyh / tavg_total_time
+    tavg_specbudgy(i,j,k) % vh_wdudzh = tavg_specbudgy(i,j,k)%vh_wdudzh / tavg_total_time
+    tavg_specbudgy(i,j,k) % wh_ududxh = tavg_specbudgy(i,j,k)%wh_ududxh / tavg_total_time
+    tavg_specbudgy(i,j,k) % wh_vdudyh = tavg_specbudgy(i,j,k)%wh_vdudyh / tavg_total_time
+    tavg_specbudgy(i,j,k) % wh_wdudzh = tavg_specbudgy(i,j,k)%wh_wdudzh / tavg_total_time
+
+    tavg_specbudgy(i,j,k) % uh_udvdxh = tavg_specbudgy(i,j,k)%uh_udvdxh / tavg_total_time
+    tavg_specbudgy(i,j,k) % uh_vdvdyh = tavg_specbudgy(i,j,k)%uh_vdvdyh / tavg_total_time
+    tavg_specbudgy(i,j,k) % uh_wdvdzh = tavg_specbudgy(i,j,k)%uh_wdvdzh / tavg_total_time
+    tavg_specbudgy(i,j,k) % vh_udvdxh = tavg_specbudgy(i,j,k)%vh_udvdxh / tavg_total_time
+    tavg_specbudgy(i,j,k) % vh_vdvdyh = tavg_specbudgy(i,j,k)%vh_vdvdyh / tavg_total_time
+    tavg_specbudgy(i,j,k) % vh_wdvdzh = tavg_specbudgy(i,j,k)%vh_wdvdzh / tavg_total_time
+    tavg_specbudgy(i,j,k) % wh_udvdxh = tavg_specbudgy(i,j,k)%wh_udvdxh / tavg_total_time
+    tavg_specbudgy(i,j,k) % wh_vdvdyh = tavg_specbudgy(i,j,k)%wh_vdvdyh / tavg_total_time
+    tavg_specbudgy(i,j,k) % wh_wdvdzh = tavg_specbudgy(i,j,k)%wh_wdvdzh / tavg_total_time
+
+    tavg_specbudgy(i,j,k) % uh_udwdxh = tavg_specbudgy(i,j,k)%uh_udwdxh / tavg_total_time
+    tavg_specbudgy(i,j,k) % uh_vdwdyh = tavg_specbudgy(i,j,k)%uh_vdwdyh / tavg_total_time
+    tavg_specbudgy(i,j,k) % uh_wdwdzh = tavg_specbudgy(i,j,k)%uh_wdwdzh / tavg_total_time
+    tavg_specbudgy(i,j,k) % vh_udwdxh = tavg_specbudgy(i,j,k)%vh_udwdxh / tavg_total_time
+    tavg_specbudgy(i,j,k) % vh_vdwdyh = tavg_specbudgy(i,j,k)%vh_vdwdyh / tavg_total_time
+    tavg_specbudgy(i,j,k) % vh_wdwdzh = tavg_specbudgy(i,j,k)%vh_wdwdzh / tavg_total_time
+    tavg_specbudgy(i,j,k) % wh_udwdxh = tavg_specbudgy(i,j,k)%wh_udwdxh / tavg_total_time
+    tavg_specbudgy(i,j,k) % wh_vdwdyh = tavg_specbudgy(i,j,k)%wh_vdwdyh / tavg_total_time
+    tavg_specbudgy(i,j,k) % wh_wdwdzh = tavg_specbudgy(i,j,k)%wh_wdwdzh / tavg_total_time
+
+    ! Mean velocity * pressure gradient product, ui*dpdxj
+    tavg_specbudgy(i,j,k) % udpdx = tavg_specbudgy(i,j,k) % udpdx / tavg_total_time
+    tavg_specbudgy(i,j,k) % udpdy = tavg_specbudgy(i,j,k) % udpdy / tavg_total_time
+    tavg_specbudgy(i,j,k) % udpdz = tavg_specbudgy(i,j,k) % udpdz / tavg_total_time
+    tavg_specbudgy(i,j,k) % vdpdx = tavg_specbudgy(i,j,k) % vdpdx / tavg_total_time
+    tavg_specbudgy(i,j,k) % vdpdy = tavg_specbudgy(i,j,k) % vdpdy / tavg_total_time
+    tavg_specbudgy(i,j,k) % vdpdz = tavg_specbudgy(i,j,k) % vdpdz / tavg_total_time
+    tavg_specbudgy(i,j,k) % wdpdx = tavg_specbudgy(i,j,k) % wdpdx / tavg_total_time
+    tavg_specbudgy(i,j,k) % wdpdy = tavg_specbudgy(i,j,k) % wdpdy / tavg_total_time
+    tavg_specbudgy(i,j,k) % wdpdz = tavg_specbudgy(i,j,k) % wdpdz / tavg_total_time
+
+    ! Mean pressure * velocity gradient product, p*duidxj
+    tavg_specbudgy(i,j,k) % pdudx = tavg_specbudgy(i,j,k) % pdudx / tavg_total_time
+    tavg_specbudgy(i,j,k) % pdudy = tavg_specbudgy(i,j,k) % pdudy / tavg_total_time
+    tavg_specbudgy(i,j,k) % pdudz = tavg_specbudgy(i,j,k) % pdudz / tavg_total_time
+    tavg_specbudgy(i,j,k) % pdvdx = tavg_specbudgy(i,j,k) % pdvdx / tavg_total_time
+    tavg_specbudgy(i,j,k) % pdvdy = tavg_specbudgy(i,j,k) % pdvdy / tavg_total_time
+    tavg_specbudgy(i,j,k) % pdvdz = tavg_specbudgy(i,j,k) % pdvdz / tavg_total_time
+    tavg_specbudgy(i,j,k) % pdwdx = tavg_specbudgy(i,j,k) % pdwdx / tavg_total_time
+    tavg_specbudgy(i,j,k) % pdwdy = tavg_specbudgy(i,j,k) % pdwdy / tavg_total_time
+    tavg_specbudgy(i,j,k) % pdwdz = tavg_specbudgy(i,j,k) % pdwdz / tavg_total_time
+
+    ! Mean Laplacian, nu*lap(uj)
+    tavg_specbudgy(i,j,k) % lapu = tavg_specbudgy(i,j,k) % lapu / tavg_total_time
+    tavg_specbudgy(i,j,k) % lapv = tavg_specbudgy(i,j,k) % lapv / tavg_total_time
+    tavg_specbudgy(i,j,k) % lapw = tavg_specbudgy(i,j,k) % lapw / tavg_total_time
+
+    ! Mean Vel-Laplacian, nu*ui*lap(uj)
+    tavg_specbudgy(i,j,k) % ulapu = tavg_specbudgy(i,j,k) % ulapu / tavg_total_time
+    tavg_specbudgy(i,j,k) % ulapv = tavg_specbudgy(i,j,k) % ulapv / tavg_total_time
+    tavg_specbudgy(i,j,k) % ulapw = tavg_specbudgy(i,j,k) % ulapw / tavg_total_time
+    tavg_specbudgy(i,j,k) % vlapu = tavg_specbudgy(i,j,k) % vlapu / tavg_total_time
+    tavg_specbudgy(i,j,k) % vlapv = tavg_specbudgy(i,j,k) % vlapv / tavg_total_time
+    tavg_specbudgy(i,j,k) % vlapw = tavg_specbudgy(i,j,k) % vlapw / tavg_total_time
+    tavg_specbudgy(i,j,k) % wlapu = tavg_specbudgy(i,j,k) % wlapu / tavg_total_time
+    tavg_specbudgy(i,j,k) % wlapv = tavg_specbudgy(i,j,k) % wlapv / tavg_total_time
+    tavg_specbudgy(i,j,k) % wlapw = tavg_specbudgy(i,j,k) % wlapw / tavg_total_time
+#endif
 end do
 end do
 
@@ -5672,7 +6354,7 @@ close(13)
 #ifdef PPOUTPUT_SPECBUDG
 ! Write spectral budget data
 allocate(specbudgx(nx/2+1,ny,lbz:nz))
-specbudgx = specbudg_compute(tavg_specbudgx, turbspecx, tavg_turbspecx, tavg_budget, tavg, lbz)
+specbudgx = specbudgx_compute(tavg_specbudgx, turbspecx, tavg_turbspecx, tavg_budget, tavg, lbz)
 
 #ifdef PPCGNS
 ! Not ready
@@ -5747,6 +6429,83 @@ close(13)
 
 deallocate(specbudgx)
 
+! Write spectral budget data
+allocate(specbudgy(nx,ny/2+1,lbz:nz))
+specbudgy = specbudgy_compute(tavg_specbudgy, turbspecy, tavg_turbspecy, tavg_budget, tavg, lbz)
+
+#ifdef PPCGNS
+! Not ready
+#else
+! Write binary data
+open(unit=13, file=fname_syuu, form='unformatted', convert=write_endian,     &
+    access='direct', recl=nx*(ny/2+1)*nz*rprec)
+write(13,rec=1) specbudgy(:nx,:ny/2+1,1:nz)%advxx
+write(13,rec=2) specbudgy(:nx,:ny/2+1,1:nz)%tflucxx
+write(13,rec=3) specbudgy(:nx,:ny/2+1,1:nz)%tpresxx
+write(13,rec=4) specbudgy(:nx,:ny/2+1,1:nz)%pstrainxx
+write(13,rec=5) specbudgy(:nx,:ny/2+1,1:nz)%tviscxx
+write(13,rec=6) specbudgy(:nx,:ny/2+1,1:nz)%prodxx
+write(13,rec=7) specbudgy(:nx,:ny/2+1,1:nz)%pdissxx
+close(13)
+
+open(unit=13, file=fname_syvv, form='unformatted', convert=write_endian,     &
+    access='direct', recl=nx*(ny/2+1)*nz*rprec)
+write(13,rec=1) specbudgy(:nx,:ny/2+1,1:nz)%advyy
+write(13,rec=2) specbudgy(:nx,:ny/2+1,1:nz)%tflucyy
+write(13,rec=3) specbudgy(:nx,:ny/2+1,1:nz)%tpresyy
+write(13,rec=4) specbudgy(:nx,:ny/2+1,1:nz)%pstrainyy
+write(13,rec=5) specbudgy(:nx,:ny/2+1,1:nz)%tviscyy
+write(13,rec=6) specbudgy(:nx,:ny/2+1,1:nz)%prodyy
+write(13,rec=7) specbudgy(:nx,:ny/2+1,1:nz)%pdissyy
+close(13)
+
+open(unit=13, file=fname_syww, form='unformatted', convert=write_endian,     &
+    access='direct', recl=nx*(ny/2+1)*nz*rprec)
+write(13,rec=1) specbudgy(:nx,:ny/2+1,1:nz)%advzz
+write(13,rec=2) specbudgy(:nx,:ny/2+1,1:nz)%tfluczz
+write(13,rec=3) specbudgy(:nx,:ny/2+1,1:nz)%tpreszz
+write(13,rec=4) specbudgy(:nx,:ny/2+1,1:nz)%pstrainzz
+write(13,rec=5) specbudgy(:nx,:ny/2+1,1:nz)%tvisczz
+write(13,rec=6) specbudgy(:nx,:ny/2+1,1:nz)%prodzz
+write(13,rec=7) specbudgy(:nx,:ny/2+1,1:nz)%pdisszz
+close(13)
+
+open(unit=13, file=fname_syuv, form='unformatted', convert=write_endian,     &
+    access='direct', recl=nx*(ny/2+1)*nz*rprec)
+write(13,rec=1) specbudgy(:nx,:ny/2+1,1:nz)%advxy
+write(13,rec=2) specbudgy(:nx,:ny/2+1,1:nz)%tflucxy
+write(13,rec=3) specbudgy(:nx,:ny/2+1,1:nz)%tpresxy
+write(13,rec=4) specbudgy(:nx,:ny/2+1,1:nz)%pstrainxy
+write(13,rec=5) specbudgy(:nx,:ny/2+1,1:nz)%tviscxy
+write(13,rec=6) specbudgy(:nx,:ny/2+1,1:nz)%prodxy
+write(13,rec=7) specbudgy(:nx,:ny/2+1,1:nz)%pdissxy
+close(13)
+
+open(unit=13, file=fname_syuw, form='unformatted', convert=write_endian,     &
+    access='direct', recl=nx*(ny/2+1)*nz*rprec)
+write(13,rec=1) specbudgy(:nx,:ny/2+1,1:nz)%advxz
+write(13,rec=2) specbudgy(:nx,:ny/2+1,1:nz)%tflucxz
+write(13,rec=3) specbudgy(:nx,:ny/2+1,1:nz)%tpresxz
+write(13,rec=4) specbudgy(:nx,:ny/2+1,1:nz)%pstrainxz
+write(13,rec=5) specbudgy(:nx,:ny/2+1,1:nz)%tviscxz
+write(13,rec=6) specbudgy(:nx,:ny/2+1,1:nz)%prodxz
+write(13,rec=7) specbudgy(:nx,:ny/2+1,1:nz)%pdissxz
+close(13)
+
+open(unit=13, file=fname_syvw, form='unformatted', convert=write_endian,     &
+    access='direct', recl=nx*(ny/2+1)*nz*rprec)
+write(13,rec=1) specbudgy(:nx,:ny/2+1,1:nz)%advyz
+write(13,rec=2) specbudgy(:nx,:ny/2+1,1:nz)%tflucyz
+write(13,rec=3) specbudgy(:nx,:ny/2+1,1:nz)%tpresyz
+write(13,rec=4) specbudgy(:nx,:ny/2+1,1:nz)%pstrainyz
+write(13,rec=5) specbudgy(:nx,:ny/2+1,1:nz)%tviscyz
+write(13,rec=6) specbudgy(:nx,:ny/2+1,1:nz)%prodyz
+write(13,rec=7) specbudgy(:nx,:ny/2+1,1:nz)%pdissyz
+close(13)
+#endif
+
+deallocate(specbudgy)
+
 #endif
 
 #ifdef PPOUTPUT_TURBSEC
@@ -5785,7 +6544,7 @@ use stat_defs, only : tavg_turbspecx, tavg_turbspecy
 #endif
 #ifdef PPOUTPUT_SPECBUDG
 use param, only : checkpoint_tavg_specbudg_file
-use stat_defs, only : tavg_specbudgx
+use stat_defs, only : tavg_specbudgx, tavg_specbudgy
 #endif
 
 implicit none
@@ -5854,6 +6613,7 @@ open(1, file=fname, action='write', position='rewind',form='unformatted',   &
     convert=write_endian)
 write(1) tavg_total_time
 write(1) tavg_specbudgx
+write(1) tavg_specbudgy
 close(1)
 #endif
 
