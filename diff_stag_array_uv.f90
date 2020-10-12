@@ -32,7 +32,7 @@ use sgs_param, only : nu, Nu_t
 use derivatives, only : ddz_w
 use fft
 #ifdef PPMAPPING
-use sim_param, only : JACO1, JACO2, mesh_stretch
+use sim_param, only : jaco_w, jaco_uv, mesh_stretch
 #endif
 use derivatives, only : dft_direct_forw_2d_n_yonlyC, &
     dft_direct_back_2d_n_yonlyC
@@ -104,9 +104,9 @@ if (coord == 0) then
                 end if
                 ! txz(jx,jy,1) = 0, so nothing added to RHS
 #ifdef PPMAPPING
-                b(jx,jy,1) = 1._rprec + const1*(1._rprec/JACO2(1))*        &
-                    const2*(1._rprec/JACO1(2))*nu_c
-                c(jx,jy,1) = -const1*(1._rprec/JACO2(1))*const2*(1._rprec/JACO1(2))*nu_c
+                b(jx,jy,1) = 1._rprec + const1*(1._rprec/jaco_uv(1))*        &
+                    const2*(1._rprec/jaco_w(2))*nu_c
+                c(jx,jy,1) = -const1*(1._rprec/jaco_uv(1))*const2*(1._rprec/jaco_w(2))*nu_c
 #else
                 b(jx,jy,1) = 1._rprec + const1*const2*nu_c
                 c(jx,jy,1) = -const1*const2*nu_c
@@ -132,11 +132,11 @@ if (coord == 0) then
                 ! Therefore BC treated implicitly
                 ! vbot = 0 so no changes to Ry
 #ifdef PPMAPPING
-                b(jx,jy,1) = 1._rprec + const1*(1._rprec/JACO2(1))*        &
-                    (const2*(1._rprec/JACO1(2))*nu_c + (nu/mesh_stretch(1)))
-                c(jx,jy,1) = -const1*(1._rprec/JACO2(1))*const2*(1._rprec/JACO1(2))*nu_c
+                b(jx,jy,1) = 1._rprec + const1*(1._rprec/jaco_uv(1))*        &
+                    (const2*(1._rprec/jaco_w(2))*nu_c + (nu/mesh_stretch(1)))
+                c(jx,jy,1) = -const1*(1._rprec/jaco_uv(1))*const2*(1._rprec/jaco_w(2))*nu_c
                 if (.not. fourier) then
-                    Rx(jx,jy,1) = Rx(jx,jy,1) + const1*(1._rprec/JACO2(1))* &
+                    Rx(jx,jy,1) = Rx(jx,jy,1) + const1*(1._rprec/jaco_uv(1))* &
                         (nu/mesh_stretch(1))*ubot
                 endif
 #else
@@ -152,7 +152,7 @@ if (coord == 0) then
             !! Add ubot to kx = ky = 0 mode only
             if (fourier) then
 #ifdef PPMAPPING
-                Rx(1,1,1) = Rx(1,1,1) + const1*(1._rprec/JACO2(1))* &
+                Rx(1,1,1) = Rx(1,1,1) + const1*(1._rprec/jaco_uv(1))* &
                     (nu/mesh_stretch(1))*ubot
 #else
                 Rx(1,1,1) = Rx(1,1,1) + const1*const3*nu*ubot
@@ -175,11 +175,11 @@ if (coord == 0) then
                 end if
                 ! Treating txz(jx,jy,1) from wallstress explicitly
 #ifdef PPMAPPING
-                b(jx,jy,1) = 1._rprec + const1*(1._rprec/JACO2(1))*            &
-                    const2*(1._rprec/JACO1(2))*nu_c
-                c(jx,jy,1) = -const1*(1._rprec/JACO2(1))*const2*(1._rprec/JACO1(2))*nu_c
-                Rx(jx,jy,1) = Rx(jx,jy,1) + const1*(1._rprec/JACO2(1))*txz(jx,jy,1)
-                Ry(jx,jy,1) = Ry(jx,jy,1) + const1*(1._rprec/JACO2(1))*tyz(jx,jy,1)
+                b(jx,jy,1) = 1._rprec + const1*(1._rprec/jaco_uv(1))*            &
+                    const2*(1._rprec/jaco_w(2))*nu_c
+                c(jx,jy,1) = -const1*(1._rprec/jaco_uv(1))*const2*(1._rprec/jaco_w(2))*nu_c
+                Rx(jx,jy,1) = Rx(jx,jy,1) + const1*(1._rprec/jaco_uv(1))*txz(jx,jy,1)
+                Ry(jx,jy,1) = Ry(jx,jy,1) + const1*(1._rprec/jaco_uv(1))*tyz(jx,jy,1)
 #else
                 b(jx,jy,1) = 1._rprec + const1*const2*nu_c
                 c(jx,jy,1) = -const1*const2*nu_c
@@ -219,9 +219,9 @@ if (coord == nproc-1) then
                 end if
                 ! txz(jx,jy,nz) = 0, so nothing added to RHS
 #ifdef PPMAPPING
-                a(jx,jy,nz-1) = -const1*(1._rprec/JACO2(nz-1))*const2*(1._rprec/JACO1(nz-1))*nu_a
+                a(jx,jy,nz-1) = -const1*(1._rprec/jaco_uv(nz-1))*const2*(1._rprec/jaco_w(nz-1))*nu_a
                 b(jx,jy,nz-1) = 1._rprec +                               &
-                    const1*(1._rprec/JACO2(nz-1))*const2*(1._rprec/JACO1(nz-1))*nu_a
+                    const1*(1._rprec/jaco_uv(nz-1))*const2*(1._rprec/jaco_w(nz-1))*nu_a
 #else
                 a(jx,jy,nz-1) = -const1*const2*nu_a
                 b(jx,jy,nz-1) = 1._rprec + const1*const2*nu_a
@@ -247,11 +247,11 @@ if (coord == nproc-1) then
                 ! Therefore BC treated implicitly
                 ! vtop = 0 so no changes to Ry
 #ifdef PPMAPPING
-                a(jx,jy,nz-1) = -const1*(1._rprec/JACO2(nz-1))*const2*(1._rprec/JACO1(nz-1))*nu_a
-                b(jx,jy,nz-1) = 1._rprec + const1*(1._rprec/JACO2(nz-1))*          &
-                    (const2*(1._rprec/JACO1(nz-1))*nu_a + (nu/(L_z-mesh_stretch(nz-1))))
+                a(jx,jy,nz-1) = -const1*(1._rprec/jaco_uv(nz-1))*const2*(1._rprec/jaco_w(nz-1))*nu_a
+                b(jx,jy,nz-1) = 1._rprec + const1*(1._rprec/jaco_uv(nz-1))*          &
+                    (const2*(1._rprec/jaco_w(nz-1))*nu_a + (nu/(L_z-mesh_stretch(nz-1))))
                 if (.not. fourier) then
-                    Rx(jx,jy,nz-1) = Rx(jx,jy,nz-1) + const1*(1._rprec/JACO2(nz-1))* &
+                    Rx(jx,jy,nz-1) = Rx(jx,jy,nz-1) + const1*(1._rprec/jaco_uv(nz-1))* &
                         (nu/(L_z-mesh_stretch(nz-1)))*utop
                 endif
 #else
@@ -267,7 +267,7 @@ if (coord == nproc-1) then
             !! Add utop to kx = ky = 0 mode only
             if (fourier) then
 #ifdef PPMAPPING
-                Rx(1,1,nz-1) = Rx(1,1,nz-1) + const1*(1._rprec/JACO2(nz-1))* &
+                Rx(1,1,nz-1) = Rx(1,1,nz-1) + const1*(1._rprec/jaco_uv(nz-1))* &
                     (nu/(L_z-mesh_stretch(nz-1)))*utop
 #else
                 Rx(1,1,nz-1) = Rx(1,1,nz-1) + const1*const3*nu*utop
@@ -290,11 +290,11 @@ if (coord == nproc-1) then
                 end if
                 ! Treating txz(jx,jy,nz) from wallstress explicitly
 #ifdef PPMAPPING
-                a(jx,jy,nz-1) = -const1*(1._rprec/JACO2(nz-1))*const2*(1._rprec/JACO1(nz-1))*nu_a
-                b(jx,jy,nz-1) = 1._rprec + const1*(1._rprec/JACO2(nz-1))*            &
-                    const2*(1._rprec/JACO1(nz-1))*nu_a
-                Rx(jx,jy,nz-1) = Rx(jx,jy,nz-1) - const1*(1._rprec/JACO2(nz-1))*txz(jx,jy,nz)
-                Ry(jx,jy,nz-1) = Ry(jx,jy,nz-1) - const1*(1._rprec/JACO2(nz-1))*tyz(jx,jy,nz)
+                a(jx,jy,nz-1) = -const1*(1._rprec/jaco_uv(nz-1))*const2*(1._rprec/jaco_w(nz-1))*nu_a
+                b(jx,jy,nz-1) = 1._rprec + const1*(1._rprec/jaco_uv(nz-1))*            &
+                    const2*(1._rprec/jaco_w(nz-1))*nu_a
+                Rx(jx,jy,nz-1) = Rx(jx,jy,nz-1) - const1*(1._rprec/jaco_uv(nz-1))*txz(jx,jy,nz)
+                Ry(jx,jy,nz-1) = Ry(jx,jy,nz-1) - const1*(1._rprec/jaco_uv(nz-1))*tyz(jx,jy,nz)
 #else
                 a(jx,jy,nz-1) = -const1*const2*nu_a
                 b(jx,jy,nz-1) = 1._rprec + const1*const2*nu_a
@@ -321,7 +321,7 @@ do jx = 1, nx
         if (fourier) then
             nu_a = Nu_t(1,jy,jz) + nu
 #ifdef PPMAPPING
-            nu_b = ((Nu_t(1,jy,jz+1)+nu)/JACO1(jz+1)) + ((Nu_t(1,jy,jz)+nu)/JACO1(jz))
+            nu_b = ((Nu_t(1,jy,jz+1)+nu)/jaco_w(jz+1)) + ((Nu_t(1,jy,jz)+nu)/jaco_w(jz))
 #else
             nu_b = Nu_t(1,jy,jz+1) + Nu_t(1,jy,jz) + 2._rprec*nu
 #endif
@@ -329,7 +329,7 @@ do jx = 1, nx
         else
             nu_a = Nu_t(jx,jy,jz) + nu
 #ifdef PPMAPPING
-            nu_b = ((Nu_t(jx,jy,jz+1)+nu)/JACO1(jz+1)) + ((Nu_t(jx,jy,jz)+nu)/JACO1(jz))
+            nu_b = ((Nu_t(jx,jy,jz+1)+nu)/jaco_w(jz+1)) + ((Nu_t(jx,jy,jz)+nu)/jaco_w(jz))
 #else
             nu_b = Nu_t(jx,jy,jz+1) + Nu_t(jx,jy,jz) + 2._rprec*nu
 #endif
@@ -338,7 +338,7 @@ do jx = 1, nx
     else
         nu_a = nu
 #ifdef PPMAPPING
-        nu_b = (nu/JACO1(jz+1)) + (nu/JACO1(jz))
+        nu_b = (nu/jaco_w(jz+1)) + (nu/jaco_w(jz))
 #else
         nu_b = 2._rprec*nu
 #endif
@@ -346,9 +346,9 @@ do jx = 1, nx
     endif
 
 #ifdef PPMAPPING
-    a(jx, jy, jz) = -const1*(1._rprec/JACO2(jz))*const2*(1._rprec/JACO1(jz))*nu_a
-    b(jx, jy, jz) = 1._rprec + const1*(1._rprec/JACO2(jz))*const2*nu_b
-    c(jx, jy, jz) = -const1*(1._rprec/JACO2(jz))*const2*(1._rprec/JACO1(jz+1))*nu_c
+    a(jx, jy, jz) = -const1*(1._rprec/jaco_uv(jz))*const2*(1._rprec/jaco_w(jz))*nu_a
+    b(jx, jy, jz) = 1._rprec + const1*(1._rprec/jaco_uv(jz))*const2*nu_b
+    c(jx, jy, jz) = -const1*(1._rprec/jaco_uv(jz))*const2*(1._rprec/jaco_w(jz+1))*nu_c
 #else
     a(jx, jy, jz) = -const1*const2*nu_a
     b(jx, jy, jz) = 1._rprec + const1*const2*nu_b

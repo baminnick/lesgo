@@ -1605,7 +1605,7 @@ use param
 use sgs_param, only : nu
 use derivatives, only : ddz_w
 #ifdef PPMAPPING
-use sim_param, only : JACO1, JACO2, mesh_stretch
+use sim_param, only : jaco_w, jaco_uv, mesh_stretch
 #endif
 
 implicit none
@@ -1656,11 +1656,11 @@ if (coord == 0) then
                 ! Discretized dTdz(jx,jy,1) as in wallstress,
                 ! Therefore BC treated implicitly
 #ifdef PPMAPPING
-                b(jx,jy,1) = 1._rprec + const1*(1._rprec/JACO2(1))*        &
-                    (const2*(1._rprec/JACO1(2))*kappa_c + ((nu/Pr_sgs)/mesh_stretch(1)))
-                c(jx,jy,1) = -const1*(1._rprec/JACO2(1))*const2*(1._rprec/JACO1(2))*kappa_c
+                b(jx,jy,1) = 1._rprec + const1*(1._rprec/jaco_uv(1))*        &
+                    (const2*(1._rprec/jaco_w(2))*kappa_c + ((nu/Pr_sgs)/mesh_stretch(1)))
+                c(jx,jy,1) = -const1*(1._rprec/jaco_uv(1))*const2*(1._rprec/jaco_w(2))*kappa_c
                 if (.not. fourier) then
-                    Rtheta(jx,jy,1) = Rtheta(jx,jy,1) + const1*(1._rprec/JACO2(1))* &
+                    Rtheta(jx,jy,1) = Rtheta(jx,jy,1) + const1*(1._rprec/jaco_uv(1))* &
                         ((nu/Pr_sgs)/mesh_stretch(1))*scal_bot
                 endif
 #else
@@ -1676,7 +1676,7 @@ if (coord == 0) then
             !! Only add scal_bot to kx = ky = 0 mode
             if (fourier) then
 #ifdef PPMAPPING
-                Rtheta(1,1,1) = Rtheta(1,1,1) + const1*(1._rprec/JACO2(1))* &
+                Rtheta(1,1,1) = Rtheta(1,1,1) + const1*(1._rprec/jaco_uv(1))* &
                     ((nu/Pr_sgs)/mesh_stretch(1))*scal_bot
 #else
                 Rtheta(1,1,1) = Rtheta(1,1,1) + const1*const3*(nu/Pr_sgs)*scal_bot
@@ -1693,11 +1693,11 @@ if (coord == 0) then
                 ! Discretized dTdz(jx,jy,1) = prescribed flux, move to RHS
                 ! Therefore BC treated implicitly
 #ifdef PPMAPPING
-                b(jx,jy,1) = 1._rprec + const1*(1._rprec/JACO2(1))*        &
-                    (const2*(1._rprec/JACO1(2))*kappa_c)
-                c(jx,jy,1) = -const1*(1._rprec/JACO2(1))*const2*(1._rprec/JACO1(2))*kappa_c
+                b(jx,jy,1) = 1._rprec + const1*(1._rprec/jaco_uv(1))*        &
+                    (const2*(1._rprec/jaco_w(2))*kappa_c)
+                c(jx,jy,1) = -const1*(1._rprec/jaco_uv(1))*const2*(1._rprec/jaco_w(2))*kappa_c
                 if (.not. fourier) then
-                    Rtheta(jx,jy,1) = Rtheta(jx,jy,1) - const1*(1._rprec/JACO2(1))* &
+                    Rtheta(jx,jy,1) = Rtheta(jx,jy,1) - const1*(1._rprec/jaco_uv(1))* &
                         ((nu/Pr_sgs)/mesh_stretch(1))*flux_bot
                 endif
 #else
@@ -1713,7 +1713,7 @@ if (coord == 0) then
             !! Only add flux_bot to kx = ky = 0 mode
             if (fourier) then
 #ifdef PPMAPPING
-                Rtheta(1,1,1) = Rtheta(1,1,1) - const1*(1._rprec/JACO2(1))* &
+                Rtheta(1,1,1) = Rtheta(1,1,1) - const1*(1._rprec/jaco_uv(1))* &
                     ((nu/Pr_sgs)/mesh_stretch(1))*flux_bot
 #else
                 Rtheta(1,1,1) = Rtheta(1,1,1) - const1*const3*(nu/Pr_sgs)*flux_bot
@@ -1744,11 +1744,11 @@ if (coord == nproc-1) then
                 ! Discretized dTdz(jx,jy,nz) as in wallstress,
                 ! Therefore BC treated implicitly
 #ifdef PPMAPPING
-                a(jx,jy,nz-1) = -const1*(1._rprec/JACO2(nz-1))*const2*(1._rprec/JACO1(nz-1))*kappa_a
-                b(jx,jy,nz-1) = 1._rprec + const1*(1._rprec/JACO2(nz-1))*          &
-                    (const2*(1._rprec/JACO1(nz-1))*kappa_a + ((nu/Pr_sgs)/(L_z-mesh_stretch(nz-1))))
+                a(jx,jy,nz-1) = -const1*(1._rprec/jaco_uv(nz-1))*const2*(1._rprec/jaco_w(nz-1))*kappa_a
+                b(jx,jy,nz-1) = 1._rprec + const1*(1._rprec/jaco_uv(nz-1))*          &
+                    (const2*(1._rprec/jaco_w(nz-1))*kappa_a + ((nu/Pr_sgs)/(L_z-mesh_stretch(nz-1))))
                 if (.not. fourier) then
-                    Rtheta(jx,jy,nz-1) = Rtheta(jx,jy,nz-1) + const1*(1._rprec/JACO2(nz-1))* &
+                    Rtheta(jx,jy,nz-1) = Rtheta(jx,jy,nz-1) + const1*(1._rprec/jaco_uv(nz-1))* &
                         ((nu/Pr_sgs)/(L_z-mesh_stretch(nz-1)))*scal_top
                 endif
 #else
@@ -1764,7 +1764,7 @@ if (coord == nproc-1) then
             !! Only add scal_top to kx = ky = 0 mode
             if (fourier) then
 #ifdef PPMAPPING
-                Rtheta(1,1,nz-1) = Rtheta(1,1,nz-1) + const1*(1._rprec/JACO2(nz-1))* &
+                Rtheta(1,1,nz-1) = Rtheta(1,1,nz-1) + const1*(1._rprec/jaco_uv(nz-1))* &
                     ((nu/Pr_sgs)/(L_z-mesh_stretch(nz-1)))*scal_top
 #else
                 Rtheta(1,1,nz-1) = Rtheta(1,1,nz-1) + const1*const3*nu*scal_top
@@ -1781,11 +1781,11 @@ if (coord == nproc-1) then
                 ! Discretized dTdz(jx,jy,nz) as in wallstress,
                 ! Therefore BC treated implicitly
 #ifdef PPMAPPING
-                a(jx,jy,nz-1) = -const1*(1._rprec/JACO2(nz-1))*const2*(1._rprec/JACO1(nz-1))*kappa_a
-                b(jx,jy,nz-1) = 1._rprec + const1*(1._rprec/JACO2(nz-1))*          &
-                    (const2*(1._rprec/JACO1(nz-1))*kappa_a)
+                a(jx,jy,nz-1) = -const1*(1._rprec/jaco_uv(nz-1))*const2*(1._rprec/jaco_w(nz-1))*kappa_a
+                b(jx,jy,nz-1) = 1._rprec + const1*(1._rprec/jaco_uv(nz-1))*          &
+                    (const2*(1._rprec/jaco_w(nz-1))*kappa_a)
                 if (.not. fourier) then
-                    Rtheta(jx,jy,nz-1) = Rtheta(jx,jy,nz-1) - const1*(1._rprec/JACO2(nz-1))* &
+                    Rtheta(jx,jy,nz-1) = Rtheta(jx,jy,nz-1) - const1*(1._rprec/jaco_uv(nz-1))* &
                         ((nu/Pr_sgs)/(L_z-mesh_stretch(nz-1)))*flux_top
                 endif
 #else
@@ -1801,7 +1801,7 @@ if (coord == nproc-1) then
             !! Only add flux_top to kx = ky = 0 mode
             if (fourier) then
 #if PPMAPPING
-                Rtheta(1,1,nz-1) = Rtheta(1,1,nz-1) - const1*(1._rprec/JACO2(nz-1))* &
+                Rtheta(1,1,nz-1) = Rtheta(1,1,nz-1) - const1*(1._rprec/jaco_uv(nz-1))* &
                     ((nu/Pr_sgs)/(L_z-mesh_stretch(nz-1)))*flux_top
 #else
                 Rtheta(1,1,nz-1) = Rtheta(1,1,nz-1) - const1*const3*nu*flux_top
@@ -1824,16 +1824,16 @@ do jx = 1, nx
     ! molec = true and sgs = false only
     kappa_a = Kappa_t(jx,jy,jz)
 #ifdef PPMAPPING
-    kappa_b = (Kappa_t(jx,jy,jz+1)/JACO1(jz+1)) + (Kappa_t(jx,jy,jz)/JACO1(jz))
+    kappa_b = (Kappa_t(jx,jy,jz+1)/jaco_w(jz+1)) + (Kappa_t(jx,jy,jz)/jaco_w(jz))
 #else
     kappa_b = Kappa_t(jx,jy,jz+1) + Kappa_t(jx,jy,jz)
 #endif
     kappa_c = Kappa_t(jx,jy,jz+1)
 
 #ifdef PPMAPPING
-    a(jx, jy, jz) = -const1*(1._rprec/JACO2(jz))*const2*(1._rprec/JACO1(jz))*kappa_a
-    b(jx, jy, jz) = 1._rprec + const1*(1._rprec/JACO2(jz))*const2*kappa_b
-    c(jx, jy, jz) = -const1*(1._rprec/JACO2(jz))*const2*(1._rprec/JACO1(jz+1))*kappa_c
+    a(jx, jy, jz) = -const1*(1._rprec/jaco_uv(jz))*const2*(1._rprec/jaco_w(jz))*kappa_a
+    b(jx, jy, jz) = 1._rprec + const1*(1._rprec/jaco_uv(jz))*const2*kappa_b
+    c(jx, jy, jz) = -const1*(1._rprec/jaco_uv(jz))*const2*(1._rprec/jaco_w(jz+1))*kappa_c
 #else
     a(jx, jy, jz) = -const1*const2*kappa_a
     b(jx, jy, jz) = 1._rprec + const1*const2*kappa_b

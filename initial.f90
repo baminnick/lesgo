@@ -25,7 +25,7 @@ use types,only:rprec
 use param
 use sim_param, only : u, v, w, RHSx, RHSy, RHSz
 #ifdef PPMAPPING
-use sim_param, only : delta_stretch, JACO1
+use sim_param, only : delta_stretch, jaco_w
 use test_filtermodule, only : filter_size
 #endif
 use sgs_param, only : Cs_opt2, F_LM, F_MM, F_QN, F_NN
@@ -69,10 +69,16 @@ logical :: iwm_file_flag !xiang: for iwm restart
 
 #ifdef PPMAPPING
 call load_jacobian ()
-! Initialize delta_stretch for SGS, only for sgs = 1
-do jz = 1, nz
-    delta_stretch(jz) = filter_size*(dx*dy*(JACO1(jz))*dz)**(1._rprec/3._rprec)
-enddo
+! Initialize delta_stretch for SGS models
+if (fourier) then
+    do jz = 1, nz
+        delta_stretch(jz) = filter_size*(dy*(jaco_w(jz))*dz)**(1._rprec/2._rprec)
+    enddo
+else
+    do jz = 1, nz
+        delta_stretch(jz) = filter_size*(dx*dy*(jaco_w(jz))*dz)**(1._rprec/3._rprec)
+    enddo
+endif
 #endif
 
 #ifdef PPLVLSET_STRETCH
@@ -447,7 +453,7 @@ use sim_param, only : mesh_stretch
 implicit none
 
 real(rprec), dimension(nz) :: ubar
-real(rprec) :: rms, temp, z
+real(rprec) :: temp, z
 integer :: jx, jy, jz
 real(rprec) :: dummy_rand
 
@@ -490,21 +496,16 @@ call init_random_seed
 
 ! Add noise to the velocity field
 ! the "default" rms of a unif variable is 0.289
-
-! rms = 0._rprec !! Don't add noise for debugging
-rms = 0.2_rprec
-! Using 30 percent of the centerline velocity for rms of noise
-!!rms = (u_star*z_i/nu_molec)*0.5_rprec*0.30_rprec*1.5_rprec/5.0_rprec
-!! rms = (1._rprec/vonk*log(z_i*u_star/nu_molec)+5.5_rprec)*0.289_rprec*1.5_rprec
+! this is how variable initial_noise is scaled
 do jz = 1, nz
     do jy = 1, ny
         do jx = 1, nx
             call random_number(dummy_rand)
-            u(jx,jy,jz)=ubar(jz)+(rms/.289_rprec)*(dummy_rand-.5_rprec)/u_star
+            u(jx,jy,jz)=ubar(jz)+(initial_noise/.289_rprec)*(dummy_rand-.5_rprec)/u_star
             call random_number(dummy_rand)
-            v(jx,jy,jz) = 0._rprec+(rms/.289_rprec)*(dummy_rand-.5_rprec)/u_star
+            v(jx,jy,jz) = 0._rprec+(initial_noise/.289_rprec)*(dummy_rand-.5_rprec)/u_star
             call random_number(dummy_rand)
-            w(jx,jy,jz) = 0._rprec+(rms/.289_rprec)*(dummy_rand-.5_rprec)/u_star
+            w(jx,jy,jz) = 0._rprec+(initial_noise/.289_rprec)*(dummy_rand-.5_rprec)/u_star
         end do
     end do
 end do
@@ -559,7 +560,7 @@ use sim_param, only : mesh_stretch
 implicit none
 integer :: jz, jz_abs
 real(rprec), dimension(nz) :: ubar
-real(rprec) :: rms, sigma_rv, arg, arg2, arg3, z
+real(rprec) :: sigma_rv, arg, arg2, arg3, z
 real(rprec) :: angle
 character(*), parameter :: sub_name = 'ic'
 
@@ -626,8 +627,6 @@ do jz = 1, nz
 
 end do
 
-!rms = 0.0_rprec !! Don't add noise for debugging
-rms = 3._rprec
 sigma_rv = 0.289_rprec
 
 ! Fill u, v, and w with uniformly distributed random numbers between 0 and 1
@@ -637,9 +636,9 @@ call random_number(v)
 call random_number(w)
 
 ! Center random number about 0 and rescale
-u = rms / sigma_rv * (u - 0.5_rprec)
-v = rms / sigma_rv * (v - 0.5_rprec)
-w = rms / sigma_rv * (w - 0.5_rprec)
+u = initial_noise / sigma_rv * (u - 0.5_rprec)
+v = initial_noise / sigma_rv * (v - 0.5_rprec)
+w = initial_noise / sigma_rv * (w - 0.5_rprec)
 
 ! Modify angle of bulk flow based on pressure gradient
 if (mean_p_force_x == 0._rprec) then
@@ -723,7 +722,7 @@ use sim_param, only : mesh_stretch
 implicit none
 integer :: jz, jz_abs
 real(rprec), dimension(nz) :: ubar
-real(rprec) :: rms, sigma_rv, z_plus, uturb, z, nu_eff
+real(rprec) :: sigma_rv, z_plus, uturb, z, nu_eff
 real(rprec) :: angle
 real(rprec) :: wall_noise, decay
 real(rprec) :: kappa1, kappa2, beta
@@ -769,8 +768,6 @@ do jz = 1, nz
 
 end do
 
-!rms = 0.0_rprec !! Don't add noise for debugging
-rms = 3._rprec
 sigma_rv = 0.289_rprec
 wall_noise = 10 !! dictates how strong the noise is at the wall
 ! The higher wall_noise is, the stronger the noise is
@@ -782,9 +779,9 @@ call random_number(v)
 call random_number(w)
 
 ! Center random number about 0 and rescale
-u = rms / sigma_rv * (u - 0.5_rprec)
-v = rms / sigma_rv * (v - 0.5_rprec)
-w = rms / sigma_rv * (w - 0.5_rprec)
+u = initial_noise / sigma_rv * (u - 0.5_rprec)
+v = initial_noise / sigma_rv * (v - 0.5_rprec)
+w = initial_noise / sigma_rv * (w - 0.5_rprec)
 
 ! Modify angle of bulk flow based on pressure gradient
 if (mean_p_force_x == 0._rprec) then

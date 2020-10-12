@@ -56,7 +56,7 @@ real(rprec), dimension(:,:,:), allocatable :: u_low, v_low, w_low,             &
 real(rprec), target, dimension(:,:,:), allocatable :: p
 
 #ifdef PPMAPPING
-real(rprec), dimension(:), allocatable :: JACO1, JACO2
+real(rprec), dimension(:), allocatable :: jaco_w, jaco_uv
 real(rprec), dimension(:), allocatable :: mesh_stretch, delta_stretch
 #ifdef PPLVLSET_STRETCH
 real(rprec), dimension(:), allocatable :: mesh_stretch_w
@@ -204,8 +204,8 @@ allocate ( fz(ld, ny, nz) ); fz = 0.0_rprec
 #endif
 
 #ifdef PPMAPPING
-allocate ( JACO1(lbz:nz) ); JACO1 = 1/BOGUS
-allocate ( JACO2(lbz:nz) ); JACO2 = 1/BOGUS
+allocate ( jaco_w(lbz:nz) ); jaco_w = 1/BOGUS
+allocate ( jaco_uv(lbz:nz) ); jaco_uv = 1/BOGUS
 allocate ( mesh_stretch(lbz:nz) ); mesh_stretch = BOGUS
 allocate ( delta_stretch(lbz:nz) ); delta_stretch = BOGUS
 #ifdef PPLVLSET_STRETCH
