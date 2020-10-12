@@ -135,24 +135,29 @@ if (coord == 0) then
                 b(jx,jy,1) = 1._rprec + const1*(1._rprec/jaco_uv(1))*        &
                     (const2*(1._rprec/jaco_w(2))*nu_c + (nu/mesh_stretch(1)))
                 c(jx,jy,1) = -const1*(1._rprec/jaco_uv(1))*const2*(1._rprec/jaco_w(2))*nu_c
-                if (fourier) then
-                    Rx(1,1,1) = Rx(1,1,1) + const1*(1._rprec/jaco_uv(1))* &
-                        (nu/mesh_stretch(1))*ubot
-                else
+                if (.not. fourier) then
                     Rx(jx,jy,1) = Rx(jx,jy,1) + const1*(1._rprec/jaco_uv(1))* &
                         (nu/mesh_stretch(1))*ubot
                 endif
 #else
                 b(jx,jy,1) = 1._rprec + const1*(const2*nu_c + const3*nu)
                 c(jx,jy,1) = -const1*const2*nu_c
-                if (fourier) then
-                    Rx(1,1,1) = Rx(1,1,1) + const1*const3*nu*ubot
-                else
+                if (.not. fourier) then
                     Rx(jx,jy,1) = Rx(jx,jy,1) + const1*const3*nu*ubot
                 endif
 #endif
             end do
             end do
+
+            !! Add ubot to kx = ky = 0 mode only
+            if (fourier) then
+#ifdef PPMAPPING
+                Rx(1,1,1) = Rx(1,1,1) + const1*(1._rprec/jaco_uv(1))* &
+                    (nu/mesh_stretch(1))*ubot
+#else
+                Rx(1,1,1) = Rx(1,1,1) + const1*const3*nu*ubot
+#endif
+            endif
 
         ! Wall-model 
         case (2:)
@@ -245,24 +250,29 @@ if (coord == nproc-1) then
                 a(jx,jy,nz-1) = -const1*(1._rprec/jaco_uv(nz-1))*const2*(1._rprec/jaco_w(nz-1))*nu_a
                 b(jx,jy,nz-1) = 1._rprec + const1*(1._rprec/jaco_uv(nz-1))*          &
                     (const2*(1._rprec/jaco_w(nz-1))*nu_a + (nu/(L_z-mesh_stretch(nz-1))))
-                if (fourier) then
-                    Rx(1,1,nz-1) = Rx(1,1,nz-1) + const1*(1._rprec/jaco_uv(nz-1))* &
-                        (nu/(L_z-mesh_stretch(nz-1)))*utop
-                else
+                if (.not. fourier) then
                     Rx(jx,jy,nz-1) = Rx(jx,jy,nz-1) + const1*(1._rprec/jaco_uv(nz-1))* &
                         (nu/(L_z-mesh_stretch(nz-1)))*utop
                 endif
 #else
                 a(jx,jy,nz-1) = -const1*const2*nu_a
                 b(jx,jy,nz-1) = 1._rprec + const1*(const2*nu_a + const3*nu)
-                if (fourier) then
-                    Rx(1,1,nz-1) = Rx(1,1,nz-1) + const1*const3*nu*utop
-                else
+                if (.not. fourier) then
                     Rx(jx,jy,nz-1) = Rx(jx,jy,nz-1) + const1*const3*nu*utop
                 endif
 #endif
             end do
             end do
+
+            !! Add utop to kx = ky = 0 mode only
+            if (fourier) then
+#ifdef PPMAPPING
+                Rx(1,1,nz-1) = Rx(1,1,nz-1) + const1*(1._rprec/jaco_uv(nz-1))* &
+                    (nu/(L_z-mesh_stretch(nz-1)))*utop
+#else
+                Rx(1,1,nz-1) = Rx(1,1,nz-1) + const1*const3*nu*utop
+#endif
+            endif
 
         ! Wall-model
         case (2:)
