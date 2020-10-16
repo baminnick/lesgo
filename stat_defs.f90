@@ -1547,14 +1547,14 @@ e(i,j,k) % pdissyz = 2.0_rprec*nu_molec*real(Cvxwx + Cvywy + Cvzwz)
 ! Transport by viscous diffusion
 ! Cuilapuj already multiplied by viscosity because divtxj was used
 ! Change sign of Cuilapuj because of how divtxj is set up
-! Note: lapui terms include x-deriveration terms from pseudo-dissipation
-!       which need to be canceled, which is why Cuxux terms have different sign
-e(i,j,k) % tviscxx = 2.0_rprec*nu_molec*real(-Cuxux + Cuyuy + Cuzuz) - real( conjg(Culapu) + Culapu )
-e(i,j,k) % tviscyy = 2.0_rprec*nu_molec*real(-Cvxvx + Cvyvy + Cvzvz) - real( conjg(Cvlapv) + Cvlapv )
-e(i,j,k) % tvisczz = 2.0_rprec*nu_molec*real(-Cwxwx + Cwywy + Cwzwz) - real( conjg(Cwlapw) + Cwlapw )
-e(i,j,k) % tviscxy = 2.0_rprec*nu_molec*real(-Cuxvx + Cuyvy + Cuzvz) - real( conjg(Cvlapu) + Culapv )
-e(i,j,k) % tviscxz = 2.0_rprec*nu_molec*real(-Cuxwx + Cuywy + Cuzwz) - real( conjg(Cwlapu) + Culapw )
-e(i,j,k) % tviscyz = 2.0_rprec*nu_molec*real(-Cvxwx + Cvywy + Cvzwz) - real( conjg(Cwlapv) + Cvlapw )
+! Note: lapui terms include y-deriveration terms from pseudo-dissipation
+!       which need to be canceled, which is why Cuyuy terms have different sign
+e(i,j,k) % tviscxx = 2.0_rprec*nu_molec*real(Cuxux - Cuyuy + Cuzuz) - real( conjg(Culapu) + Culapu )
+e(i,j,k) % tviscyy = 2.0_rprec*nu_molec*real(Cvxvx - Cvyvy + Cvzvz) - real( conjg(Cvlapv) + Cvlapv )
+e(i,j,k) % tvisczz = 2.0_rprec*nu_molec*real(Cwxwx - Cwywy + Cwzwz) - real( conjg(Cwlapw) + Cwlapw )
+e(i,j,k) % tviscxy = 2.0_rprec*nu_molec*real(Cuxvx - Cuyvy + Cuzvz) - real( conjg(Cvlapu) + Culapv )
+e(i,j,k) % tviscxz = 2.0_rprec*nu_molec*real(Cuxwx - Cuywy + Cuzwz) - real( conjg(Cwlapu) + Culapw )
+e(i,j,k) % tviscyz = 2.0_rprec*nu_molec*real(Cvxwx - Cvywy + Cvzwz) - real( conjg(Cwlapv) + Cvlapw )
 
 end do
 end do
