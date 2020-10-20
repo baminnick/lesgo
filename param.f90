@@ -46,6 +46,9 @@ character(*), parameter :: checkpoint_tavg_scal_file = path // 'tavg_scal.out'
 #ifdef PPOUTPUT_TURBSPEC
 character(*), parameter :: checkpoint_tavg_scal_turbspec_file = path // 'tavg_scal_turbspec.out'
 #endif
+#ifdef PPOUTPUT_SPECBUDG
+character(*), parameter :: checkpoint_tavg_scal_specbudg_file = path // 'tavg_scal_specbudg.out'
+#endif
 #endif
 character(*), parameter :: checkpoint_tavg_vort_file = path // 'tavg_vort.out'
 #ifdef PPOUTPUT_SGS

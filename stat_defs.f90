@@ -82,8 +82,7 @@ end type rs_scal_t
 
 #ifdef PPOUTPUT_TURBSPEC
 type tavg_scal_turbspec_t
-    complex(rprec) :: thetaf
-    real(rprec) :: theta2, utheta, vtheta, wtheta
+    complex(rprec) :: thetaf, theta2, utheta, vtheta, wtheta
 end type tavg_scal_turbspec_t
 
 type scal_turbspec_t
@@ -181,6 +180,21 @@ type specbudg_t
     real(rprec) :: prodxx, prodyy, prodzz, prodxy, prodxz, prodyz
     real(rprec) :: pdissxx, pdissyy, pdisszz, pdissxy, pdissxz, pdissyz
 end type specbudg_t
+
+#ifdef PPSCALARS
+type tavg_scal_specbudg_t
+    complex(rprec) :: dTdx, dTdy, dTdz
+    complex(rprec) :: Th_dTdxh, Th_dTdyh, Th_dTdzh
+    complex(rprec) :: udTdxh, vdTdyh, wdTdzh
+    complex(rprec) :: Th_udTdxh, Th_vdTdyh, Th_wdTdzh
+    complex(rprec) :: TxTx, TyTy, TzTz
+    complex(rprec) :: lapT, TlapT
+end type tavg_scal_specbudg_t
+
+type scal_specbudg_t
+    real(rprec) :: adv, tfluc, tvisc, prod, pdiss
+end type scal_specbudg_t
+#endif
 #endif
 
 #ifdef PPOUTPUT_WMLES
@@ -280,6 +294,10 @@ type(tavg_specbudg_t), allocatable, dimension(:,:,:) :: tavg_specbudgx
 type(specbudg_t), allocatable, dimension(:,:,:) :: specbudgx
 type(tavg_specbudg_t), allocatable, dimension(:,:,:) :: tavg_specbudgy
 type(specbudg_t), allocatable, dimension(:,:,:) :: specbudgy
+#ifdef PPSCALARS
+type(tavg_scal_specbudg_t), allocatable, dimension(:,:,:) :: tavg_scal_specbudgx
+type(scal_specbudg_t), allocatable, dimension(:,:,:) :: scal_specbudgx
+#endif
 #endif
 
 #ifdef PPOUTPUT_WMLES
@@ -483,10 +501,10 @@ ubz = ubound(a,3)
 
 allocate(c(ubx,uby,lbz2:ubz))
 
-c % thetap2  = a % theta2 - real( a % thetaf * conjg( a % thetaf ) )
-c % upthetap = a % utheta - real( b % uf * conjg( a % thetaf ) )
-c % vpthetap = a % vtheta - real( b % vf * conjg( a % thetaf ) )
-c % wpthetap = a % wtheta - real( b % wf * conjg( a % thetaf ) )
+c % thetap2  = real( a % theta2 - a % thetaf * conjg( a % thetaf ) )
+c % upthetap = real( a % utheta - b % uf * conjg( a % thetaf ) )
+c % vpthetap = real( a % vtheta - b % vf * conjg( a % thetaf ) )
+c % wpthetap = real( a % wtheta - b % wf * conjg( a % thetaf ) )
 
 end function scal_turbspec_compute
 #endif
@@ -1722,6 +1740,150 @@ e % pdissxz = - e % pdissxz
 e % pdissyz = - e % pdissyz
 
 end function specbudgy_compute
+
+#ifdef PPSCALARS
+!*****************************************************************************
+function scal_specbudgx_compute( a, b, bb, c, d, lbz2 ) result( e )
+!*****************************************************************************
+! 
+! Compute the spectral budget for scalar equation. 
+! All quantities are on the w-grid.
+! 
+use param, only: nu_molec
+use scalars, only: Pr_sgs
+implicit none
+integer, intent(in) :: lbz2
+type(tavg_scal_specbudg_t), dimension(:,:,lbz2:), intent(in) :: a
+type(scal_turbspec_t), dimension(:,:,lbz2:), intent(in) :: b
+type(tavg_scal_turbspec_t), dimension(:,:,lbz2:), intent(in) :: bb
+type(tavg_budget_t), dimension(:,:,lbz2:), intent(in) :: c
+type(tavg_t), dimension(:,:,lbz2:), intent(in) :: d
+type(scal_specbudg_t), allocatable, dimension(:,:,:) :: e
+
+integer :: ubx, uby, ubz, vbx, vby, vbz, i, j, k
+
+real(rprec), allocatable, dimension(:,:,:) :: u_avg, v_avg, w_avg
+real(rprec), allocatable, dimension(:,:,:) :: theta_avg, dTdx_avg, dTdy_avg, dTdz_avg
+
+complex(rprec) :: CTdTdx, CTdTdy, CTdTdz
+complex(rprec) :: CTudTdx, CTvdTdy, CTwdTdz
+complex(rprec) :: CTxTx, CTyTy, CTzTz
+complex(rprec) :: CTlapT
+
+! Size of a, b, and e
+ubx = ubound(a,1)
+uby = ubound(a,2)
+ubz = ubound(a,3)
+
+! Size of c and d
+vbx = ubound(c,1)
+vby = ubound(c,2)
+vbz = ubound(c,3)
+
+allocate(e(ubx,uby,lbz2:ubz))
+
+allocate(u_avg(ubx,vby,lbz2:vbz))
+allocate(v_avg(ubx,vby,lbz2:vbz))
+allocate(w_avg(ubx,vby,lbz2:vbz))
+allocate(theta_avg(ubx,vby,lbz2:vbz))
+allocate(dTdx_avg(ubx,vby,lbz2:vbz))
+allocate(dTdy_avg(ubx,vby,lbz2:vbz))
+allocate(dTdz_avg(ubx,vby,lbz2:vbz))
+
+! -------------------------- Streamwise Average ------------------------------
+! Quantities used in average are in x,y,z space, however only kx=0 mode
+! is filled, kx~=0 modes are left as zeros
+u_avg(:,:,:) = 0._rprec
+v_avg(:,:,:) = 0._rprec
+w_avg(:,:,:) = 0._rprec
+theta_avg(:,:,:) = 0._rprec
+dTdx_avg(:,:,:) = 0._rprec
+dTdy_avg(:,:,:) = 0._rprec
+dTdz_avg(:,:,:) = 0._rprec
+! Perform streamwise average
+do i = 1, vbx
+    u_avg(1,:,:) = u_avg(1,:,:) + d(i,:,:) % u_w
+    v_avg(1,:,:) = v_avg(1,:,:) + d(i,:,:) % v_w
+    w_avg(1,:,:) = w_avg(1,:,:) + d(i,:,:) % w
+enddo
+u_avg(1,:,:) = u_avg(1,:,:) / vbx
+v_avg(1,:,:) = v_avg(1,:,:) / vbx
+w_avg(1,:,:) = w_avg(1,:,:) / vbx
+! Use kx=0 as streamwise average to avoid having to time-average dTdxj
+theta_avg(1,:,:) = real( bb(1,:,:)%thetaf )
+dTdx_avg(1,:,:) = real( a(1,:,:)%dTdx )
+dTdy_avg(1,:,:) = real( a(1,:,:)%dTdy )
+dTdz_avg(1,:,:) = real( a(1,:,:)%dTdz )
+
+do i = 1, ubx
+do j = 1, uby
+do k = 1, ubz
+
+! ---------------------- Compute Intermediate Terms --------------------------
+! Scalar-Scalar Gradient correlation, T_hat*dTdxj_hat
+CTdTdx = a(i,j,k)%Th_dTdxh - bb(i,j,k)%thetaf * conjg( a(i,j,k)%dTdx )
+CTdTdy = a(i,j,k)%Th_dTdyh - bb(i,j,k)%thetaf * conjg( a(i,j,k)%dTdy )
+CTdTdz = a(i,j,k)%Th_dTdzh - bb(i,j,k)%thetaf * conjg( a(i,j,k)%dTdz )
+
+! Triple correlation, Scalar-Velocity-Scalar Gradient correlation, T_hat*((uj*dTdxj)_hat)
+! Here the time-average mean is non-zero for i=1 (kx=0) and zero otherwise (kx~=0)
+CTudTdx = a(i,j,k)%Th_udTdxh         - conjg(bb(i,j,k)%utheta)*dTdx_avg(1,j,k)  &
+    - a(i,j,k)%Th_dTdxh*u_avg(1,j,k) - conjg(a(i,j,k)%udTdxh)*theta_avg(1,j,k)  &
+    + 2.0_rprec*theta_avg(i,j,k)*u_avg(i,j,k)*dTdx_avg(i,j,k)
+CTvdTdy = a(i,j,k)%Th_vdTdyh         - conjg(bb(i,j,k)%vtheta)*dTdy_avg(1,j,k)  &
+    - a(i,j,k)%Th_dTdyh*v_avg(1,j,k) - conjg(a(i,j,k)%vdTdyh)*theta_avg(1,j,k)  &
+    + 2.0_rprec*theta_avg(i,j,k)*v_avg(i,j,k)*dTdy_avg(i,j,k)
+CTwdTdz = a(i,j,k)%Th_wdTdzh         - conjg(bb(i,j,k)%wtheta)*dTdz_avg(1,j,k)  &
+    - a(i,j,k)%Th_dTdzh*w_avg(1,j,k) - conjg(a(i,j,k)%wdTdzh)*theta_avg(1,j,k)  &
+    + 2.0_rprec*theta_avg(i,j,k)*w_avg(i,j,k)*dTdz_avg(i,j,k)
+
+! Scalar Gradient-Scalar Gradient correlation, dTdxj*dTdxj
+CTxTx = a(i,j,k)%TxTx - a(i,j,k)%dTdx * conjg( a(i,j,k)%dTdx )
+CTyTy = a(i,j,k)%TyTy - a(i,j,k)%dTdy * conjg( a(i,j,k)%dTdy )
+CTzTz = a(i,j,k)%TzTz - a(i,j,k)%dTdz * conjg( a(i,j,k)%dTdz )
+
+! Scalar-Laplacian correlation, theta*lap(theta)
+CTlapT = a(i,j,k)%TlapT - bb(i,j,k)%thetaf * conjg(a(i,j,k)%lapT)
+
+! ------------------------- Compute Budget Terms -----------------------------
+! Mean Advection, Uk*d(T*T)dxk
+! Multiplying by kx=0 mode time-average here
+e(i,j,k) % adv = u_avg(1,j,k)*real(conjg(CTdTdx) + CTdTdx)       &
+    + v_avg(1,j,k)*real(conjg(CTdTdy) + CTdTdy)                  &
+    + w_avg(1,j,k)*real(conjg(CTdTdz) + CTdTdz)
+
+! Turbulent Transport
+e(i,j,k) % tfluc = real( CTudTdx + conjg(CTudTdx) +              &
+    CTvdTdy + conjg(CTvdTdy) + CTwdTdz + conjg(CTwdTdz) )
+
+! Production Rate, -(Rik*dUjdxk + Rjk*dUidxk)
+! Multiplying by kx=0 mode time-average here
+e(i,j,k) % prod = 2.0_rprec*( b(i,j,k)%upthetap*dTdx_avg(1,j,k) +           &
+    b(i,j,k)%vpthetap*dTdy_avg(1,j,k) + b(i,j,k)%wpthetap*dTdz_avg(1,j,k) )
+
+! Pseudo-dissipation, 2*kappa*dTdxj*dTdxj
+e(i,j,k) % pdiss = 2.0_rprec*(nu_molec/Pr_sgs)*real(CTxTx + CTyTy + CTzTz)
+
+! Transport by diffusion
+! CTlapT already multiplied by (nu/Pr) because div_pi was used
+! Change sign of CTlapT because of how div_pi is set up
+! Note: lapT terms include x-deriveration terms from pseudo-dissipation
+!       which need to be canceled, which is why CTxTx terms have different sign
+e(i,j,k) % tvisc = 2.0_rprec*(nu_molec/Pr_sgs)*real(-CTxTx + CTyTy + CTzTz) - real( conjg(CTlapT) + CTlapT )
+
+end do
+end do
+end do
+
+! ---------------------------- Prepare Output --------------------------------
+! Move all terms to the RHS
+e % adv   = - e % adv
+e % tfluc = - e % tfluc
+e % prod  = - e % prod
+e % pdiss = - e % pdiss
+
+end function scal_specbudgx_compute
+#endif
 
 #endif
 
