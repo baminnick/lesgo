@@ -2770,7 +2770,7 @@ use stat_defs, only : tavg_scal
 use stat_defs, only : tavg_scal_turbspecx, tavg_scal_turbspecy
 #endif
 #ifdef PPOUTPUT_SPECBUDG
-use stat_defs, only : tavg_scal_specbudgx
+use stat_defs, only : tavg_scal_specbudgx, tavg_scal_specbudgy
 #endif
 #endif
 use stat_defs, only : tavg_vort
@@ -2824,6 +2824,7 @@ if( tavg_calc ) then
 #endif
 #ifdef PPOUTPUT_SPECBUDG
     allocate(tavg_scal_specbudgx(nx/2+1,ny,lbz:nz))
+    allocate(tavg_scal_specbudgy(nx,ny/2+1,lbz:nz))
 #endif
 #endif
     allocate(tavg_vort(nx,ny,lbz:nz))
@@ -2963,6 +2964,45 @@ if( tavg_calc ) then
 
         ! Scalar-Laplacian, (theta*(nu/Pr)*lap(theta)
         tavg_scal_specbudgx(i,j,k) % TlapT = 0.d0
+
+    end do
+    end do
+    end do
+
+    do k = 1, Nz
+    do j = 1, Ny/2 + 1
+    do i = 1, Nx
+
+        ! Scalar gradients
+        tavg_scal_specbudgy(i,j,k) % dTdx = 0.d0
+        tavg_scal_specbudgy(i,j,k) % dTdy = 0.d0
+        tavg_scal_specbudgy(i,j,k) % dTdz = 0.d0
+
+        ! Scalar-Scalar Gradient, Th_dTdxjh
+        tavg_scal_specbudgy(i,j,k) % Th_dTdxh = 0.d0
+        tavg_scal_specbudgy(i,j,k) % Th_dTdyh = 0.d0
+        tavg_scal_specbudgy(i,j,k) % Th_dTdzh = 0.d0
+
+        ! Velocity-Scalar Gradient, (uj*dTdxj)h
+        tavg_scal_specbudgy(i,j,k) % udTdxh = 0.d0
+        tavg_scal_specbudgy(i,j,k) % vdTdyh = 0.d0
+        tavg_scal_specbudgy(i,j,k) % wdTdzh = 0.d0
+
+        ! Scalar-Velocity-Scalar Gradient, Th_(uj*dTdxj)h
+        tavg_scal_specbudgy(i,j,k) % Th_udTdxh = 0.d0
+        tavg_scal_specbudgy(i,j,k) % Th_vdTdyh = 0.d0
+        tavg_scal_specbudgy(i,j,k) % Th_wdTdzh = 0.d0
+
+        ! Scalar Gradient-Scalar Gradient
+        tavg_scal_specbudgy(i,j,k) % TxTx = 0.d0
+        tavg_scal_specbudgy(i,j,k) % TyTy = 0.d0
+        tavg_scal_specbudgy(i,j,k) % TzTz = 0.d0
+
+        ! Laplacian, (nu/Pr)*lap(theta)
+        tavg_scal_specbudgy(i,j,k) % lapT = 0.d0
+
+        ! Scalar-Laplacian, (theta*(nu/Pr)*lap(theta)
+        tavg_scal_specbudgy(i,j,k) % TlapT = 0.d0
 
     end do
     end do
@@ -3649,7 +3689,7 @@ use stat_defs, only : tavg_scal
 use stat_defs, only : tavg_scal_turbspecx, tavg_scal_turbspecy
 #endif
 #ifdef PPOUTPUT_SPECBUDG
-use stat_defs, only : tavg_scal_specbudgx
+use stat_defs, only : tavg_scal_specbudgx, tavg_scal_specbudgy
 #endif
 #endif
 #ifdef PPOUTPUT_SPECBUDG
@@ -3789,6 +3829,7 @@ else
         convert=read_endian)
     read(1) tavg_total_time
     read(1) tavg_scal_specbudgx
+    read(1) tavg_scal_specbudgy
     close(1)
 #endif
 #endif
@@ -4380,7 +4421,7 @@ use scalars, only: theta
 use stat_defs, only: tavg_scal_turbspecx, tavg_scal_turbspecy
 #ifdef PPOUTPUT_SPECBUDG
 use scalars, only: dTdx, dTdy, dTdz, div_pi
-use stat_defs, only: tavg_scal_specbudgx
+use stat_defs, only: tavg_scal_specbudgx, tavg_scal_specbudgy
 #endif
 #endif
 #ifdef PPOUTPUT_SPECBUDG
@@ -4447,11 +4488,17 @@ complex(rprec), dimension(ny/2+1) :: thetafy
 real(rprec), dimension(ld,ny,lbz:nz) :: dTdx_w, dTdy_w
 real(rprec), dimension(nx) :: dTdxpx, dTdypx, dTdzpx
 complex(rprec), dimension(nx/2+1) :: dTdxfx, dTdyfx, dTdzfx
+real(rprec), dimension(ny) :: dTdxpy, dTdypy, dTdzpy
+complex(rprec), dimension(ny/2+1) :: dTdxfy, dTdyfy, dTdzfy
 real(rprec), dimension(nx) :: udTdxpx, vdTdypx, wdTdzpx
 complex(rprec), dimension(nx/2+1) :: udTdxfx, vdTdyfx, wdTdzfx
+real(rprec), dimension(ny) :: udTdxpy, vdTdypy, wdTdzpy
+complex(rprec), dimension(ny/2+1) :: udTdxfy, vdTdyfy, wdTdzfy
 real(rprec), dimension(ld,ny,lbz:nz) :: lapT_w
 real(rprec), dimension(nx) :: lapTpx
 complex(rprec), dimension(nx/2+1) :: lapTfx
+real(rprec), dimension(ny) :: lapTpy
+complex(rprec), dimension(ny/2+1) :: lapTfy
 #endif
 #endif
 
@@ -4816,7 +4863,6 @@ do jz = 1, nz
         ! Scalar-Laplacian, theta*(nu/Pr)*lap(theta)
         tavg_scal_specbudgx(jx,jy,jz)%TlapT = tavg_scal_specbudgx(jx,jy,jz)%TlapT + &
             thetafx(jx)*conjg(lapTfx(jx))*tavg_dt
-
 #endif
 #endif
 
@@ -5116,6 +5162,15 @@ do jz = 1, nz
     !vortpy = const2 * vort(jx,1:ny,jz)
 #ifdef PPSCALARS
     thetapy = const2 * theta_w(jx,1:ny,jz)
+#ifdef PPOUTPUT_SPECBUDG
+    dTdxpy  = const1 * dTdx_w(jx,1:ny,jz)
+    dTdypy  = const1 * dTdy_w(jx,1:ny,jz)
+    dTdzpy  = const1 * dTdz(jx,1:ny,jz)
+    lapTpy  = const1 * lapT_w(jx,1:ny,jz)
+    udTdxpy = const1 * u_w(jx,1:ny,jz)*dTdx_w(jx,1:ny,jz)
+    vdTdypy = const1 * v_w(jx,1:ny,jz)*dTdy_w(jx,1:ny,jz)
+    wdTdzpy = const1 * w(jx,1:ny,jz)*dTdz(jx,1:ny,jz)
+#endif
 #endif
 
     ! Take 1d transform, y --> ky
@@ -5129,6 +5184,15 @@ do jz = 1, nz
     !call dfftw_execute_dft_r2c( forw_y, vortpy,  vortfy )
 #ifdef PPSCALARS
     call dfftw_execute_dft_r2c( forw_y, thetapy, thetafy )
+#ifdef PPOUTPUT_SPECBUDG
+    call dfftw_execute_dft_r2c( forw_y, dTdxpy, dTdxfy )
+    call dfftw_execute_dft_r2c( forw_y, dTdypy, dTdyfy )
+    call dfftw_execute_dft_r2c( forw_y, dTdzpy, dTdzfy )
+    call dfftw_execute_dft_r2c( forw_y, lapTpy, lapTfy )
+    call dfftw_execute_dft_r2c( forw_y, udTdxpy, udTdxfy )
+    call dfftw_execute_dft_r2c( forw_y, vdTdypy, vdTdyfy )
+    call dfftw_execute_dft_r2c( forw_y, wdTdzpy, wdTdzfy )
+#endif
 #endif
 
 #ifdef PPOUTPUT_SPECBUDG
@@ -5239,6 +5303,56 @@ do jz = 1, nz
             vfy(jy)*conjg(thetafy(jy))*tavg_dt
         tavg_scal_turbspecy(jx,jy,jz)%wtheta = tavg_scal_turbspecy(jx,jy,jz)%wtheta + &
             wfy(jy)*conjg(thetafy(jy))*tavg_dt
+
+#ifdef PPOUTPUT_SPECBUDG
+        ! Scalar gradient, dTdxj_hat
+        tavg_scal_specbudgy(jx,jy,jz)%dTdx = tavg_scal_specbudgy(jx,jy,jz)%dTdx + &
+            dTdxfy(jy)*tavg_dt
+        tavg_scal_specbudgy(jx,jy,jz)%dTdy = tavg_scal_specbudgy(jx,jy,jz)%dTdy + &
+            dTdyfy(jy)*tavg_dt
+        tavg_scal_specbudgy(jx,jy,jz)%dTdz = tavg_scal_specbudgy(jx,jy,jz)%dTdz + &
+            dTdzfy(jy)*tavg_dt
+
+        ! Scalar-Scalar gradient, T_hat*dTdxj_hat
+        tavg_scal_specbudgy(jx,jy,jz)%Th_dTdxh = tavg_scal_specbudgy(jx,jy,jz)%Th_dTdxh + &
+            thetafy(jy)*conjg(dTdxfy(jy))*tavg_dt
+        tavg_scal_specbudgy(jx,jy,jz)%Th_dTdyh = tavg_scal_specbudgy(jx,jy,jz)%Th_dTdyh + &
+            thetafy(jy)*conjg(dTdyfy(jy))*tavg_dt
+        tavg_scal_specbudgy(jx,jy,jz)%Th_dTdzh = tavg_scal_specbudgy(jx,jy,jz)%Th_dTdzh + &
+            thetafy(jy)*conjg(dTdzfy(jy))*tavg_dt
+
+        ! Velocity-Scalar Gradient, (uj*dTdxj)_hat
+        tavg_scal_specbudgy(jx,jy,jz)%udTdxh = tavg_scal_specbudgy(jx,jy,jz)%udTdxh + &
+            udTdxfy(jy)*tavg_dt
+        tavg_scal_specbudgy(jx,jy,jz)%vdTdyh = tavg_scal_specbudgy(jx,jy,jz)%vdTdyh + &
+            vdTdyfy(jy)*tavg_dt
+        tavg_scal_specbudgy(jx,jy,jz)%wdTdzh = tavg_scal_specbudgy(jx,jy,jz)%wdTdzh + &
+            wdTdzfy(jy)*tavg_dt
+
+        ! Scalar-Velocity-Scalar Gradient, T_hat*((uj*dTdxj)_hat)
+        tavg_scal_specbudgy(jx,jy,jz)%Th_udTdxh = tavg_scal_specbudgy(jx,jy,jz)%Th_udTdxh + &
+            thetafy(jy)*conjg(udTdxfy(jy))*tavg_dt
+        tavg_scal_specbudgy(jx,jy,jz)%Th_vdTdyh = tavg_scal_specbudgy(jx,jy,jz)%Th_vdTdyh + &
+            thetafy(jy)*conjg(vdTdyfy(jy))*tavg_dt
+        tavg_scal_specbudgy(jx,jy,jz)%Th_wdTdzh = tavg_scal_specbudgy(jx,jy,jz)%Th_wdTdzh + &
+            thetafy(jy)*conjg(wdTdzfy(jy))*tavg_dt
+
+        ! Scalar gradient-scalar gradient, dTdxj_hat*dTdxj_hat
+        tavg_scal_specbudgy(jx,jy,jz)%TxTx = tavg_scal_specbudgy(jx,jy,jz)%TxTx + &
+            dTdxfy(jy)*conjg(dTdxfy(jy))*tavg_dt
+        tavg_scal_specbudgy(jx,jy,jz)%TyTy = tavg_scal_specbudgy(jx,jy,jz)%TyTy + &
+            dTdyfy(jy)*conjg(dTdyfy(jy))*tavg_dt
+        tavg_scal_specbudgy(jx,jy,jz)%TzTz = tavg_scal_specbudgy(jx,jy,jz)%TzTz + &
+            dTdzfy(jy)*conjg(dTdzfy(jy))*tavg_dt
+
+        ! Laplacian, (nu/Pr)*lap(theta)
+        tavg_scal_specbudgy(jx,jy,jz)%lapT = tavg_scal_specbudgy(jx,jy,jz)%lapT + &
+            lapTfy(jy)*tavg_dt
+
+        ! Scalar-Laplacian, theta*(nu/Pr)*lap(theta)
+        tavg_scal_specbudgy(jx,jy,jz)%TlapT = tavg_scal_specbudgy(jx,jy,jz)%TlapT + &
+            thetafy(jy)*conjg(lapTfy(jy))*tavg_dt
+#endif
 #endif
 
 #ifdef PPOUTPUT_SPECBUDG
@@ -5559,7 +5673,8 @@ use stat_defs, only : scal_turbspecx, scal_turbspecy
 use stat_defs, only : scal_turbspec_compute
 #endif
 #ifdef PPOUTPUT_SPECBUDG
-use stat_defs, only : tavg_scal_specbudgx, scal_specbudgx, scal_specbudgx_compute
+use stat_defs, only : tavg_scal_specbudgx, scal_specbudgx, tavg_scal_specbudgy, scal_specbudgy
+use stat_defs, only : scal_specbudgx_compute, scal_specbudgy_compute
 #endif
 #endif
 
@@ -5601,7 +5716,7 @@ character(64) :: fname_scal
 character(64) :: fname_sxscal, fname_syscal
 #endif
 #ifdef PPOUTPUT_SPECBUDG
-character(64) :: fname_sxscal_budg
+character(64) :: fname_sxscal_budg, fname_syscal_budg
 #endif
 #endif
 
@@ -5658,6 +5773,7 @@ fname_syscal = path // 'output/syscal'
 #endif
 #ifdef PPOUTPUT_SPECBUDG
 fname_sxscal_budg = path // 'output/sxscal_budg'
+fname_syscal_budg = path // 'output/syscal_budg'
 #endif
 #endif
 
@@ -5715,6 +5831,7 @@ call string_concat(fname_syscal, '.cgns')
 #endif
 #ifdef PPOUTPUT_SPECBUDG
 call string_concat(fname_sxscal_budg, '.cgns')
+call string_concat(fname_syscal_budg, '.cgns')
 #endif
 #endif
 
@@ -5776,6 +5893,7 @@ call string_concat(fname_syscal, bin_ext)
 #endif
 #ifdef PPOUTPUT_SPECBUDG
 call string_concat(fname_sxscal_budg, bin_ext)
+call string_concat(fname_syscal_budg, bin_ext)
 #endif
 #endif
 #ifdef PPOUTPUT_SPECBUDG
@@ -6098,7 +6216,6 @@ do i = 1, Nx/2 + 1
 
     ! Scalar-Laplacian, theta*(nu/Pr)*lap(theta)
     tavg_scal_specbudgx(i,j,k) % TlapT = tavg_scal_specbudgx(i,j,k) % TlapT / tavg_total_time
-
 #endif
 #endif
 
@@ -6290,6 +6407,39 @@ do i = 1, Nx
     tavg_scal_turbspecy(i,j,k) % utheta = tavg_scal_turbspecy(i,j,k) % utheta / tavg_total_time
     tavg_scal_turbspecy(i,j,k) % vtheta = tavg_scal_turbspecy(i,j,k) % vtheta / tavg_total_time
     tavg_scal_turbspecy(i,j,k) % wtheta = tavg_scal_turbspecy(i,j,k) % wtheta / tavg_total_time
+
+#ifdef PPOUTPUT_SPECBUDG
+    ! Scalar gradient, dTdxj_hat
+    tavg_scal_specbudgy(i,j,k) % dTdx = tavg_scal_specbudgy(i,j,k) % dTdx / tavg_total_time
+    tavg_scal_specbudgy(i,j,k) % dTdy = tavg_scal_specbudgy(i,j,k) % dTdy / tavg_total_time
+    tavg_scal_specbudgy(i,j,k) % dTdz = tavg_scal_specbudgy(i,j,k) % dTdz / tavg_total_time
+
+    ! Scalar-Scalar gradient, T_hat*dTdxj_hat
+    tavg_scal_specbudgy(i,j,k) % Th_dTdxh = tavg_scal_specbudgy(i,j,k) % Th_dTdxh / tavg_total_time
+    tavg_scal_specbudgy(i,j,k) % Th_dTdyh = tavg_scal_specbudgy(i,j,k) % Th_dTdyh / tavg_total_time
+    tavg_scal_specbudgy(i,j,k) % Th_dTdzh = tavg_scal_specbudgy(i,j,k) % Th_dTdzh / tavg_total_time
+
+    ! Velocity-Scalar Gradient, (uj*dTdxj)_hat
+    tavg_scal_specbudgy(i,j,k) % udTdxh = tavg_scal_specbudgy(i,j,k) % udTdxh / tavg_total_time
+    tavg_scal_specbudgy(i,j,k) % vdTdyh = tavg_scal_specbudgy(i,j,k) % vdTdyh / tavg_total_time
+    tavg_scal_specbudgy(i,j,k) % wdTdzh = tavg_scal_specbudgy(i,j,k) % wdTdzh / tavg_total_time
+
+    ! Scalar-Velocity-Scalar Gradient, T_hat*((uj*dTdxj)_hat)
+    tavg_scal_specbudgy(i,j,k) % Th_udTdxh = tavg_scal_specbudgy(i,j,k) % Th_udTdxh / tavg_total_time
+    tavg_scal_specbudgy(i,j,k) % Th_vdTdyh = tavg_scal_specbudgy(i,j,k) % Th_vdTdyh / tavg_total_time
+    tavg_scal_specbudgy(i,j,k) % Th_wdTdzh = tavg_scal_specbudgy(i,j,k) % Th_wdTdzh / tavg_total_time
+
+    ! Scalar gradient-scalar gradient, dTdxj_hat*dTdxj_hat
+    tavg_scal_specbudgy(i,j,k) % TxTx = tavg_scal_specbudgy(i,j,k) % TxTx / tavg_total_time
+    tavg_scal_specbudgy(i,j,k) % TyTy = tavg_scal_specbudgy(i,j,k) % TyTy / tavg_total_time
+    tavg_scal_specbudgy(i,j,k) % TzTz = tavg_scal_specbudgy(i,j,k) % TzTz / tavg_total_time
+
+    ! Laplacian, (nu/Pr)*lap(theta)
+    tavg_scal_specbudgy(i,j,k) % lapT = tavg_scal_specbudgy(i,j,k) % lapT / tavg_total_time
+
+    ! Scalar-Laplacian, theta*(nu/Pr)*lap(theta)
+    tavg_scal_specbudgy(i,j,k) % TlapT = tavg_scal_specbudgy(i,j,k) % TlapT / tavg_total_time
+#endif
 #endif
 
 #ifdef PPOUTPUT_SPECBUDG
@@ -7247,7 +7397,9 @@ close(13)
 #ifdef PPOUTPUT_SPECBUDG
 ! Write spectral budget data
 allocate(scal_specbudgx(nx/2+1,ny,lbz:nz))
+allocate(scal_specbudgy(nx,ny/2+1,lbz:nz))
 scal_specbudgx = scal_specbudgx_compute(tavg_scal_specbudgx, scal_turbspecx, tavg_scal_turbspecx, tavg_budget, tavg, lbz)
+scal_specbudgy = scal_specbudgy_compute(tavg_scal_specbudgy, scal_turbspecy, tavg_scal_turbspecy, tavg_budget, tavg, lbz)
 
 #ifdef PPCGNS
 ! Not ready
@@ -7261,7 +7413,18 @@ write(13,rec=3) scal_specbudgx(:nx/2+1,:ny,1:nz)%tvisc
 write(13,rec=4) scal_specbudgx(:nx/2+1,:ny,1:nz)%prod
 write(13,rec=5) scal_specbudgx(:nx/2+1,:ny,1:nz)%pdiss
 close(13)
+
+open(unit=13, file=fname_syscal_budg, form='unformatted', convert=write_endian,     &
+    access='direct', recl=nx*(ny/2+1)*nz*rprec)
+write(13,rec=1) scal_specbudgy(:nx,:ny/2+1,1:nz)%adv
+write(13,rec=2) scal_specbudgy(:nx,:ny/2+1,1:nz)%tfluc
+write(13,rec=3) scal_specbudgy(:nx,:ny/2+1,1:nz)%tvisc
+write(13,rec=4) scal_specbudgy(:nx,:ny/2+1,1:nz)%prod
+write(13,rec=5) scal_specbudgy(:nx,:ny/2+1,1:nz)%pdiss
+close(13)
 #endif
+deallocate(scal_specbudgx)
+deallocate(scal_specbudgy)
 #endif
 
 deallocate(scal_turbspecx)
