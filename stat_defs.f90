@@ -1975,7 +1975,7 @@ CTudTdx = a(i,j,k)%Th_udTdxh         - conjg(bb(i,j,k)%utheta)*dTdx_avg(i,1,k)  
     - a(i,j,k)%Th_dTdxh*u_avg(i,1,k) - conjg(a(i,j,k)%udTdxh)*theta_avg(i,1,k)  &
     + 2.0_rprec*theta_avg(i,j,k)*u_avg(i,j,k)*dTdx_avg(i,j,k)
 CTvdTdy = a(i,j,k)%Th_vdTdyh         - conjg(bb(i,j,k)%vtheta)*dTdy_avg(i,1,k)  &
-    - a(i,j,k)%Th_dTdyh*v_avg(1,j,k) - conjg(a(i,j,k)%vdTdyh)*theta_avg(i,1,k)  &
+    - a(i,j,k)%Th_dTdyh*v_avg(i,1,k) - conjg(a(i,j,k)%vdTdyh)*theta_avg(i,1,k)  &
     + 2.0_rprec*theta_avg(i,j,k)*v_avg(i,j,k)*dTdy_avg(i,j,k)
 CTwdTdz = a(i,j,k)%Th_wdTdzh         - conjg(bb(i,j,k)%wtheta)*dTdz_avg(i,1,k)  &
     - a(i,j,k)%Th_dTdzh*w_avg(i,1,k) - conjg(a(i,j,k)%wdTdzh)*theta_avg(i,1,k)  &

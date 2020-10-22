@@ -7637,7 +7637,7 @@ use stat_defs, only : tavg_scal_turbspecx, tavg_scal_turbspecy
 #endif
 #ifdef PPOUTPUT_SPECBUDG
 use param, only : checkpoint_tavg_scal_specbudg_file
-use stat_defs, only : tavg_scal_specbudgx
+use stat_defs, only : tavg_scal_specbudgx, tavg_scal_specbudgy
 #endif
 #endif
 #ifdef PPOUTPUT_SPECBUDG
@@ -7748,6 +7748,7 @@ open(1, file=fname, action='write', position='rewind',form='unformatted',      &
     convert=write_endian)
 write(1) tavg_total_time
 write(1) tavg_scal_specbudgx
+write(1) tavg_scal_specbudgy
 close(1)
 #endif
 #endif
