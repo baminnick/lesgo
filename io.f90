@@ -2352,6 +2352,7 @@ use param, only : nz, checkpoint_file, tavg_calc, lbc_mom, L_x, L_y, L_z
 #ifdef PPMPI
 use param, only : comm, ierr
 #endif
+use param, only : kxs_in, fourier
 use sim_param, only : u, v, w, RHSx, RHSy, RHSz
 use sgs_param, only : Cs_opt2, F_LM, F_MM, F_QN, F_NN
 use param, only : jt_total, total_time, total_time_dim, dt,                 &
@@ -2392,6 +2393,15 @@ if (coord == 0) then
     write(11) nproc, Nx, Ny, Nz, L_x, L_y, L_z
     close(11)
 end if
+
+! Write fourier grid variables to file
+if (fourier) then
+    if (coord == 0) then
+        open(11, file='grid_fourier.out', form='unformatted', convert=write_endian)
+        write(11) kxs_in
+        close(11)
+    end if
+endif
 
 #ifdef PPMPI
 call mpi_barrier( comm, ierr )
