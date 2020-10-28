@@ -6,7 +6,8 @@ rm  *vel.out*
 rm -r ./output/
 rm lesgo.out
 rm wmles.out
-rm grid*
+rm grid.out
+rm grid_fourier.out
 
 # Remove total_time.dat file
 rm total_time.dat
