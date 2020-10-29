@@ -1658,12 +1658,14 @@ use sim_param, only : fx, fy, fz, fxa, fya, fza
 #endif
 
 !debug
-use derivatives, only : wave2phys, phys2wave
+! For instantaneous x-plane average if fourier mode is on
+!use derivatives, only : wave2phys, phys2wave
 
 implicit none
 
 !debug
-real(rprec), dimension(ny,lbz:nz) :: u_sum, v_sum, w_sum, u_avg, v_avg, w_avg
+! For instantaneous x-plane average if fourier mode is on
+!real(rprec), dimension(ny,lbz:nz) :: u_sum, v_sum, w_sum, u_avg, v_avg, w_avg
 
 integer, intent(in) :: itype
 character (64) :: fname
@@ -1682,9 +1684,10 @@ real(rprec), allocatable, dimension(:,:,:) :: fx_tot, fy_tot, fz_tot
 real(rprec), dimension (:,:,:), allocatable :: vortx, vorty, vortz
 real(rprec), dimension (:,:,:), allocatable :: vortxF, vortyF, vortzF
 
+!! Commented out instantaneous pressure output
 ! Pressure
-real(rprec), dimension(:,:,:), allocatable :: pres_real
-real(rprec), dimension(:,:,:), allocatable :: presF_real
+!real(rprec), dimension(:,:,:), allocatable :: pres_real
+!real(rprec), dimension(:,:,:), allocatable :: presF_real
 
 #ifdef PPMPI
 call string_splice(bin_ext, '.c', coord, '.bin')
@@ -1706,7 +1709,8 @@ if (fourier) then
     call wave2physF( u, uF )
     call wave2physF( v, vF )
     call wave2physF( w, wF )
-    call wave2physF( p, pF )
+!! Commented out instantaneous pressure output
+!    call wave2physF( p, pF )
     call wave2physF( dudy, dudyF )
     call wave2physF( dudz, dudzF )
     call wave2physF( dvdx, dvdxF )
@@ -1725,6 +1729,62 @@ if (fourier) then
 else
     w_uv = interp_to_uv_grid(w(1:nx,1:ny,lbz:nz), lbz)
 endif
+
+! Compute vorticity
+allocate(vortx(nx,ny,lbz:nz), vorty(nx,ny,lbz:nz), vortz(nx,ny,lbz:nz))
+allocate(vortxF(nxp,ny,lbz:nz), vortyF(nxp,ny,lbz:nz), vortzF(nxp,ny,lbz:nz))
+
+! Use vorticityx as an intermediate step for performing uv-w interpolation
+! Vorticity is written in w grid
+if (fourier) then
+    vortxF(1:nxp,1:ny,lbz:nz) = 0._rprec
+    vortyF(1:nxp,1:ny,lbz:nz) = 0._rprec
+    vortzF(1:nxp,1:ny,lbz:nz) = 0._rprec
+
+    vortxF(1:nxp,1:ny,lbz:nz) = dvdxF(1:nxp,1:ny,lbz:nz) -            &
+        dudyF(1:nxp,1:ny,lbz:nz)
+    vortzF(1:nxp,1:ny,lbz:nz) =                                       &
+        interp_to_w_grid( vortxF(1:nxp,1:ny,lbz:nz), lbz)
+    vortxF(1:nxp,1:ny,lbz:nz) = dwdyF(1:nxp,1:ny,lbz:nz) -            &
+        dvdzF(1:nxp,1:ny,lbz:nz)
+    vortyF(1:nxp,1:ny,lbz:nz) = dudzF(1:nxp,1:ny,lbz:nz) -            &
+        dwdxF(1:nxp,1:ny,lbz:nz)
+
+    if (coord == 0) then
+        vortzF(1:nxp,1:ny, 1) = 0._rprec
+    end if
+else
+    vortx(1:nx,1:ny,lbz:nz) = 0._rprec
+    vorty(1:nx,1:ny,lbz:nz) = 0._rprec
+    vortz(1:nx,1:ny,lbz:nz) = 0._rprec
+
+    vortx(1:nx,1:ny,lbz:nz) = dvdx(1:nx,1:ny,lbz:nz) - dudy(1:nx,1:ny,lbz:nz)
+    vortz(1:nx,1:ny,lbz:nz) = interp_to_w_grid( vortx(1:nx,1:ny,lbz:nz), lbz)
+    vortx(1:nx,1:ny,lbz:nz) = dwdy(1:nx,1:ny,lbz:nz) - dvdz(1:nx,1:ny,lbz:nz)
+    vorty(1:nx,1:ny,lbz:nz) = dudz(1:nx,1:ny,lbz:nz) - dwdx(1:nx,1:ny,lbz:nz)
+
+    if (coord == 0) then
+        vortz(1:nx,1:ny, 1) = 0._rprec
+    end if
+endif
+
+!! Commented out instantaneous pressure output
+!! Compute static pressure
+!allocate(pres_real(nx,ny,lbz:nz))
+!allocate(presF_real(nxp,ny,lbz:nz))
+!if (fourier) then
+!    presF_real(1:nxp,1:ny,lbz:nz) = 0._rprec
+!    presF_real(1:nxp,1:ny,lbz:nz) = pF(1:nxp,1:ny,lbz:nz)               &
+!        - 0.5 * ( uF(1:nxp,1:ny,lbz:nz)**2                              &
+!        + wF_uv(1:nxp,1:ny,lbz:nz)**2                                   &
+!        + vF(1:nxp,1:ny,lbz:nz)**2 )
+!else !! .not. fourier
+!    pres_real(1:nx,1:ny,lbz:nz) = 0._rprec
+!    pres_real(1:nx,1:ny,lbz:nz) = p(1:nx,1:ny,lbz:nz)                   &
+!        - 0.5 * ( u(1:nx,1:ny,lbz:nz)**2                                &
+!        + w_uv(1:nx,1:ny,lbz:nz)**2                                     &
+!        + v(1:nx,1:ny,lbz:nz)**2 )
+!endif
 
 !  Instantaneous velocity sampled at point
 if(itype==1) then
@@ -1752,216 +1812,150 @@ elseif(itype==2) then
     ! Common file name for all output types
     call string_splice(fname, path //'output/vel.', jt_total)
 
-if (fourier) then
-#if defined(PPCGNS) && defined(PPMPI)
-    ! Write CGNS Output
-    call string_concat(fname, '.cgns')
-    call write_parallel_cgns(fname, nxp, ny, nz - nz_end, nz_tot,           &
-        (/ 1, 1,   (nz-1)*coord + 1 /),                                     &
-        (/ nxp, ny, (nz-1)*(coord+1) + 1 - nz_end /),                       &
-        x(1:nxp) , y(1:ny) , z(1:(nz-nz_end) ),                             &
-        3, (/ 'VelocityX', 'VelocityY', 'VelocityZ' /),                     &
-        (/ uF(1:nxp,1:ny,1:(nz-nz_end)), vF(1:nxp,1:ny,1:(nz-nz_end)),      &
-         wF_uv(1:nxp,1:ny,1:(nz-nz_end)) /) )
-#else
-    ! Write binary Output
-    call string_concat(fname, bin_ext)
-    open(unit=13, file=fname, form='unformatted', convert=write_endian,     &
-        access='direct', recl=nxp*ny*nz*rprec)
-    write(13,rec=1) uF(:nxp,:ny,1:nz)
-    write(13,rec=2) vF(:nxp,:ny,1:nz)
-    write(13,rec=3) wF_uv(:nxp,:ny,1:nz)
-    close(13)
-#endif
-else !! .not. fourier
-#if defined(PPCGNS) && defined(PPMPI)
-    ! Write CGNS Output
-    call string_concat(fname, '.cgns')
-    call write_parallel_cgns(fname, nx, ny, nz - nz_end, nz_tot,            &
-        (/ 1, 1,   (nz-1)*coord + 1 /),                                     &
-        (/ nx, ny, (nz-1)*(coord+1) + 1 - nz_end /),                        &
-        x(1:nx) , y(1:ny) , z(1:(nz-nz_end) ),                              &
-        3, (/ 'VelocityX', 'VelocityY', 'VelocityZ' /),                     &
-        (/ u(1:nx,1:ny,1:(nz-nz_end)), v(1:nx,1:ny,1:(nz-nz_end)),          &
-         w_uv(1:nx,1:ny,1:(nz-nz_end)) /) )
-#else
-    ! Write binary Output
-    call string_concat(fname, bin_ext)
-    open(unit=13, file=fname, form='unformatted', convert=write_endian,     &
-        access='direct', recl=nx*ny*nz*rprec)
-    write(13,rec=1) u(:nx,:ny,1:nz)
-    write(13,rec=2) v(:nx,:ny,1:nz)
-    write(13,rec=3) w_uv(:nx,:ny,1:nz)
-    close(13)
-#endif
-endif
-
-    ! Compute vorticity
-    allocate(vortx(nx,ny,lbz:nz), vorty(nx,ny,lbz:nz), vortz(nx,ny,lbz:nz))
-    allocate(vortxF(nxp,ny,lbz:nz), vortyF(nxp,ny,lbz:nz), vortzF(nxp,ny,lbz:nz))
-
-    ! Use vorticityx as an intermediate step for performing uv-w interpolation
-    ! Vorticity is written in w grid
     if (fourier) then
-        vortxF(1:nxp,1:ny,lbz:nz) = 0._rprec
-        vortyF(1:nxp,1:ny,lbz:nz) = 0._rprec
-        vortzF(1:nxp,1:ny,lbz:nz) = 0._rprec
-
-        vortxF(1:nxp,1:ny,lbz:nz) = dvdxF(1:nxp,1:ny,lbz:nz) -            &
-            dudyF(1:nxp,1:ny,lbz:nz)
-        vortzF(1:nxp,1:ny,lbz:nz) =                                       &
-            interp_to_w_grid( vortxF(1:nxp,1:ny,lbz:nz), lbz)
-        vortxF(1:nxp,1:ny,lbz:nz) = dwdyF(1:nxp,1:ny,lbz:nz) -            &
-            dvdzF(1:nxp,1:ny,lbz:nz)
-        vortyF(1:nxp,1:ny,lbz:nz) = dudzF(1:nxp,1:ny,lbz:nz) -            &
-            dwdxF(1:nxp,1:ny,lbz:nz)
-
-        if (coord == 0) then
-            vortzF(1:nxp,1:ny, 1) = 0._rprec
-        end if
-    else
-        vortx(1:nx,1:ny,lbz:nz) = 0._rprec
-        vorty(1:nx,1:ny,lbz:nz) = 0._rprec
-        vortz(1:nx,1:ny,lbz:nz) = 0._rprec
-
-        vortx(1:nx,1:ny,lbz:nz) = dvdx(1:nx,1:ny,lbz:nz) - dudy(1:nx,1:ny,lbz:nz)
-        vortz(1:nx,1:ny,lbz:nz) = interp_to_w_grid( vortx(1:nx,1:ny,lbz:nz), lbz)
-        vortx(1:nx,1:ny,lbz:nz) = dwdy(1:nx,1:ny,lbz:nz) - dvdz(1:nx,1:ny,lbz:nz)
-        vorty(1:nx,1:ny,lbz:nz) = dudz(1:nx,1:ny,lbz:nz) - dwdx(1:nx,1:ny,lbz:nz)
-
-        if (coord == 0) then
-            vortz(1:nx,1:ny, 1) = 0._rprec
-        end if
+#if defined(PPCGNS) && defined(PPMPI)
+        ! Write CGNS Output
+        call string_concat(fname, '.cgns')
+        call write_parallel_cgns(fname, nxp, ny, nz - nz_end, nz_tot,           &
+            (/ 1, 1,   (nz-1)*coord + 1 /),                                     &
+            (/ nxp, ny, (nz-1)*(coord+1) + 1 - nz_end /),                       &
+            x(1:nxp) , y(1:ny) , z(1:(nz-nz_end) ),                             &
+            3, (/ 'VelocityX', 'VelocityY', 'VelocityZ' /),                     &
+            (/ uF(1:nxp,1:ny,1:(nz-nz_end)), vF(1:nxp,1:ny,1:(nz-nz_end)),      &
+             wF_uv(1:nxp,1:ny,1:(nz-nz_end)) /) )
+#else
+        ! Write binary Output
+        call string_concat(fname, bin_ext)
+        open(unit=13, file=fname, form='unformatted', convert=write_endian,     &
+            access='direct', recl=nxp*ny*nz*rprec)
+        write(13,rec=1) uF(:nxp,:ny,1:nz)
+        write(13,rec=2) vF(:nxp,:ny,1:nz)
+        write(13,rec=3) wF_uv(:nxp,:ny,1:nz)
+        close(13)
+#endif
+    else !! .not. fourier
+#if defined(PPCGNS) && defined(PPMPI)
+        ! Write CGNS Output
+        call string_concat(fname, '.cgns')
+        call write_parallel_cgns(fname, nx, ny, nz - nz_end, nz_tot,            &
+            (/ 1, 1,   (nz-1)*coord + 1 /),                                     &
+            (/ nx, ny, (nz-1)*(coord+1) + 1 - nz_end /),                        &
+            x(1:nx) , y(1:ny) , z(1:(nz-nz_end) ),                              &
+            3, (/ 'VelocityX', 'VelocityY', 'VelocityZ' /),                     &
+            (/ u(1:nx,1:ny,1:(nz-nz_end)), v(1:nx,1:ny,1:(nz-nz_end)),          &
+             w_uv(1:nx,1:ny,1:(nz-nz_end)) /) )
+#else
+        ! Write binary Output
+        call string_concat(fname, bin_ext)
+        open(unit=13, file=fname, form='unformatted', convert=write_endian,     &
+            access='direct', recl=nx*ny*nz*rprec)
+        write(13,rec=1) u(:nx,:ny,1:nz)
+        write(13,rec=2) v(:nx,:ny,1:nz)
+        write(13,rec=3) w_uv(:nx,:ny,1:nz)
+        close(13)
+#endif
     endif
 
     ! Common file name for all output types
     call string_splice(fname, path //'output/vort.', jt_total)
 
-if (fourier) then
-#if defined(PPCGNS) && defined(PPMPI)
-    ! Write CGNS Output
-    call string_concat(fname, '.cgns')
-    call write_parallel_cgns(fname,nxp,ny, nz - nz_end, nz_tot,             &
-        (/ 1, 1,   (nz-1)*coord + 1 /),                                     &
-        (/ nxp, ny, (nz-1)*(coord+1) + 1 - nz_end /),                       &
-        x(1:nxp) , y(1:ny) , zw(1:(nz-nz_end) ),                            &
-        3, (/ 'VorticityX', 'VorticityY', 'VorticityZ' /),                  &
-        (/ vortxF(1:nxp,1:ny,1:(nz-nz_end)), vortyF(1:nxp,1:ny,1:(nz-nz_end)),  &
-        vortzF(1:nxp,1:ny,1:(nz-nz_end)) /) )
-
-#else
-    ! Write binary Output
-    call string_concat(fname, bin_ext)
-    open(unit=13, file=fname, form='unformatted', convert=write_endian,     &
-        access='direct', recl=nxp*ny*nz*rprec)
-    write(13,rec=1) vortxF(:nxp,:ny,1:nz)
-    write(13,rec=2) vortyF(:nxp,:ny,1:nz)
-    write(13,rec=3) vortzF(:nxp,:ny,1:nz)
-    close(13)
-#endif
-else !! .not. fourier
-#if defined(PPCGNS) && defined(PPMPI)
-    ! Write CGNS Output
-    call string_concat(fname, '.cgns')
-    call write_parallel_cgns(fname,nx,ny, nz - nz_end, nz_tot,              &
-        (/ 1, 1,   (nz-1)*coord + 1 /),                                     &
-        (/ nx, ny, (nz-1)*(coord+1) + 1 - nz_end /),                        &
-        x(1:nx) , y(1:ny) , zw(1:(nz-nz_end) ),                             &
-        3, (/ 'VorticityX', 'VorticityY', 'VorticityZ' /),                  &
-        (/ vortx(1:nx,1:ny,1:(nz-nz_end)), vorty(1:nx,1:ny,1:(nz-nz_end)),  &
-        vortz(1:nx,1:ny,1:(nz-nz_end)) /) )
-
-#else
-    ! Write binary Output
-    call string_concat(fname, bin_ext)
-    open(unit=13, file=fname, form='unformatted', convert=write_endian,     &
-        access='direct', recl=nx*ny*nz*rprec)
-    write(13,rec=1) vortx(:nx,:ny,1:nz)
-    write(13,rec=2) vorty(:nx,:ny,1:nz)
-    write(13,rec=3) vortz(:nx,:ny,1:nz)
-    close(13)
-#endif
-endif !! fourier
-
-    deallocate(vortx, vorty, vortz)
-    deallocate(vortxF, vortyF, vortzF)
-
-    ! Compute pressure
-    allocate(pres_real(nx,ny,lbz:nz))
-    allocate(presF_real(nxp,ny,lbz:nz))
     if (fourier) then
-        presF_real(1:nxp,1:ny,lbz:nz) = 0._rprec
+#if defined(PPCGNS) && defined(PPMPI)
+        ! Write CGNS Output
+        call string_concat(fname, '.cgns')
+        call write_parallel_cgns(fname,nxp,ny, nz - nz_end, nz_tot,                 &
+            (/ 1, 1,   (nz-1)*coord + 1 /),                                         &
+            (/ nxp, ny, (nz-1)*(coord+1) + 1 - nz_end /),                           &
+            x(1:nxp) , y(1:ny) , zw(1:(nz-nz_end) ),                                &
+            3, (/ 'VorticityX', 'VorticityY', 'VorticityZ' /),                      &
+            (/ vortxF(1:nxp,1:ny,1:(nz-nz_end)), vortyF(1:nxp,1:ny,1:(nz-nz_end)),  &
+            vortzF(1:nxp,1:ny,1:(nz-nz_end)) /) )
 
-        presF_real(1:nxp,1:ny,lbz:nz) = pF(1:nxp,1:ny,lbz:nz)               &
-            - 0.5 * ( uF(1:nxp,1:ny,lbz:nz)**2                              &
-            + wF_uv(1:nxp,1:ny,lbz:nz)**2                                   &
-            + vF(1:nxp,1:ny,lbz:nz)**2 )
+#else
+        ! Write binary Output
+        call string_concat(fname, bin_ext)
+        open(unit=13, file=fname, form='unformatted', convert=write_endian,     &
+            access='direct', recl=nxp*ny*nz*rprec)
+        write(13,rec=1) vortxF(:nxp,:ny,1:nz)
+        write(13,rec=2) vortyF(:nxp,:ny,1:nz)
+        write(13,rec=3) vortzF(:nxp,:ny,1:nz)
+        close(13)
+#endif
     else !! .not. fourier
-        pres_real(1:nx,1:ny,lbz:nz) = 0._rprec
-
-        pres_real(1:nx,1:ny,lbz:nz) = p(1:nx,1:ny,lbz:nz)                   &
-            - 0.5 * ( u(1:nx,1:ny,lbz:nz)**2                                &
-            + w_uv(1:nx,1:ny,lbz:nz)**2                                     &
-            + v(1:nx,1:ny,lbz:nz)**2 )
-    endif
-
-    ! Common file name for all output types
-    call string_splice(fname, path //'output/pres.', jt_total)
-
-if (fourier) then
 #if defined(PPCGNS) && defined(PPMPI)
-    ! Write CGNS Output
-    call string_concat(fname, '.cgns')
-    call write_parallel_cgns(fname, nxp, ny, nz - nz_end, nz_tot,           &
-        (/ 1, 1,   (nz-1)*coord + 1 /),                                     &
-        (/ nxp, ny, (nz-1)*(coord+1) + 1 - nz_end /),                       &
-        x(1:nxp) , y(1:ny) , z(1:(nz-nz_end) ),                             &
-        1, (/ 'Pressure' /), (/ presF_real(1:nxp,1:ny,1:(nz-nz_end)) /) )
+        ! Write CGNS Output
+        call string_concat(fname, '.cgns')
+        call write_parallel_cgns(fname,nx,ny, nz - nz_end, nz_tot,              &
+            (/ 1, 1,   (nz-1)*coord + 1 /),                                     &
+            (/ nx, ny, (nz-1)*(coord+1) + 1 - nz_end /),                        &
+            x(1:nx) , y(1:ny) , zw(1:(nz-nz_end) ),                             &
+            3, (/ 'VorticityX', 'VorticityY', 'VorticityZ' /),                  &
+            (/ vortx(1:nx,1:ny,1:(nz-nz_end)), vorty(1:nx,1:ny,1:(nz-nz_end)),  &
+            vortz(1:nx,1:ny,1:(nz-nz_end)) /) )
 
 #else
-    ! Write binary Output
-    call string_concat(fname, bin_ext)
-    open(unit=13, file=fname, form='unformatted', convert=write_endian,     &
-        access='direct', recl=nxp*ny*nz*rprec)
-    write(13,rec=1) presF_real(:nxp,:ny,1:nz)
-    close(13)
+        ! Write binary Output
+        call string_concat(fname, bin_ext)
+        open(unit=13, file=fname, form='unformatted', convert=write_endian,     &
+            access='direct', recl=nx*ny*nz*rprec)
+        write(13,rec=1) vortx(:nx,:ny,1:nz)
+        write(13,rec=2) vorty(:nx,:ny,1:nz)
+        write(13,rec=3) vortz(:nx,:ny,1:nz)
+        close(13)
 #endif
-else !! .not. fourier
-#if defined(PPCGNS) && defined(PPMPI)
-    ! Write CGNS Output
-    call string_concat(fname, '.cgns')
-    call write_parallel_cgns(fname, nx, ny, nz - nz_end, nz_tot,            &
-        (/ 1, 1,   (nz-1)*coord + 1 /),                                     &
-        (/ nx, ny, (nz-1)*(coord+1) + 1 - nz_end /),                        &
-        x(1:nx) , y(1:ny) , z(1:(nz-nz_end) ),                              &
-        1, (/ 'Pressure' /), (/ pres_real(1:nx,1:ny,1:(nz-nz_end)) /) )
+    endif !! fourier
 
-#else
-    ! Write binary Output
-    call string_concat(fname, bin_ext)
-    open(unit=13, file=fname, form='unformatted', convert=write_endian,     &
-        access='direct', recl=nx*ny*nz*rprec)
-    write(13,rec=1) pres_real(:nx,:ny,1:nz)
-    close(13)
-#endif
-endif
-
-     deallocate(pres_real)
-     deallocate(presF_real)
+!! Commented out instantaneous pressure output
+!    ! Common file name for all output types
+!    call string_splice(fname, path //'output/pres.', jt_total)
+!
+!    if (fourier) then
+!#if defined(PPCGNS) && defined(PPMPI)
+!        ! Write CGNS Output
+!        call string_concat(fname, '.cgns')
+!        call write_parallel_cgns(fname, nxp, ny, nz - nz_end, nz_tot,           &
+!            (/ 1, 1,   (nz-1)*coord + 1 /),                                     &
+!            (/ nxp, ny, (nz-1)*(coord+1) + 1 - nz_end /),                       &
+!            x(1:nxp) , y(1:ny) , z(1:(nz-nz_end) ),                             &
+!            1, (/ 'Pressure' /), (/ presF_real(1:nxp,1:ny,1:(nz-nz_end)) /) )
+!#else
+!        ! Write binary Output
+!        call string_concat(fname, bin_ext)
+!        open(unit=13, file=fname, form='unformatted', convert=write_endian,     &
+!            access='direct', recl=nxp*ny*nz*rprec)
+!        write(13,rec=1) presF_real(:nxp,:ny,1:nz)
+!        close(13)
+!#endif
+!    else !! .not. fourier
+!#if defined(PPCGNS) && defined(PPMPI)
+!        ! Write CGNS Output
+!        call string_concat(fname, '.cgns')
+!        call write_parallel_cgns(fname, nx, ny, nz - nz_end, nz_tot,            &
+!            (/ 1, 1,   (nz-1)*coord + 1 /),                                     &
+!            (/ nx, ny, (nz-1)*(coord+1) + 1 - nz_end /),                        &
+!            x(1:nx) , y(1:ny) , z(1:(nz-nz_end) ),                              &
+!            1, (/ 'Pressure' /), (/ pres_real(1:nx,1:ny,1:(nz-nz_end)) /) )
+!#else
+!        ! Write binary Output
+!        call string_concat(fname, bin_ext)
+!        open(unit=13, file=fname, form='unformatted', convert=write_endian,     &
+!            access='direct', recl=nx*ny*nz*rprec)
+!        write(13,rec=1) pres_real(:nx,:ny,1:nz)
+!        close(13)
+!#endif
+!    endif
 
 !  Write instantaneous x-plane values
 elseif(itype==3) then
 
-if (fourier) then
-
+    if (fourier) then
     ! Not going to interpolate since physical grid is probably coarse
     ! Instead going to use arbitrary xplane location, ignoring user-input
     ! Assuming user only wants a single xplane location
 
     ! Common file name portion for all output types
 ! debug
-!    call string_splice(fname, path // 'output/vel.x-', xplane_loc(1), '.', jt_total)
-    call string_splice(fname, path // 'output/vel.x-avg.', jt_total)
+    call string_splice(fname, path // 'output/vel.x-', xplane_loc(1), '.', jt_total)
 
 #if defined(PPCGNS) && defined(PPMPI)
         ! Write CGNS Output
@@ -1976,75 +1970,51 @@ if (fourier) then
 
 #else
         ! Write binary output
-! Uncomment code below to write instantaneous x-plane velocity data
-! debug
-!        call string_concat(fname, bin_ext)
-!        open(unit=13,file=fname,form='unformatted',convert=write_endian, access='direct',recl=ny*nz*rprec)
-!        write(13,rec=1) uF(1,:ny,1:nz)
-!        write(13,rec=2) vF(1,:ny,1:nz)
-!        write(13,rec=3) wF(1,:ny,1:nz)
-!        close(13)
+        call string_concat(fname, bin_ext)
+        open(unit=13,file=fname,form='unformatted',convert=write_endian, access='direct',recl=ny*nz*rprec)
+        write(13,rec=1) uF(1,:ny,1:nz)
+        write(13,rec=2) vF(1,:ny,1:nz)
+        write(13,rec=3) wF(1,:ny,1:nz)
+        close(13)
 
 ! Uncomment code below to write instantaneous x-plane average velocity data
 ! This includes y & z locations, and w is interpolated onto uv-grid
 ! debug
-! Transform to obtain streamwise average
-call wave2phys( u, lbz )
-call wave2phys( v, lbz )
-call wave2phys( w, lbz )
-
-! Interpolate w velocity to uv-grid
-w_uv = interp_to_uv_grid(w(1:nx,1:ny,lbz:nz), lbz)
-
-! Compute streamwise average
-u_sum = 0._rprec
-v_sum = 0._rprec
-w_sum = 0._rprec
-do i = 1, nx
-    u_sum = u_sum + u(i,:,:)
-    v_sum = v_sum + v(i,:,:)
-    w_sum = w_sum + w_uv(i,:,:) !! using w interpolated onto uv-grid
-enddo
-u_avg(:,:) = u_sum(:,:) / nx
-v_avg(:,:) = v_sum(:,:) / nx
-w_avg(:,:) = w_sum(:,:) / nx
-
-! Output data
-        call string_concat(fname, bin_ext)
-        open(unit=13,file=fname,form='unformatted',convert=write_endian, access='direct',recl=ny*nz*rprec)
-        write(13,rec=1) u_avg(:ny,1:nz)
-        write(13,rec=2) v_avg(:ny,1:nz)
-        write(13,rec=3) w_avg(:ny,1:nz)
-        close(13)
+!! Transform to obtain streamwise average
+!call wave2phys( u, lbz )
+!call wave2phys( v, lbz )
+!call wave2phys( w, lbz )
+!
+!! Interpolate w velocity to uv-grid
+!w_uv = interp_to_uv_grid(w(1:nx,1:ny,lbz:nz), lbz)
+!
+!! Compute streamwise average
+!u_sum = 0._rprec
+!v_sum = 0._rprec
+!w_sum = 0._rprec
+!do i = 1, nx
+!    u_sum = u_sum + u(i,:,:)
+!    v_sum = v_sum + v(i,:,:)
+!    w_sum = w_sum + w_uv(i,:,:) !! using w interpolated onto uv-grid
+!enddo
+!u_avg(:,:) = u_sum(:,:) / nx
+!v_avg(:,:) = v_sum(:,:) / nx
+!w_avg(:,:) = w_sum(:,:) / nx
+!
+!! Transform back to Fourier space
+!call phys2wave( u, lbz )
+!call phys2wave( v, lbz )
+!call phys2wave( w, lbz )
+!
+!    call string_splice(fname, path // 'output/vel.x-avg.', jt_total)
+!! Output data
+!        call string_concat(fname, bin_ext)
+!        open(unit=13,file=fname,form='unformatted',convert=write_endian, access='direct',recl=ny*nz*rprec)
+!        write(13,rec=1) u_avg(:ny,1:nz)
+!        write(13,rec=2) v_avg(:ny,1:nz)
+!        write(13,rec=3) w_avg(:ny,1:nz)
+!        close(13)
 #endif
-
-! Transform back to Fourier space
-call phys2wave( u, lbz )
-call phys2wave( v, lbz )
-call phys2wave( w, lbz )
-
-    ! Now to compute vorticity
-    allocate(vortx(nx,ny,lbz:nz), vorty(nx,ny,lbz:nz), vortz(nx,ny,lbz:nz))
-    allocate(vortxF(nxp,ny,lbz:nz), vortyF(nxp,ny,lbz:nz), vortzF(nxp,ny,lbz:nz))
-
-    ! Use vorticityx as an intermediate step for performing uv-w interpolation
-    ! Vorticity is written in w grid
-    vortxF(1:nxp,1:ny,lbz:nz) = 0._rprec
-    vortyF(1:nxp,1:ny,lbz:nz) = 0._rprec
-    vortzF(1:nxp,1:ny,lbz:nz) = 0._rprec
-
-    vortxF(1:nxp,1:ny,lbz:nz) = dvdxF(1:nxp,1:ny,lbz:nz) -            &
-        dudyF(1:nxp,1:ny,lbz:nz)
-    vortzF(1:nxp,1:ny,lbz:nz) =                                       &
-        interp_to_w_grid( vortxF(1:nxp,1:ny,lbz:nz), lbz)
-    vortxF(1:nxp,1:ny,lbz:nz) = dwdyF(1:nxp,1:ny,lbz:nz) -            &
-        dvdzF(1:nxp,1:ny,lbz:nz)
-    vortyF(1:nxp,1:ny,lbz:nz) = dudzF(1:nxp,1:ny,lbz:nz) -            &
-        dwdxF(1:nxp,1:ny,lbz:nz)
-
-    if (coord == 0) then
-        vortzF(1:nxp,1:ny, 1) = 0._rprec
-    end if
  
     ! Common file name for all output types
     call string_splice(fname, path // 'output/vort.x-', xplane_loc(1), '.', jt_total)
@@ -2070,8 +2040,6 @@ call phys2wave( w, lbz )
     write(13,rec=3) vortzF(1,:ny,1:nz)
     close(13)
 #endif
-
-    deallocate(vortxF, vortyF, vortzF)
 
 else !! not fourier
     allocate(ui(1,ny,nz), vi(1,ny,nz), wi(1,ny,nz))
@@ -2121,96 +2089,140 @@ endif !! to fourier or not to fourier
 !  Write instantaneous y-plane values
 elseif(itype==4) then
 
-    allocate(ui(nx,1,nz), vi(nx,1,nz), wi(nx,1,nz))
+    if (fourier) then
+        allocate(ui(nxp,1,nz), vi(nxp,1,nz), wi(nxp,1,nz))
 
-    !  Loop over all yplane locations
-    do j = 1, yplane_nloc
-        do k = 1, nz
-            do i = 1, nx
-
-                ui(i,1,k) = linear_interp(u(i,yplane(j) % istart,k),        &
-                     u(i,yplane(j) % istart+1,k), dy, yplane(j) % ldiff)
-                vi(i,1,k) = linear_interp(v(i,yplane(j) % istart,k),        &
-                     v(i,yplane(j) % istart+1,k), dy, yplane(j) % ldiff)
-                wi(i,1,k) = linear_interp(w_uv(i,yplane(j) % istart,k),     &
-                     w_uv(i,yplane(j) % istart+1,k), dy, yplane(j) % ldiff)
+        !  Loop over all yplane locations
+        do j = 1, yplane_nloc
+            do k = 1, nz
+                do i = 1, nxp
+                    ui(i,1,k) = linear_interp(uF(i,yplane(j) % istart,k),        &
+                         uF(i,yplane(j) % istart+1,k), dy, yplane(j) % ldiff)
+                    vi(i,1,k) = linear_interp(vF(i,yplane(j) % istart,k),        &
+                         vF(i,yplane(j) % istart+1,k), dy, yplane(j) % ldiff)
+                    wi(i,1,k) = linear_interp(wF_uv(i,yplane(j) % istart,k),     &
+                         wF_uv(i,yplane(j) % istart+1,k), dy, yplane(j) % ldiff)
+                end do
             end do
-        end do
 
-        ! Common file name portion for all output types
-        call string_splice(fname, path // 'output/vel.y-', yplane_loc(j), '.', &
-             jt_total)
+            ! Common file name portion for all output types
+            call string_splice(fname, path // 'output/vel.y-', yplane_loc(j), '.', &
+                 jt_total)
 
 #if defined(PPCGNS) && defined(PPMPI)
-        call string_concat(fname, '.cgns')
-        call write_parallel_cgns (fname,nx,1, nz - nz_end, nz_tot,          &
-            (/ 1, 1,   (nz-1)*coord + 1 /),                                 &
-            (/ nx, 1, (nz-1)*(coord+1) + 1 - nz_end /),                     &
-            x(1:nx) , yplane_loc(j:j) , z(1:(nz-nz_end) ),                  &
-            3, (/ 'VelocityX', 'VelocityY', 'VelocityZ' /),                 &
-            (/ ui(1:nx,1,1:(nz-nz_end)), vi(1:nx,1,1:(nz-nz_end)),          &
-            wi(1:nx,1,1:(nz-nz_end)) /) )
+            call string_concat(fname, '.cgns')
+            call write_parallel_cgns (fname,nxp,1, nz - nz_end, nz_tot,           &
+                (/ 1, 1,   (nz-1)*coord + 1 /),                                   &
+                (/ nxp, 1, (nz-1)*(coord+1) + 1 - nz_end /),                      &
+                x(1:nxp) , yplane_loc(j:j) , z(1:(nz-nz_end) ),                   &
+                3, (/ 'VelocityX', 'VelocityY', 'VelocityZ' /),                   &
+                (/ ui(1:nxp,1,1:(nz-nz_end)), vi(1:nxp,1,1:(nz-nz_end)),          &
+                wi(1:nxp,1,1:(nz-nz_end)) /) )
 #else
-        ! Write binary output
-        call string_concat(fname, bin_ext)
-        open(unit=13,file=fname,form='unformatted',convert=write_endian, access='direct',recl=nx*nz*rprec)
-        write(13,rec=1) ui
-        write(13,rec=2) vi
-        write(13,rec=3) wi
-        close(13)
+            ! Write binary output
+            call string_concat(fname, bin_ext)
+            open(unit=13,file=fname,form='unformatted',convert=write_endian, access='direct',recl=nxp*nz*rprec)
+            write(13,rec=1) ui
+            write(13,rec=2) vi
+            write(13,rec=3) wi
+            close(13)
 #endif
 
-    end do
+        end do
 
-    deallocate(ui,vi,wi)
+        deallocate(ui,vi,wi)
+    else
+        allocate(ui(nx,1,nz), vi(nx,1,nz), wi(nx,1,nz))
+
+        !  Loop over all yplane locations
+        do j = 1, yplane_nloc
+            do k = 1, nz
+                do i = 1, nx
+                    ui(i,1,k) = linear_interp(u(i,yplane(j) % istart,k),        &
+                         u(i,yplane(j) % istart+1,k), dy, yplane(j) % ldiff)
+                    vi(i,1,k) = linear_interp(v(i,yplane(j) % istart,k),        &
+                         v(i,yplane(j) % istart+1,k), dy, yplane(j) % ldiff)
+                    wi(i,1,k) = linear_interp(w_uv(i,yplane(j) % istart,k),     &
+                         w_uv(i,yplane(j) % istart+1,k), dy, yplane(j) % ldiff)
+                end do
+            end do
+
+            ! Common file name portion for all output types
+            call string_splice(fname, path // 'output/vel.y-', yplane_loc(j), '.', &
+                 jt_total)
+
+#if defined(PPCGNS) && defined(PPMPI)
+            call string_concat(fname, '.cgns')
+            call write_parallel_cgns (fname,nx,1, nz - nz_end, nz_tot,          &
+                (/ 1, 1,   (nz-1)*coord + 1 /),                                 &
+                (/ nx, 1, (nz-1)*(coord+1) + 1 - nz_end /),                     &
+                x(1:nx) , yplane_loc(j:j) , z(1:(nz-nz_end) ),                  &
+                3, (/ 'VelocityX', 'VelocityY', 'VelocityZ' /),                 &
+                (/ ui(1:nx,1,1:(nz-nz_end)), vi(1:nx,1,1:(nz-nz_end)),          &
+                wi(1:nx,1,1:(nz-nz_end)) /) )
+#else
+            ! Write binary output
+            call string_concat(fname, bin_ext)
+            open(unit=13,file=fname,form='unformatted',convert=write_endian, access='direct',recl=nx*nz*rprec)
+            write(13,rec=1) ui
+            write(13,rec=2) vi
+            write(13,rec=3) wi
+            close(13)
+#endif
+
+        end do
+
+        deallocate(ui,vi,wi)
+    endif
 
 !  Write instantaneous z-plane values
 elseif (itype==5) then
 
-    allocate(ui(nx,ny,1), vi(nx,ny,1), wi(nx,ny,1))
+    if (fourier) then
+        allocate(ui(nxp,ny,1), vi(nxp,ny,1), wi(nxp,ny,1))
 
-    !  Loop over all zplane locations
-    do k = 1, zplane_nloc
-        ! Common file name portion for all output types
-        call string_splice(fname, path // 'output/vel.z-',                  &
-                zplane_loc(k), '.', jt_total)
+        !  Loop over all zplane locations
+        do k = 1, zplane_nloc
+            ! Common file name portion for all output types
+            call string_splice(fname, path // 'output/vel.z-',                  &
+                    zplane_loc(k), '.', jt_total)
 
 #ifdef PPCGNS
-        call string_concat(fname, '.cgns')
+            call string_concat(fname, '.cgns')
 #endif
 
 #ifdef PPMPI
-        if(zplane(k) % coord == coord) then
-            do j = 1, Ny
-                do i = 1, Nx
-                    ui(i,j,1) = linear_interp(u(i,j,zplane(k) % istart),     &
-                         u(i,j,zplane(k) % istart+1), dz, zplane(k) % ldiff)
-                    vi(i,j,1) = linear_interp(v(i,j,zplane(k) % istart),     &
-                         v(i,j,zplane(k) % istart+1), dz, zplane(k) % ldiff)
-                    wi(i,j,1) = linear_interp(w_uv(i,j,zplane(k) % istart),  &
-                         w_uv(i,j,zplane(k) % istart+1), dz, zplane(k) % ldiff)
+            if(zplane(k) % coord == coord) then
+                do j = 1, ny
+                    do i = 1, nxp
+                        ui(i,j,1) = linear_interp(uF(i,j,zplane(k) % istart),     &
+                             uF(i,j,zplane(k) % istart+1), dz, zplane(k) % ldiff)
+                        vi(i,j,1) = linear_interp(vF(i,j,zplane(k) % istart),     &
+                             vF(i,j,zplane(k) % istart+1), dz, zplane(k) % ldiff)
+                        wi(i,j,1) = linear_interp(wF_uv(i,j,zplane(k) % istart),  &
+                             wF_uv(i,j,zplane(k) % istart+1), dz, zplane(k) % ldiff)
+                    end do
                 end do
-            end do
 
 #ifdef PPCGNS
-            call warn("inst_write","Z plane writting is currently disabled.")
-!            ! Write CGNS Data
-!            ! Only the processor with data writes, the other one is written
-!            ! using null arguments with 'write_null_cgns'
-!            call write_parallel_cgns (fname ,nx, ny, 1, 1,                  &
-!                (/ 1, 1,   1 /),                                            &
-!                (/ nx, ny, 1 /),                                            &
-!                x(1:nx) , y(1:ny) , zplane_loc(k:k), 3,                     &
-!                (/ 'VelocityX', 'VelocityY', 'VelocityZ' /),                &
-!                (/ ui(1:nx,1:ny,1), vi(1:nx,1:ny,1), wi(1:nx,1:ny,1) /) )
+                call warn("inst_write","Z plane writting is currently disabled.")
+!                ! Write CGNS Data
+!                ! Only the processor with data writes, the other one is written
+!                ! using null arguments with 'write_null_cgns'
+!                call write_parallel_cgns (fname ,nx, ny, 1, 1,                  &
+!                    (/ 1, 1,   1 /),                                            &
+!                    (/ nx, ny, 1 /),                                            &
+!                    x(1:nx) , y(1:ny) , zplane_loc(k:k), 3,                     &
+!                    (/ 'VelocityX', 'VelocityY', 'VelocityZ' /),                &
+!                    (/ ui(1:nx,1:ny,1), vi(1:nx,1:ny,1), wi(1:nx,1:ny,1) /) )
 #else
-            call string_concat(fname, bin_ext)
-            open(unit=13,file=fname,form='unformatted',convert=write_endian, &
-                            access='direct',recl=nx*ny*1*rprec)
-            write(13,rec=1) ui(1:nx,1:ny,1)
-            write(13,rec=2) vi(1:nx,1:ny,1)
-            write(13,rec=3) wi(1:nx,1:ny,1)
-            close(13)
+                call string_concat(fname, bin_ext)
+                open(unit=13,file=fname,form='unformatted',convert=write_endian, &
+                                access='direct',recl=nxp*ny*1*rprec)
+                write(13,rec=1) ui(1:nxp,1:ny,1)
+                write(13,rec=2) vi(1:nxp,1:ny,1)
+                write(13,rec=3) wi(1:nxp,1:ny,1)
+                close(13)
 #endif
 !
 ! #ifdef PPMPI
@@ -2223,16 +2235,84 @@ elseif (itype==5) then
 !            x(1:nx) , y(1:ny) , zplane_loc(k:k), 3,                         &
 !            (/ 'VelocityX', 'VelocityY', 'VelocityZ' /) )
 !#endif
-        end if
+            end if
 #endif
-    end do
-    deallocate(ui,vi,wi)
+        end do
+        deallocate(ui,vi,wi)
+    else
+        allocate(ui(nx,ny,1), vi(nx,ny,1), wi(nx,ny,1))
+
+        !  Loop over all zplane locations
+        do k = 1, zplane_nloc
+            ! Common file name portion for all output types
+            call string_splice(fname, path // 'output/vel.z-',                  &
+                    zplane_loc(k), '.', jt_total)
+
+#ifdef PPCGNS
+            call string_concat(fname, '.cgns')
+#endif
+
+#ifdef PPMPI
+            if(zplane(k) % coord == coord) then
+                do j = 1, Ny
+                    do i = 1, Nx
+                        ui(i,j,1) = linear_interp(u(i,j,zplane(k) % istart),     &
+                             u(i,j,zplane(k) % istart+1), dz, zplane(k) % ldiff)
+                        vi(i,j,1) = linear_interp(v(i,j,zplane(k) % istart),     &
+                             v(i,j,zplane(k) % istart+1), dz, zplane(k) % ldiff)
+                        wi(i,j,1) = linear_interp(w_uv(i,j,zplane(k) % istart),  &
+                             w_uv(i,j,zplane(k) % istart+1), dz, zplane(k) % ldiff)
+                    end do
+                end do
+
+#ifdef PPCGNS
+                call warn("inst_write","Z plane writting is currently disabled.")
+!                ! Write CGNS Data
+!                ! Only the processor with data writes, the other one is written
+!                ! using null arguments with 'write_null_cgns'
+!                call write_parallel_cgns (fname ,nx, ny, 1, 1,                  &
+!                    (/ 1, 1,   1 /),                                            &
+!                    (/ nx, ny, 1 /),                                            &
+!                    x(1:nx) , y(1:ny) , zplane_loc(k:k), 3,                     &
+!                    (/ 'VelocityX', 'VelocityY', 'VelocityZ' /),                &
+!                    (/ ui(1:nx,1:ny,1), vi(1:nx,1:ny,1), wi(1:nx,1:ny,1) /) )
+#else
+                call string_concat(fname, bin_ext)
+                open(unit=13,file=fname,form='unformatted',convert=write_endian, &
+                                access='direct',recl=nx*ny*1*rprec)
+                write(13,rec=1) ui(1:nx,1:ny,1)
+                write(13,rec=2) vi(1:nx,1:ny,1)
+                write(13,rec=3) wi(1:nx,1:ny,1)
+                close(13)
+#endif
+!
+! #ifdef PPMPI
+!         else
+! #ifdef PPCGNS
+!            write(*,*) "At write_null_cgns"
+!            call write_null_cgns (fname ,nx, ny, 1, 1,                      &
+!            (/ 1, 1,   1 /),                                                &
+!            (/ nx, ny, 1 /),                                                &
+!            x(1:nx) , y(1:ny) , zplane_loc(k:k), 3,                         &
+!            (/ 'VelocityX', 'VelocityY', 'VelocityZ' /) )
+!#endif
+            end if
+#endif
+        end do
+        deallocate(ui,vi,wi)
+    endif
 else
     write(*,*) 'Error: itype not specified properly to inst_write!'
     stop
 end if
 
+! Deallocate temp variables
 deallocate(w_uv)
+deallocate(vortx, vorty, vortz)
+deallocate(vortxF, vortyF, vortzF)
+!! Commented out instantaneous pressure output
+!deallocate(pres_real)
+!deallocate(presF_real)
 nullify(x,y,z,zw)
 
 #ifdef PPLVLSET
