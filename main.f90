@@ -33,9 +33,13 @@ use grid_m
 use io, only : energy, output_loop, output_final, jt_total
 use io, only : write_tau_wall_bot, write_tau_wall_top, kx_energy, kx_energy_fourier
 !use io, only : ky_energy
+#ifdef PPOUTPUT_CLOCK
+use io, only : write_clocks
+#endif
 use fft
 use derivatives, only : filt_da, ddz_uv, ddz_w
 use derivatives, only : wave2physF
+use derivatives, only : wave2phys, phys2wave
 use test_filtermodule
 use cfl_util
 use sgs_param, only : nu
@@ -85,8 +89,9 @@ real(rprec) :: rmsdivvel, maxcfl, tt, maxvisc
 
 type(clock_t) :: clock, clock_total
 !type(clock_t) :: clock_forcing
-#ifdef PPOUTPUT_WMLES
-type(clock_t) :: clock_wm
+#ifdef PPOUTPUT_CLOCK
+type(clock_t) :: clock_deriv, clock_wm, clock_stress, clock_divstress
+type(clock_t) :: clock_convec, clock_inter, clock_pres
 #endif
 
 ! Measure total time in forcing function
@@ -195,7 +200,25 @@ time_loop: do jt_step = nstart, nsteps
         endif       
     end if
 
+    ! Fourier check
+    if (fourier .and. fourier_check) then
+        if ( (mod(jt_total,fourier_nskip)==0) .and.             &
+            (jt_total < tavg_nstart) ) then
+            ! Transform to physical space
+            call wave2phys( u, lbz )
+            call wave2phys( v, lbz )
+            call wave2phys( w, lbz )
+            ! Transform back
+            call phys2wave( u, lbz )
+            call phys2wave( v, lbz )
+            call phys2wave( w, lbz )
+        endif
+    endif
+
     ! Calculate velocity derivatives
+#ifdef PPOUTPUT_CLOCK
+    call clock_deriv%start
+#endif
     ! Calculate dudx, dudy, dvdx, dvdy, dwdx, dwdy (in Fourier space)
     call filt_da(u, dudx, dudy, lbz)
     call filt_da(v, dvdx, dvdy, lbz)
@@ -209,45 +232,77 @@ time_loop: do jt_step = nstart, nsteps
     ! Calculate dwdz using finite differences (for 0:nz-1 on w-nodes)
     !  except bottom coord, only 1:nz-1
     call ddz_w(w, dwdz, lbz)
-
+#ifdef PPOUTPUT_CLOCK
+    call clock_deriv%stop
+#endif
     ! Calculate wall stress and derivatives at the wall
     ! (txz, tyz, dudz, dvdz at jz=1)
     ! MPI: bottom and top processes only
     if (coord == 0) then
-#ifdef PPOUTPUT_WMLES
+#ifdef PPOUTPUT_CLOCK
         call clock_wm%start
+#endif
         call wallstress()
+#ifdef PPOUTPUT_CLOCK
         call clock_wm%stop
-#else
-        call wallstress()
+#endif
+
+#ifdef PPCNDIFF
+        ! Add boundary condition to explicit portion
+        txz_half2(1:nx,:,1) = txz(1:nx,:,1)
+        tyz_half2(1:nx,:,1) = tyz(1:nx,:,1)
 #endif
     endif
     if (coord == nproc-1) then
         call wallstress()
+#ifdef PPCNDIFF
+        ! Add boundary condition to explicit portion
+        txz_half2(1:nx,:,nz) = txz(1:nx,:,nz)
+        tyz_half2(1:nx,:,nz) = tyz(1:nx,:,nz)
+#endif
     endif
 
     ! Calculate turbulent (subgrid) stress for entire domain
     !   using the model specified in param.f90 (Smag, LASD, etc)
     !   MPI: txx, txy, tyy, tzz at 1:nz-1; txz, tyz at 1:nz (stress-free lid)
+#ifdef PPOUTPUT_CLOCK
+    call clock_stress%start
+#endif
     call sgs_stag()
+#ifdef PPOUTPUT_CLOCK
+    call clock_stress%stop
+#endif
 
     ! Exchange ghost node information (since coords overlap) for tau_zz
     !   send info up (from nz-1 below to 0 above)
 #ifdef PPMPI
-    call mpi_sendrecv (tzz(:,:,nz-1), ld*ny, MPI_RPREC, up, 6,                 &
-                       tzz(:,:,0), ld*ny, MPI_RPREC, down, 6,                  &
+    call mpi_sendrecv (tzz(:,:,nz-1), ld*ny, MPI_RPREC, up, 6,             &
+                       tzz(:,:,0), ld*ny, MPI_RPREC, down, 6,              &
                        comm, status, ierr)
 #endif
 
     ! Compute divergence of SGS shear stresses
     ! the divt's and the diagonal elements of t are not equivalenced
     ! in this version. Provides divtz 1:nz-1, except 1:nz at top process
+#ifdef PPOUTPUT_CLOCK
+    call clock_divstress%start
+#endif
+#ifdef PPCNDIFF
+    call divstress_uv(divtx, divty, txx, txy, txz_half1, tyy, tyz_half1)
+    call divstress_w_cndiff(divtz, txz, tyz)
+#else
     call divstress_uv(divtx, divty, txx, txy, txz, tyy, tyz)
     call divstress_w(divtz, txz, tyz, tzz)
+#endif
+#ifdef PPOUTPUT_CLOCK
+    call clock_divstress%stop
+#endif
 
     ! Calculates u x (omega) term in physical space. Uses 3/2 rule for
     ! dealiasing. Stores this term in RHS (right hand side) variable
-
+#ifdef PPOUTPUT_CLOCK
+    call clock_convec%start
+#endif
 #ifdef PPRNL
     ! Use RNL equations
     call convec(u,v,w,dudy,dudz,dvdx,dvdz,dwdx,dwdy,RHSx,RHSy,RHSz)
@@ -263,9 +318,9 @@ time_loop: do jt_step = nstart, nsteps
         dwdx_pert = dwdx - x_avg(dwdx)
         dwdy_pert = dwdy - x_avg(dwdy)
 
-        call convec(u_pert, v_pert, w_pert,                                       &
-                dudy_pert, dudz_pert, dvdx_pert, dvdz_pert, dwdx_pert, dwdy_pert, &
-                RHSx_pert, RHSy_pert, RHSz_pert)
+        call convec(u_pert, v_pert, w_pert,                                   &
+            dudy_pert, dudz_pert, dvdx_pert, dvdz_pert, dwdx_pert, dwdy_pert, &
+            RHSx_pert, RHSy_pert, RHSz_pert)
 
         RHSx = RHSx - RHSx_pert + x_avg(RHSx_pert)
         RHSy = RHSy - RHSy_pert + x_avg(RHSy_pert)
@@ -295,9 +350,9 @@ time_loop: do jt_step = nstart, nsteps
         dwdx_low = gql_filter( dwdx )
         dwdy_low = gql_filter( dwdy )
 
-        call convec(u_low, v_low, w_low,                                          &
-                dudy_low, dudz_low, dvdx_low, dvdz_low, dwdx_low, dwdy_low,       &
-                RHSx_low, RHSy_low, RHSz_low)
+        call convec(u_low, v_low, w_low,                                    &
+            dudy_low, dudz_low, dvdx_low, dvdz_low, dwdx_low, dwdy_low,     &
+            RHSx_low, RHSy_low, RHSz_low)
 
         RHSx = RHSx - RHSx_low + 2.0_rprec*gql_filter( RHSx_low )
         RHSy = RHSy - RHSy_low + 2.0_rprec*gql_filter( RHSy_low )
@@ -313,9 +368,9 @@ time_loop: do jt_step = nstart, nsteps
         dwdx_high = dwdx - dwdx_low
         dwdy_high = dwdy - dwdy_low
 
-        call convec(u_high, v_high, w_high,                                       &
-                dudy_high, dudz_high, dvdx_high, dvdz_high, dwdx_high, dwdy_high, &
-                RHSx_high, RHSy_high, RHSz_high)
+        call convec(u_high, v_high, w_high,                                   &
+            dudy_high, dudz_high, dvdx_high, dvdz_high, dwdx_high, dwdy_high, &
+            RHSx_high, RHSy_high, RHSz_high)
 
         RHSx = RHSx - RHSx_high + 2.0_rprec*gql_filter( RHSx_high )
         RHSy = RHSy - RHSy_high + 2.0_rprec*gql_filter( RHSy_high )
@@ -324,6 +379,9 @@ time_loop: do jt_step = nstart, nsteps
 
 #endif
 
+#endif
+#ifdef PPOUTPUT_CLOCK
+call clock_convec%stop
 #endif
 
     ! Add div-tau term to RHS variable
@@ -338,9 +396,9 @@ time_loop: do jt_step = nstart, nsteps
         ! This is to put in the coriolis forcing using coriol,ug and vg as
         ! precribed in param.f90. (ug,vg) specfies the geostrophic wind vector
         ! Note that ug and vg are non-dimensional (using u_star in param.f90)
-        RHSx(:,:,1:nz-1) = RHSx(:,:,1:nz-1) +                                  &
+        RHSx(:,:,1:nz-1) = RHSx(:,:,1:nz-1) +                           &
             coriol * v(:,:,1:nz-1) - coriol * vg
-        RHSy(:,:,1:nz-1) = RHSy(:,:,1:nz-1) -                                  &
+        RHSy(:,:,1:nz-1) = RHSy(:,:,1:nz-1) -                           &
             coriol * u(:,:,1:nz-1) + coriol * ug
     end if
 
@@ -414,6 +472,13 @@ time_loop: do jt_step = nstart, nsteps
     !//////////////////////////////////////////////////////
     ! Calculate intermediate velocity field
     !   only 1:nz-1 are valid
+#ifdef PPOUTPUT_CLOCK
+    call clock_inter%start
+#endif
+#ifdef PPCNDIFF
+    call diff_stag_array_uv()
+    call diff_stag_array_w()
+#else
     u(:,:,1:nz-1) = u(:,:,1:nz-1) +                                     &
         dt * ( tadv1 * RHSx(:,:,1:nz-1) + tadv2 * RHSx_f(:,:,1:nz-1) )
     v(:,:,1:nz-1) = v(:,:,1:nz-1) +                                     &
@@ -424,6 +489,10 @@ time_loop: do jt_step = nstart, nsteps
         w(:,:,nz) = w(:,:,nz) +                                         &
             dt * ( tadv1 * RHSz(:,:,nz) + tadv2 * RHSz_f(:,:,nz) )
     end if
+#endif
+#ifdef PPOUTPUT_CLOCK
+    call clock_inter%stop
+#endif
 
     ! Set unused values to BOGUS so unintended uses will be noticable
 #ifdef PPSAFETYMODE
@@ -444,7 +513,13 @@ time_loop: do jt_step = nstart, nsteps
     !   div of momentum eqn + continuity (div-vel=0) yields Poisson eqn
     !   do not need to store p --> only need gradient
     !   provides p, dpdx, dpdy at 0:nz-1 and dpdz at 1:nz-1
+#ifdef PPOUTPUT_CLOCK
+    call clock_pres%start
+#endif
     call press_stag_array()
+#ifdef PPOUTPUT_CLOCK
+    call clock_pres%stop
+#endif
 
     ! SIMPLIFIED LEVEL SET METHOD WITH MAPPING CAPABILITY
 #ifdef PPLVLSET_STRETCH
@@ -490,6 +565,10 @@ time_loop: do jt_step = nstart, nsteps
 
     if (modulo (jt_total, wbase) == 0) then
 
+        ! Get the ending time for the iteration
+        call clock%stop
+        call clock_total%stop
+
         if (fourier) then
             call wave2physF( u, uF )
             call wave2physF( v, vF )
@@ -497,10 +576,6 @@ time_loop: do jt_step = nstart, nsteps
             call wave2physF( txz, txzF )
             call wave2physF( tyz, tyzF )
         endif
-
-        ! Get the ending time for the iteration
-        call clock%stop
-        call clock_total%stop
 
         ! Calculate rms divergence of velocity
         ! only written to screen, not used otherwise
@@ -511,31 +586,33 @@ time_loop: do jt_step = nstart, nsteps
         ! This takes care of the clock times, to obtain the quantities based
         ! on all the processors, not just processor 0
 #ifdef PPMPI
-        call mpi_allreduce(clock % time, maxdummy, 1, mpi_rprec,               &
+        call mpi_allreduce(clock % time, maxdummy, 1, mpi_rprec,            &
             MPI_MAX, comm, ierr)
         clock % time = maxdummy
-        call mpi_allreduce(clock_total % time, maxdummy, 1, mpi_rprec,         &
+        call mpi_allreduce(clock_total % time, maxdummy, 1, mpi_rprec,      &
             MPI_MAX, comm, ierr)
         clock_total % time = maxdummy
-        !call mpi_allreduce(clock_forcing % time, maxdummy, 1, mpi_rprec,       &
+        !call mpi_allreduce(clock_forcing % time, maxdummy, 1, mpi_rprec,   &
         !    MPI_MAX, comm, ierr)
         !clock_forcing % time = maxdummy
-        !call mpi_allreduce(clock_total_f , maxdummy, 1, mpi_rprec,             &
+        !call mpi_allreduce(clock_total_f , maxdummy, 1, mpi_rprec,         &
         !    MPI_MAX, comm, ierr)
         !clock_total_f = maxdummy
 #endif
 
         ! Send top wall stress to bottom process
 #ifdef PPMPI
-        if ( (coord == nproc-1) .and. (ubc_mom >0) ) then
-            tau_top = get_tau_wall_top()
-        else
-            tau_top = 0._rprec
-        endif
+        if (ubc_mom >0) then
+            if (coord == nproc-1) then
+                tau_top = get_tau_wall_top()
+            else
+                tau_top = 0._rprec
+            endif
 
-        call mpi_allreduce(tau_top, maxdummy, 1, mpi_rprec,               &
-            MPI_SUM, comm, ierr)
-        tau_top = maxdummy
+            call mpi_allreduce(tau_top, maxdummy, 1, mpi_rprec,             &
+                MPI_SUM, comm, ierr)
+            tau_top = maxdummy
+        endif
 #endif
 
         if (coord == 0) then
@@ -567,7 +644,7 @@ time_loop: do jt_step = nstart, nsteps
             write(*,'(1a,E15.7)') '  Cumulative: ', clock_total % time
             ! write(*,'(1a,E15.7)') '  Forcing: ', clock_forcing % time
             ! write(*,'(1a,E15.7)') '  Cumulative Forcing: ', clock_total_f
-            ! write(*,'(1a,E15.7)') '  Forcing %: ',                             &
+            ! write(*,'(1a,E15.7)') '  Forcing %: ',                        &
             !     clock_total_f /clock_total % time
 #ifdef PPOUTPUT_WMLES
             write(*,'(1a,E15.7)') '  WM Iteration: ', clock_wm % time
@@ -622,6 +699,33 @@ time_loop: do jt_step = nstart, nsteps
             call kx_energy_fourier()
         endif
 
+#ifdef PPOUTPUT_CLOCK
+#ifdef PPMPI
+        call mpi_allreduce(clock_deriv % time, maxdummy, 1, mpi_rprec,     &
+            MPI_MAX, comm, ierr)
+        clock_deriv % time = maxdummy
+        call mpi_allreduce(clock_stress % time, maxdummy, 1, mpi_rprec,    &
+            MPI_MAX, comm, ierr)
+        clock_stress % time = maxdummy
+        call mpi_allreduce(clock_divstress % time, maxdummy, 1, mpi_rprec, &
+            MPI_MAX, comm, ierr)
+        clock_divstress % time = maxdummy
+        call mpi_allreduce(clock_convec % time, maxdummy, 1, mpi_rprec,    &
+            MPI_MAX, comm, ierr)
+        clock_convec % time = maxdummy
+        call mpi_allreduce(clock_inter % time, maxdummy, 1, mpi_rprec,     &
+            MPI_MAX, comm, ierr)
+        clock_inter % time = maxdummy
+        call mpi_allreduce(clock_pres % time, maxdummy, 1, mpi_rprec,      &
+            MPI_MAX, comm, ierr)
+        clock_pres % time = maxdummy
+        ! Remember clock_wm is only on coord == 0
+#endif
+if (coord == 0) call write_clocks( clock%time, clock_deriv%time,           &
+    clock_stress%time, clock_wm%time, clock_divstress%time,                &
+    clock_convec%time, clock_inter%time,  clock_pres%time)
+#endif
+
         ! Check if we are to check the allowable runtime
         if (runtime > 0) then
 
@@ -629,14 +733,14 @@ time_loop: do jt_step = nstart, nsteps
             ! Determine the processor that has used most time and communicate
             ! this. Needed to make sure that all processors stop at the same
             ! time and not just some of them
-            call mpi_allreduce(clock_total % time, rbuffer, 1, MPI_RPREC,      &
+            call mpi_allreduce(clock_total % time, rbuffer, 1, MPI_RPREC,   &
                 MPI_MAX, MPI_COMM_WORLD, ierr)
             clock_total % time = rbuffer
 #endif
 
             ! If maximum time is surpassed go to the end of the program
             if ( clock_total % time >= real(runtime,rprec) ) then
-                call mesg( prog_name,                                          &
+                call mesg( prog_name,                                       &
                     'Specified runtime exceeded. Exiting simulation.')
                 exit time_loop
             endif
@@ -705,10 +809,10 @@ call output_final()
 ! Stop wall clock
 call clock_total%stop
 #ifdef PPMPI
-if (coord == 0) write(*,"(a,e15.7)") 'Simulation wall time (s) : ',            &
+if (coord == 0) write(*,"(a,e15.7)") 'Simulation wall time (s) : ',      &
     clock_total % time
 #else
-if (coord == 0) write(*,"(a,e15.7)") 'Simulation cpu time (s) : ',             &
+if (coord == 0) write(*,"(a,e15.7)") 'Simulation cpu time (s) : ',       &
     clock_total % time
 #endif
 

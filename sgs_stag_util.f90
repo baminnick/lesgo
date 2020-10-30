@@ -49,10 +49,13 @@ use param
 use sim_param, only : txx, txy, txz, tyy, tyz, tzz
 use sim_param, only : dudx, dudy, dudz, dvdx, dvdy, dvdz, dwdx, dwdy, dwdz
 #ifdef PPMAPPING
-use sim_param, only : JACO2, mesh_stretch, delta_stretch
+use sim_param, only : jaco_uv, mesh_stretch, delta_stretch
 #endif
 use sgs_param
 use messages
+#ifdef PPCNDIFF
+use sim_param, only : txz_half1, txz_half2, tyz_half1, tyz_half2
+#endif
 use derivatives, only : convolve_rnl, dft_direct_back_2d_n_yonlyC_big
 use derivatives, only : dft_direct_forw_2d_n_yonlyC_big
 use derivatives, only : dft_direct_back_2d_n_yonlyC
@@ -74,7 +77,8 @@ character (*), parameter :: sub_name = 'sgs_stag'
 real(rprec), dimension(nz) :: l, ziko, zz
 integer :: jz, jz_min, jz_max
 
-if (sgs) then
+! sgs models of the form nu_t = cs_opt2*(l**2)*S
+if ((sgs) .and. (sgs_model < 6)) then
     ! Cs is Smagorinsky's constant. l is a filter size (non-dim.)
     call calc_Sij ()
 
@@ -111,13 +115,23 @@ if (sgs) then
             if (coord == 0) then
                 ! z's nondimensional, l here is on uv-nodes
 #ifdef PPMAPPING
-                zz(1) = mesh_stretch(1)
-                l(1) = ( Co**(wall_damp_exp)*(vonk*zz(1))**(-wall_damp_exp)    &
-                    + (delta_stretch(1))**(-wall_damp_exp) )**(-1._rprec/wall_damp_exp)
+                if (damp_model == 1) then
+                    zz(1) = mesh_stretch(1)
+                    l(1) = ( Co**(wall_damp_exp)*(vonk*zz(1))**(-wall_damp_exp)    &
+                        + (delta_stretch(1))**(-wall_damp_exp) )**(-1._rprec/wall_damp_exp)
+                else
+                    zz(1) = mesh_stretch(1)*u_star/nu_molec !! plus units
+                    l(1) = delta_stretch(1)*(1.0_rprec - exp(-zz(1)/25.0_rprec)) !! A+ = 25.0
+                end if
 #else
-                zz(1) = 0.5_rprec * dz
-                l(1) = ( Co**(wall_damp_exp)*(vonk*zz(1))**(-wall_damp_exp)    &
-                    + (delta)**(-wall_damp_exp) )**(-1._rprec/wall_damp_exp)
+                if (damp_model == 1) then
+                    zz(1) = 0.5_rprec * dz
+                    l(1) = ( Co**(wall_damp_exp)*(vonk*zz(1))**(-wall_damp_exp)    &
+                        + (delta)**(-wall_damp_exp) )**(-1._rprec/wall_damp_exp)
+                else
+                    zz(1) = 0.5_rprec * dz * u_star / nu_molec !! plus units
+                    l(1) = delta*(1.0_rprec - exp(-zz(1)/25.0_rprec)) !! A+ = 25.0
+                end if
 #endif
                 jz_min = 2
             else
@@ -127,13 +141,23 @@ if (sgs) then
             do jz = jz_min, nz
                 ! z's nondimensional, l here is on w-nodes
 #ifdef PPMAPPING
-                zz(jz) = mesh_stretch(jz)-0.5*JACO2(jz)*dz
-                l(jz) = ( Co**(wall_damp_exp)*(vonk*zz(jz))**(-wall_damp_exp)  &
-                    + (delta_stretch(jz))**(-wall_damp_exp) )**(-1._rprec/wall_damp_exp)
+                if (damp_model == 1) then
+                    zz(jz) = mesh_stretch(jz)-0.5*jaco_uv(jz)*dz
+                    l(jz) = ( Co**(wall_damp_exp)*(vonk*zz(jz))**(-wall_damp_exp)  &
+                        + (delta_stretch(jz))**(-wall_damp_exp) )**(-1._rprec/wall_damp_exp)
+                else
+                    zz(jz) = (mesh_stretch(jz)-0.5*jaco_uv(jz)*dz) * u_star / nu_molec !! plus units
+                    l(jz) = delta_stretch(jz)*(1.0_rprec - exp(-zz(jz)/25.0_rprec)) !! A= = 25.0
+                endif
 #else
-                zz(jz) = ((jz - 1) + coord * (nz - 1)) * dz
-                l(jz) = ( Co**(wall_damp_exp)*(vonk*zz(jz))**(-wall_damp_exp)  &
-                    + (delta)**(-wall_damp_exp) )**(-1._rprec/wall_damp_exp)
+                if (damp_model == 1) then
+                    zz(jz) = ((jz - 1) + coord * (nz - 1)) * dz
+                    l(jz) = ( Co**(wall_damp_exp)*(vonk*zz(jz))**(-wall_damp_exp)  &
+                        + (delta)**(-wall_damp_exp) )**(-1._rprec/wall_damp_exp)
+                else
+                    zz(jz) = (((jz - 1) + coord * (nz - 1)) * dz) * u_star / nu_molec !! plus units
+                    l(jz) = delta*(1.0_rprec - exp(-zz(jz)/25.0_rprec)) !! A= = 25.0
+                end if
 #endif
             end do
 
@@ -199,7 +223,11 @@ if (sgs) then
     ! Dynamic procedures: modify/set Sij and Cs_opt2 (specific to sgs_model)
     else
         ! recall: l is the filter size
+#ifdef PPMAPPING
+        l(:) = delta_stretch(1:nz) ! delta_stretch from lbz:nz, l from 1:nz
+#else
         l = delta
+#endif
 
         ! Use the Smagorinsky model until DYN_init timestep
         if ((jt == 1) .and. (inilag)) then
@@ -315,7 +343,26 @@ if (sgs) then
         end do
     endif
 
-else
+! sgs models of the form, nu_t = c*OP(duidxj) for some operator OP
+! Vreman (2004) sgs model
+elseif ((sgs) .and. (sgs_model == 6)) then
+
+    call vreman()
+
+elseif ((sgs) .and. (sgs_model == 7)) then
+
+    if ( ((jt.GE.DYN_init).OR.(initu)) .AND. (mod(jt_total,cs_count)==0) ) then
+        call calc_Sij ()
+        call dyn_vreman(cvre)
+    else
+        call vreman()
+    endif
+
+elseif ((sgs) .and. (sgs_model == 8)) then
+
+    call wale()
+
+else !! not sgs, molec only
 
     ! define nu_coefs here since it does not change case-by-case for DNS
     ! if sgs, nu_coefs defined case-by-case since it is dependent on Nu_t
@@ -428,6 +475,7 @@ if (coord == nproc-1) then
 
         end select
     endif
+
     if ((fourier) .and. (sgs)) then !! only convolve if sgs since nu_coef is a function of kx
         call padd( nu_coef_big(:,:), nu_coef(:,:) )
         call padd( nu_coef2_big(:,:), nu_coef2(:,:) )
@@ -439,22 +487,49 @@ if (coord == nproc-1) then
         tyy_big(:,:) = convolve_rnl( -nu_coef_big(:,:), dvdy_big(:,:,nz-1) )
         tzz_big(:,:) = convolve_rnl( -nu_coef_big(:,:), dwdz_big(:,:,nz-1) )
         ! for top wall, include w-grid stress since we touched nz-1
+#ifdef PPCNDIFF
+        txz_big(:,:) = convolve_rnl( -nu_coef2_big(:,:), 0.5_rprec*(dudz_big(:,:,nz-1)+dwdx_big(:,:,nz-1)) )
+        txz_half1_big(:,:) = convolve_rnl( -nu_coef2_big(:,:), 0.5_rprec*(dwdx_big(:,:,nz-1)) )
+        txz_half2_big(:,:) = convolve_rnl( -nu_coef2_big(:,:), 0.5_rprec*(dudz_big(:,:,nz-1)) )
+        tyz_big(:,:) = convolve_rnl( -nu_coef2_big(:,:), 0.5_rprec*(dvdz_big(:,:,nz-1)+dwdy_big(:,:,nz-1)) )
+        tyz_half1_big(:,:) = convolve_rnl( -nu_coef2_big(:,:), 0.5_rprec*(dwdy_big(:,:,nz-1)) )
+        tyz_half2_big(:,:) = convolve_rnl( -nu_coef2_big(:,:), 0.5_rprec*(dvdz_big(:,:,nz-1)) )
+#else
         txz_big(:,:) = convolve_rnl( -nu_coef2_big(:,:), 0.5_rprec*(dudz_big(:,:,nz-1)+dwdx_big(:,:,nz-1)) )
         tyz_big(:,:) = convolve_rnl( -nu_coef2_big(:,:), 0.5_rprec*(dvdz_big(:,:,nz-1)+dwdy_big(:,:,nz-1)) )
+#endif
 
         call dft_direct_forw_2d_n_yonlyC_big( txx_big(:,:) )
         call dft_direct_forw_2d_n_yonlyC_big( txy_big(:,:) )
         call dft_direct_forw_2d_n_yonlyC_big( tyy_big(:,:) )
         call dft_direct_forw_2d_n_yonlyC_big( tzz_big(:,:) )
+#ifdef PPCNDIFF
+        call dft_direct_forw_2d_n_yonlyC_big( txz_big(:,:) )
+        call dft_direct_forw_2d_n_yonlyC_big( txz_half1_big(:,:) )
+        call dft_direct_forw_2d_n_yonlyC_big( txz_half2_big(:,:) )
+        call dft_direct_forw_2d_n_yonlyC_big( tyz_big(:,:) )
+        call dft_direct_forw_2d_n_yonlyC_big( tyz_half1_big(:,:) )
+        call dft_direct_forw_2d_n_yonlyC_big( tyz_half2_big(:,:) )
+#else
         call dft_direct_forw_2d_n_yonlyC_big( txz_big(:,:) )
         call dft_direct_forw_2d_n_yonlyC_big( tyz_big(:,:) )
+#endif
 
         call unpadd( txx(:,:,nz-1), txx_big(:,:) )
         call unpadd( txy(:,:,nz-1), txy_big(:,:) )
         call unpadd( tyy(:,:,nz-1), tyy_big(:,:) )
         call unpadd( tzz(:,:,nz-1), tzz_big(:,:) )
+#ifdef PPCNDIFF
+        call unpadd( txz(:,:,nz-1), txz_big(:,:) )
+        call unpadd( txz_half1(:,:,nz-1), txz_half1_big(:,:) )
+        call unpadd( txz_half2(:,:,nz-1), txz_half2_big(:,:) )
+        call unpadd( tyz(:,:,nz-1), tyz_big(:,:) )
+        call unpadd( tyz_half1(:,:,nz-1), tyz_half1_big(:,:) )
+        call unpadd( tyz_half2(:,:,nz-1), tyz_half2_big(:,:) )
+#else
         call unpadd( txz(:,:,nz-1), txz_big(:,:) )
         call unpadd( tyz(:,:,nz-1), tyz_big(:,:) )
+#endif
 
     else
         txx(1:nx,:,nz-1) = -nu_coef(1:nx,:)*dudx(1:nx,:,nz-1) !! uvp-node(nz-1)
@@ -462,8 +537,17 @@ if (coord == nproc-1) then
         tyy(1:nx,:,nz-1) = -nu_coef(1:nx,:)*dvdy(1:nx,:,nz-1) !! uvp-node(nz-1)
         tzz(1:nx,:,nz-1) = -nu_coef(1:nx,:)*dwdz(1:nx,:,nz-1) !! uvp-node(nz-1)
         ! for top wall, include w-grid stress since we touched nz-1
+#ifdef PPCNDIFF
+        txz(1:nx,:,nz-1) = -nu_coef2(1:nx,:)*(0.5_rprec*(dudz(1:nx,:,nz-1)+dwdx(1:nx,:,nz-1))) !! w-node(nz-1)
+        txz_half1(1:nx,:,nz-1) = -nu_coef2(1:nx,:)*(0.5_rprec*(dwdx(1:nx,:,nz-1))) !! w-node(nz-1)
+        txz_half2(1:nx,:,nz-1) = -nu_coef2(1:nx,:)*(0.5_rprec*(dudz(1:nx,:,nz-1))) !! w-node(nz-1)
+        tyz(1:nx,:,nz-1) = -nu_coef2(1:nx,:)*(0.5_rprec*(dvdz(1:nx,:,nz-1)+dwdy(1:nx,:,nz-1))) !! w-node(nz-1)
+        tyz_half1(1:nx,:,nz-1) = -nu_coef2(1:nx,:)*(0.5_rprec*(dwdy(1:nx,:,nz-1))) !! w-node(nz-1)
+        tyz_half2(1:nx,:,nz-1) = -nu_coef2(1:nx,:)*(0.5_rprec*(dvdz(1:nx,:,nz-1))) !! w-node(nz-1)
+#else
         txz(1:nx,:,nz-1) = -nu_coef2(1:nx,:)*(0.5_rprec*(dudz(1:nx,:,nz-1)+dwdx(1:nx,:,nz-1))) !! w-node(nz-1)
         tyz(1:nx,:,nz-1) = -nu_coef2(1:nx,:)*(0.5_rprec*(dvdz(1:nx,:,nz-1)+dwdy(1:nx,:,nz-1))) !! w-node(nz-1)
+#endif
     end if
 
     ! since last level already calculated
@@ -500,30 +584,66 @@ do jz = jz_min, jz_max
         tyy_big(:,:) = convolve_rnl( -nu_coef_big(:,:), dvdy_big(:,:,jz) )
         tzz_big(:,:) = convolve_rnl( -nu_coef_big(:,:), dwdz_big(:,:,jz) )
         ! for top wall, include w-grid stress since we touched nz-1
+#ifdef PPCNDIFF
+        txz_big(:,:) = convolve_rnl( -nu_coef2_big(:,:), 0.5_rprec*(dudz_big(:,:,jz)+dwdx_big(:,:,jz)) )
+        txz_half1_big(:,:) = convolve_rnl( -nu_coef2_big(:,:), 0.5_rprec*(dwdx_big(:,:,jz)) )
+        txz_half2_big(:,:) = convolve_rnl( -nu_coef2_big(:,:), 0.5_rprec*(dudz_big(:,:,jz)) )
+        tyz_big(:,:) = convolve_rnl( -nu_coef2_big(:,:), 0.5_rprec*(dvdz_big(:,:,jz)+dwdy_big(:,:,jz)) )
+        tyz_half1_big(:,:) = convolve_rnl( -nu_coef2_big(:,:), 0.5_rprec*(dwdy_big(:,:,jz)) )
+        tyz_half2_big(:,:) = convolve_rnl( -nu_coef2_big(:,:), 0.5_rprec*(dvdz_big(:,:,jz)) )
+#else
         txz_big(:,:) = convolve_rnl( -nu_coef2_big(:,:), 0.5_rprec*(dudz_big(:,:,jz)+dwdx_big(:,:,jz)) )
         tyz_big(:,:) = convolve_rnl( -nu_coef2_big(:,:), 0.5_rprec*(dvdz_big(:,:,jz)+dwdy_big(:,:,jz)) )
+#endif
 
         call dft_direct_forw_2d_n_yonlyC_big( txx_big(:,:) )
         call dft_direct_forw_2d_n_yonlyC_big( txy_big(:,:) )
         call dft_direct_forw_2d_n_yonlyC_big( tyy_big(:,:) )
         call dft_direct_forw_2d_n_yonlyC_big( tzz_big(:,:) )
+#ifdef PPCNDIFF
+        call dft_direct_forw_2d_n_yonlyC_big( txz_big(:,:) )
+        call dft_direct_forw_2d_n_yonlyC_big( txz_half1_big(:,:) )
+        call dft_direct_forw_2d_n_yonlyC_big( txz_half2_big(:,:) )
+        call dft_direct_forw_2d_n_yonlyC_big( tyz_big(:,:) )
+        call dft_direct_forw_2d_n_yonlyC_big( tyz_half1_big(:,:) )
+        call dft_direct_forw_2d_n_yonlyC_big( tyz_half2_big(:,:) )
+#else
         call dft_direct_forw_2d_n_yonlyC_big( txz_big(:,:) )
         call dft_direct_forw_2d_n_yonlyC_big( tyz_big(:,:) )
+#endif
 
         call unpadd( txx(:,:,jz), txx_big(:,:) )
         call unpadd( txy(:,:,jz), txy_big(:,:) )
         call unpadd( tyy(:,:,jz), tyy_big(:,:) )
         call unpadd( tzz(:,:,jz), tzz_big(:,:) )
+#ifdef PPCNDIFF
+        call unpadd( txz(:,:,jz), txz_big(:,:) )
+        call unpadd( txz_half1(:,:,jz), txz_half1_big(:,:) )
+        call unpadd( txz_half2(:,:,jz), txz_half2_big(:,:) )
+        call unpadd( tyz(:,:,jz), tyz_big(:,:) )
+        call unpadd( tyz_half1(:,:,jz), tyz_half1_big(:,:) )
+        call unpadd( tyz_half2(:,:,jz), tyz_half2_big(:,:) )
+#else
         call unpadd( txz(:,:,jz), txz_big(:,:) )
         call unpadd( tyz(:,:,jz), tyz_big(:,:) )
+#endif
 
     else
         txx(1:nx,:,jz)=-nu_coef(1:nx,:)*dudx(1:nx,:,jz) !! uvp-node(jz)
         txy(1:nx,:,jz)=-nu_coef(1:nx,:)*(0.5_rprec*(dudy(1:nx,:,jz)+dvdx(1:nx,:,jz))) !! uvp-node(jz)
         tyy(1:nx,:,jz)=-nu_coef(1:nx,:)*dvdy(1:nx,:,jz) !! uvp-node(jz)
         tzz(1:nx,:,jz)=-nu_coef(1:nx,:)*dwdz(1:nx,:,jz) !! uvp-node(jz)
+#ifdef PPCNDIFF
+        txz(1:nx,:,jz)=-nu_coef2(1:nx,:)*(0.5_rprec*(dudz(1:nx,:,jz)+dwdx(1:nx,:,jz))) !! w-node(jz)
+        txz_half1(1:nx,:,jz)=-nu_coef2(1:nx,:)*(0.5_rprec*(dwdx(1:nx,:,jz))) !! w-node(jz)
+        txz_half2(1:nx,:,jz)=-nu_coef2(1:nx,:)*(0.5_rprec*(dudz(1:nx,:,jz))) !! w-node(jz)
+        tyz(1:nx,:,jz)=-nu_coef2(1:nx,:)*(0.5_rprec*(dvdz(1:nx,:,jz)+dwdy(1:nx,:,jz))) !! w-node(jz)
+        tyz_half1(1:nx,:,jz)=-nu_coef2(1:nx,:)*(0.5_rprec*(dwdy(1:nx,:,jz))) !! w-node(jz)
+        tyz_half2(1:nx,:,jz)=-nu_coef2(1:nx,:)*(0.5_rprec*(dvdz(1:nx,:,jz))) !! w-node(jz)
+#else
         txz(1:nx,:,jz)=-nu_coef2(1:nx,:)*(0.5_rprec*(dudz(1:nx,:,jz)+dwdx(1:nx,:,jz))) !! w-node(jz)
         tyz(1:nx,:,jz)=-nu_coef2(1:nx,:)*(0.5_rprec*(dvdz(1:nx,:,jz)+dwdy(1:nx,:,jz))) !! w-node(jz)
+#endif
     endif
 enddo
 
@@ -539,15 +659,33 @@ call level_set_BC ()
 ! txz,tyz calculated for 1:nz-1 (on w-nodes) except bottom process
 ! (only 2:nz-1) exchange information between processors to set
 ! values at nz from jz=1 above to jz=nz below
+#ifdef PPCNDIFF
+call mpi_sync_real_array( txz, 0, MPI_SYNC_DOWN )
+call mpi_sync_real_array( txz_half1, 0, MPI_SYNC_DOWN )
+call mpi_sync_real_array( txz_half2, 0, MPI_SYNC_DOWN )
+call mpi_sync_real_array( tyz, 0, MPI_SYNC_DOWN )
+call mpi_sync_real_array( tyz_half1, 0, MPI_SYNC_DOWN )
+call mpi_sync_real_array( tyz_half2, 0, MPI_SYNC_DOWN )
+#else
 call mpi_sync_real_array( txz, 0, MPI_SYNC_DOWN )
 call mpi_sync_real_array( tyz, 0, MPI_SYNC_DOWN )
+#endif
 #ifdef PPSAFETYMODE
 ! Set bogus values (easier to catch if there's an error)
 txx(:, :, 0) = BOGUS
 txy(:, :, 0) = BOGUS
+#ifdef PPCNDIFF
 txz(:, :, 0) = BOGUS
-tyy(:, :, 0) = BOGUS
+txz_half1(:, :, 0) = BOGUS
+txz_half2(:, :, 0) = BOGUS
 tyz(:, :, 0) = BOGUS
+tyz_half1(:, :, 0) = BOGUS
+tyz_half2(:, :, 0) = BOGUS
+#else
+txz(:, :, 0) = BOGUS
+tyz(:, :, 0) = BOGUS
+#endif
+tyy(:, :, 0) = BOGUS
 tzz(:, :, 0) = BOGUS
 #endif
 #endif
@@ -593,21 +731,34 @@ if (coord == 0) then
         ! Stress free
         case (0)
             ! Sij values are supposed to be on w-nodes for this case
-            !   does that mean they (Sij) should all be zero?
-            ! these values are stored on w-nodes
-            S11(1:nx,:,1) = dudx(1:nx,:,1) ! was 0.5_rprec*(dudx(1:nx,:,1) + dudx(1:nx,:,1))
+            ! dudx, dudy, dvdx, dvdy at boundary (w) are the same as
+            !   on closest uvp because of slip
+            ! dwdz should be 0 beyond boundary due to no-penetration
+            S11(1:nx,:,1) = dudx(1:nx,:,1)
             S12(1:nx,:,1) = 0.5_rprec*(dudy(1:nx,:,1)+dvdx(1:nx,:,1))
             S13(1:nx,:,1) = 0.5_rprec*(dudz(1:nx,:,1)+dwdx(1:nx,:,1))
             S22(1:nx,:,1) = dvdy(1:nx,:,1)
             S23(1:nx,:,1) = 0.5_rprec*(dvdy(1:nx,:,1)+dwdy(1:nx,:,1))
-            S33(1:nx,:,1) = 0.5_rprec*(dwdz(1:nx,:,1) + 0.0_rprec)
+            S33(1:nx,:,1) = 0.5_rprec*(dwdz(1:nx,:,1) + 0.0_rprec) ! interpolating here
 
         ! Wall
-        ! recall dudz and dvdz are stored on uvp-nodes for first level only,
-        !   'wall' only
-        ! recall dwdx and dwdy are stored on w-nodes (always)
-        ! All Sij near wall are put on uv1 node
-        case (1:)
+        ! dudz, dvdz, dwdx, and dwdy on w-nodes... need to be interpolated
+        case (1)
+            ! these values stored on uvp-nodes
+            S11(1:nx,:,1) = dudx(1:nx,:,1) !! uvp_node(1)
+            S12(1:nx,:,1) = 0.5_rprec*(dudy(1:nx,:,1)+dvdx(1:nx,:,1)) !! uvp_node(1)
+            S13(1:nx,:,1) = 0.5_rprec*( (0.5_rprec*(dudz(1:nx,:,1)+dudz(1:nx,:,2))) + & 
+                (0.5_rprec*(dwdx(1:nx,:,1)+dwdx(1:nx,:,2))) ) !! uvp_node(1)
+            S22(1:nx,:,1) = dvdy(1:nx,:,1) !! uvp_node(1)
+            S23(1:nx,:,1) = 0.5_rprec*( (0.5_rprec*(dvdz(1:nx,:,1)+dvdz(1:nx,:,2))) + &
+                (0.5_rprec*(dwdy(1:nx,:,1)+dwdy(1:nx,:,2))) ) !! uvp_node(1)
+            S33(1:nx,:,1) = dwdz(1:nx,:,1) !! uvp_node(1)
+
+        ! Wall-Model
+        ! Only differs from case (1) by definition of dudz and dvdz
+        ! before these had to be interpolated, however if wall-modeling,
+        ! dudz and dvdz are defined on the first grid point (uvp) from the wall
+        case (2:)
             ! these values stored on uvp-nodes
             S11(1:nx,:,1) = dudx(1:nx,:,1) !! uvp_node(1)
             S12(1:nx,:,1) = 0.5_rprec*(dudy(1:nx,:,1)+dvdx(1:nx,:,1)) !! uvp_node(1)
@@ -636,30 +787,34 @@ if (coord == nproc-1) then
         ! Stress free
         case (0)
             ! Sij values are supposed to be on w-nodes for this case
-            !   does that mean they (Sij) should all be zero?
-            ! these values are stored on w-nodes
-
-            ! dudx(1:nx,:,nz-1) on uvp_node(nz-1)
-            S11(1:nx,:,nz) = dudx(1:nx,:,nz-1)                               ! w_node(nz)
-            ! dudy(1:nx,:,nz-1) on uvp_node(nz-1)
-            ! dvdx(1:nx,:,nz-1) on uvp_node(nz-1)
-            S12(1:nx,:,nz) = 0.5_rprec*(dudy(1:nx,:,nz-1)+dvdx(1:nx,:,nz-1)) ! w_node(nz)
-            ! dudz(1:nx,:,nz) comes from wallstress() i.e. zero, on w_node(nz)
-            ! dwdx(1:nx,:,nz) on uvp_node(nz-1)
-            S13(1:nx,:,nz) = 0.5_rprec*(dudz(1:nx,:,nz)+dwdx(1:nx,:,nz))     ! w_node(nz)
-            ! dvdy(1:nx,:,nz-1) on uvp_node(nz-1)
-            S22(1:nx,:,nz) = dvdy(1:nx,:,nz-1)                               ! w_node(nz)
-            ! dvdz(1:nx,:,nz) comes from wallstress() i.e. zero, on w_node(nz)
-            ! dwdy(1:nx,:,nz) on uvp_node(nz-1)
-            S23(1:nx,:,nz) = 0.5_rprec*(dvdz(1:nx,:,nz)+dwdy(1:nx,:,nz))     ! w_node(nz)
-            ! dwdz(1:nx,:,nz-1) + 0._rprec ! w_node(nz)
-            S33(1:nx,:,nz) = 0.5_rprec*(dwdz(1:nx,:,nz-1) + 0.0_rprec)       ! w_node(nz)           
+            ! dudx, dudy, dvdx, dvdy at boundary (w) are the same as
+            !   on closest uvp because of slip
+            ! dwdz should be 0 beyond boundary due to no-penetration
+            S11(1:nx,:,nz) = dudx(1:nx,:,nz-1)
+            S12(1:nx,:,nz) = 0.5_rprec*(dudy(1:nx,:,nz-1)+dvdx(1:nx,:,nz-1))
+            S13(1:nx,:,nz) = 0.5_rprec*(dudz(1:nx,:,nz)+dwdx(1:nx,:,nz))
+            S22(1:nx,:,nz) = dvdy(1:nx,:,nz-1)
+            S23(1:nx,:,nz) = 0.5_rprec*(dvdz(1:nx,:,nz)+dwdy(1:nx,:,nz))
+            S33(1:nx,:,nz) = 0.5_rprec*(dwdz(1:nx,:,nz-1) + 0.0_rprec)
 
         ! Wall
-        ! recall dudz and dvdz are stored on uvp-nodes for first level only,
-        !   'wall' only
-        ! recall dwdx and dwdy are stored on w-nodes (always)
-        case (1:)
+        ! dudz, dvdz, dwdx, and dwdy on w-nodes... need to be interpolated
+        case (1)
+            ! these values stored on uvp-nodes
+            S11(1:nx,:,nz) = dudx(1:nx,:,nz-1) !! uvp_node(nz-1)
+            S12(1:nx,:,nz) = 0.5_rprec*(dudy(1:nx,:,nz-1)+dvdx(1:nx,:,nz-1)) !! uvp_node(nz-1)
+            S13(1:nx,:,nz) = 0.5_rprec*( (0.5_rprec*(dudz(1:nx,:,nz-1)+dudz(1:nx,:,nz))) +   &
+                (0.5_rprec*(dwdx(1:nx,:,nz-1)+dwdx(1:nx,:,nz))) ) !! uvp_node(nz-1)
+            S22(1:nx,:,nz) = dvdy(1:nx,:,nz-1) !! uvp_node(nz-1)
+            S23(1:nx,:,nz) = 0.5_rprec*( (0.5_rprec*(dvdz(1:nx,:,nz-1)+dvdz(1:nx,:,nz))) +   &
+                (0.5_rprec*(dwdy(1:nx,:,nz-1)+dwdy(1:nx,:,nz))) ) !! uvp_node(nz-1)
+            S33(1:nx,:,nz) = dwdz(1:nx,:,nz-1) !! uvp_node(nz-1)
+
+        ! Wall-Model
+        ! Only differs from case (1) by definition of dudz and dvdz
+        ! before these had to be interpolated, however if wall-modeling,
+        ! dudz and dvdz are defined on the first grid point (uvp) from the wall
+        case (2:)
             ! these values stored on uvp-nodes
             S11(1:nx,:,nz) = dudx(1:nx,:,nz-1) !! uvp_node(nz-1)
             S12(1:nx,:,nz) = 0.5_rprec*(dudy(1:nx,:,nz-1)+dvdx(1:nx,:,nz-1)) !! uvp_node(nz-1)
@@ -736,7 +891,9 @@ do j = 1, jmax
     if (abs(dx) < xacc) return
 end do
 rtnewt = 1._rprec  ! if don't converge fast enough
+#ifdef PPOUTPUT_SGS
 write(6,*) 'using beta=1 at jz= ', jz
+#endif
 
 end function rtnewt
 

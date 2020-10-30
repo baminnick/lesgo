@@ -46,6 +46,10 @@ real(rprec), dimension(:,:),   allocatable :: nu_coef_big, nu_coef2_big
 real(rprec), dimension(:,:,:), allocatable :: dudx_big, dudy_big, dudz_big
 real(rprec), dimension(:,:,:), allocatable :: dvdx_big, dvdy_big, dvdz_big
 real(rprec), dimension(:,:,:), allocatable :: dwdx_big, dwdy_big, dwdz_big
+#ifdef PPCNDIFF
+real(rprec), dimension(:,:),   allocatable :: txz_half1_big, txz_half2_big
+real(rprec), dimension(:,:),   allocatable :: tyz_half1_big, tyz_half2_big
+#endif
 
 ! For all dynamic models (2-5)
 real(rprec), dimension(:,:,:),allocatable :: ee_now
@@ -74,6 +78,9 @@ real(rprec), dimension(:,:), allocatable :: S22_hat, S23_hat, S33_hat
 real(rprec), dimension(:,:), allocatable :: S_S11_hat, S_S12_hat, S_S13_hat
 real(rprec), dimension(:,:), allocatable :: S_S22_hat, S_S23_hat, S_S33_hat
 real(rprec), dimension(:,:), allocatable :: u_hat, v_hat, w_hat, S_hat
+
+! For Vreman SGS model
+real(rprec) :: cvre
 
 ! The following are for dynamically updating T, the timescale for Lagrangian averaging
 !   F_ee2 is the running average of (eij*eij)^2
@@ -134,6 +141,12 @@ if (fourier) then
     allocate ( dwdx_big(ld_big,ny2,nz) ); dwdx_big = 0.0_rprec
     allocate ( dwdy_big(ld_big,ny2,nz) ); dwdy_big = 0.0_rprec
     allocate ( dwdz_big(ld_big,ny2,nz) ); dwdz_big = 0.0_rprec
+#ifdef PPCNDIFF
+    allocate ( txz_half1_big(ld_big,ny2) ); txz_half1_big = 0.0_rprec
+    allocate ( txz_half2_big(ld_big,ny2) ); txz_half2_big = 0.0_rprec
+    allocate ( tyz_half1_big(ld_big,ny2) ); tyz_half1_big = 0.0_rprec
+    allocate ( tyz_half2_big(ld_big,ny2) ); tyz_half2_big = 0.0_rprec
+#endif
 endif
 
 ! For dynamic models:
@@ -223,6 +236,10 @@ if (sgs_model .eq. 5) then
     allocate ( N22(ld,ny) ); N22 = 0._rprec
     allocate ( N23(ld,ny) ); N23 = 0._rprec
     allocate ( N33(ld,ny) ); N33 = 0._rprec
+endif
+
+if (sgs_model >= 6) then
+    cvre = 0.07_rprec
 endif
 
 ! Set dimensionless constants

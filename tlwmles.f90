@@ -41,7 +41,7 @@ public tlwm, tlwm_init, tlwm_finalize
 ! Inputs to specify grid resolution and spacing
 real(rprec) :: dzrp = 0.4_rprec !! size of first cell from wall, in wall units
 ! dzrp <= 0.5 to be wall-resolved
-integer :: ihwm = 4 !! integer value for wall-model height
+!integer :: ihwm = 4 !! integer value for wall-model height
 ! if ihwm = 1, then using first LES uv grid point so hwm = dz/2
 real(rprec) :: ss = 1.2_rprec !! grid stretching parameter
 ! if ss = 1, then the grid is uniform, s can only be s >= 1
@@ -274,7 +274,7 @@ subroutine tlwm_grid()
 !
 
 use types, only : rprec
-use param, only : u_star, nu_molec, dz, nz
+use param, only : u_star, nu_molec, dz, nz, ihwm
 #ifdef PPOUTPUT_WMLES
 use param, only : dx, dy
 #endif
@@ -379,7 +379,7 @@ subroutine ws_tlwm_eq_lbc()
 ! used to invert the resulting matrix equation.
 ! 
 
-use param, only : ld, nx, ny, nu_molec, z_i, ubot, u_star, jt_total
+use param, only : ld, nx, ny, nu_molec, z_i, ubot, u_star, jt_total, ihwm
 use sim_param, only : u, v, dudz, dvdz, txz, tyz
 use test_filtermodule, only : test_filter
 implicit none
@@ -488,7 +488,7 @@ subroutine ws_tlwm_noneq_lbc()
 ! - Consider treating advection terms similar to convec.f90
 ! 
 
-use param, only : ld, nx, ny, nu_molec, z_i, ubot, u_star, dt, jt_total
+use param, only : ld, nx, ny, nu_molec, z_i, ubot, u_star, dt, jt_total, ihwm
 use sim_param, only : u, v, w, dudz, dvdz, txz, tyz, dpdx, dpdy
 use sim_param, only : dudx, dvdx, dwdx, dudy, dvdy, dwdy
 use test_filtermodule, only : test_filter
@@ -701,7 +701,7 @@ subroutine ws_2d3cF_eq_lbc()
 ! used to invert the resulting matrix equation.
 ! 
 
-use param, only : ld, nx, ny, nu_molec, z_i, ubot, u_star, jt_total
+use param, only : ld, nx, ny, nu_molec, z_i, ubot, u_star, jt_total, ihwm
 use sim_param, only : u, v, dudz, dvdz, txz, tyz
 use test_filtermodule, only : test_filter
 use fft
@@ -853,7 +853,7 @@ subroutine ws_rnl_eq_lbc()
 ! the LES grid is sufficiently resolved.
 ! 
 ! Currently the model assumes smooth walls, finite Reynolds number, and takes 
-! the inner layer starting at the ihwm'th LES grid point from the wall (on the 
+! the inner layer starting at the ihwm'th LES grid point from the wall (on the
 ! uv grid).
 !  
 ! The ODE is of the form:
@@ -863,7 +863,7 @@ subroutine ws_rnl_eq_lbc()
 ! used to invert the resulting matrix equation.
 ! 
 
-use param, only : ld, ny, jt_total, nu_molec, z_i, ubot, u_star
+use param, only : ld, ny, jt_total, nu_molec, z_i, ubot, u_star, ihwm
 use sim_param, only : u, v, dudz, dvdz, txz, tyz
 #ifdef PPOUTPUT_WMLES
 use param, only : tavg_calc, tavg_nstart, tavg_nend
@@ -1028,7 +1028,7 @@ subroutine wm_eddyvisc(ustar)
 !  
 
 use types, only : rprec
-use param, only : nu_molec, nx, ny, vonk, dx, dy
+use param, only : nu_molec, nx, ny, vonk, dx, dy, ihwm
 use sgs_param, only : Nu_t
 use functions, only : y_avg
 implicit none

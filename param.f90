@@ -51,6 +51,9 @@ character(*), parameter :: checkpoint_tavg_budget_file = path // 'tavg_budget.ou
 #ifdef PPOUTPUT_TURBSPEC
 character(*), parameter :: checkpoint_tavg_turbspec_file = path // 'tavg_turbspec.out'
 #endif
+#ifdef PPOUTPUT_SPECBUDG
+character(*), parameter :: checkpoint_tavg_specbudg_file = path // 'tavg_specbudg.out'
+#endif
 #ifdef PPOUTPUT_WMLES
 character(*), parameter :: checkpoint_tavg_wmles_file = path // 'tavg_wmles.out'
 #endif
@@ -129,7 +132,7 @@ real(rprec) :: str_factor = 1.25
 !---------------------------------------------------
 ! Model type: 1->Smagorinsky; 2->Dynamic; 3->Scale dependent
 !             4->Lagrangian scale-sim   5-> Lagragian scale-dep
-integer :: sgs_model=5, wall_damp_exp=2
+integer :: sgs_model=5, damp_model=1, wall_damp_exp=2
 
 ! timesteps between dynamic Cs updates
 integer :: cs_count = 5
@@ -163,6 +166,7 @@ real(rprec) :: nu_molec = 1.14e-5_rprec
 logical :: trigger = .false.
 integer :: trig_on = 500, trig_off = 2000
 real(rprec) :: trig_factor = 5.0_rprec
+real(rprec) :: initial_noise = 3.0_rprec
 
 logical :: molec=.false., sgs=.true.
 
@@ -171,11 +175,12 @@ logical :: fourier = .false.
 real(rprec), allocatable, dimension(:) :: kxs_in
 integer :: kx_num = 3
 integer :: nxp = 32
+logical :: fourier_check = .false.
+integer :: fourier_nskip = 10000
 
 ! mode limiting options for GQL
 integer :: thrx = 0
-logical :: gql_v2 = .false.
-integer :: nls = 1
+integer :: gql_fourier = 1
 
 !---------------------------------------------------
 ! TIMESTEP PARAMETERS
@@ -187,6 +192,9 @@ integer :: runtime = -1
 
 logical :: use_cfl_dt = .false.
 real(rprec) :: cfl = 0.05
+logical :: cfl_swap = .false.
+integer :: cfl_start_swap = 500, cfl_end_swap = 2000
+real(rprec) :: cfl_swap_factor = 3.2
 real(rprec) :: dt_f=2.0e-4, cfl_f=0.05
 
 real(rprec) :: dt = 2.0e-4_rprec
@@ -215,6 +223,9 @@ logical :: inilag = .true.
 ! channel branch is complete)
 integer :: lbc_mom = 1
 integer :: ubc_mom = 0
+
+! Inputs for All TLWMLES
+integer :: ihwm = 1
 
 ! Inputs for RNL TLWMLES
 real(rprec), allocatable, dimension(:) :: tlwm_kxin

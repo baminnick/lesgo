@@ -223,7 +223,7 @@ subroutine ws_equilibrium_lbc
 use param, only : dz, ld, nx, ny, vonk, zo
 use sim_param, only : u, v
 #ifdef PPMAPPING
-use sim_param, only : JACO2
+use sim_param, only : jaco_uv
 #endif
 #ifdef PPLVLSET_STRETCH
 use sim_param, only : hij
@@ -241,8 +241,8 @@ call test_filter(u1)
 call test_filter(v1)
 
 #ifdef PPMAPPING
-denom = log(0.5_rprec*JACO2(1)*dz/zo)
-const2 = JACO2(1)
+denom = log(0.5_rprec*jaco_uv(1)*dz/zo)
+const2 = jaco_uv(1)
 #else
 ! denom moved into loop, however initialize here if PPLVLSET_STRETCH is OFF
 denom = log(0.5_rprec*dz/zo)
