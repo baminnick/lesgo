@@ -33,7 +33,7 @@ implicit none
 save
 private
 
-public :: mfm_init, ic_gmt, gm_transport, mfm_checkpoint
+public :: mfm_init, ic_gmt, gm_transport, gm_2d3c_transport, mfm_checkpoint
 
 ! Main simulation variables for the GMT
 real(rprec), public, dimension(:,:,:), allocatable :: gmu, gmv, gmw
@@ -1048,6 +1048,268 @@ end if
 end subroutine gm_transport
 
 !*****************************************************************************
+subroutine gm_2d3c_transport
+!*****************************************************************************
+!
+! This subroutine marches the generalized momentum transport (GMT) equation
+! one time-step using the streamwise mean to advect. This simplifies the GMT
+! equation to have only one velocity component, gmu. Therefore, gmv and gmw
+! are unchanging and no poisson equation is solved.
+! 
+! This subroutine is used when total_advec = false
+!
+use param
+use sim_param
+use derivatives, only : ddz_uv, ddz_w
+use derivatives, only : wave2physF
+#ifdef PPMPI
+use mpi
+use mpi_defs, only : mpi_sync_real_array, MPI_SYNC_DOWN
+#endif
+use forcing, only : project
+
+real(rprec) :: diff_coef, rmsdivvel, const
+integer :: jx, jy, jz, jz_min, jz_max, nxp2
+
+real(rprec), dimension(nz) :: gmu_avg, du
+
+real(rprec), dimension(nxp+2,ny,lbz:nz) :: dtydy, dtzdz
+
+real(rprec), dimension(nxp+2,ny,lbz:nz) :: uF_avg, vF_avg, wF_avg
+
+! Save previous timestep's RHS
+rhs_gmx_f = rhs_gmx
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! Calculate derivatives of generalized momentum
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! dudy derivatives (in Fourier space)
+call gmt_ddy(gmu, dgmudy, lbz)
+
+! dudz, dvdz using finite differences (for 1:nz on uv-nodes)
+! except bottom coord, only 2:nz
+call ddz_uv(gmu, dgmudz, lbz)
+
+! Wall stress and derivatives at the wall
+! (txz, tyz, dgmudz, dgmvdz at jz=1)
+if (coord == 0) then
+    call gmt_wallstress()
+#ifdef PPCNDIFF
+    ! Add boundary condition to explicit portion
+    gmtxz_half2(1:nxp,:,1) = gmtxz(1:nxp,:,1)
+#endif
+endif
+if (coord == nproc-1) then
+    call gmt_wallstress()
+#ifdef PPCNDIFF
+    ! Add boundary condition to explicit portion
+    gmtxz_half2(1:nxp,:,nz) = gmtxz(1:nxp,:,nz)
+#endif
+endif
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! Calculate Stress of generalized momentum
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! This part is written out explicitly instead of using sgs_stag from the
+! main loop since sgs_stag is messy, however set up in a similar manner
+diff_coef = -2.0_rprec*(nu_molec/(u_star*z_i))
+
+! Calculate stress for bottom level
+if (coord == 0) then
+    gmtxy(:,:,1) = diff_coef*0.5_rprec*( dgmudy(:,:,1) )
+    ! Remember txz already calculated in gmt_wallstress
+
+    ! since first level already calculated
+    jz_min = 2
+else
+    jz_min = 1
+endif
+
+! Unlike sgs_stag, calculate all tij for nz-1 on top coord with 
+! all other levels isntead of separately
+
+! Calculate stress for entire domain
+do jz = jz_min, nz-1
+    gmtxy(:,:,jz) = diff_coef*0.5_rprec*( dgmudy(:,:,jz) )
+#ifdef PPCNDIFF
+    gmtxz(:,:,jz) = diff_coef*0.5_rprec*( dgmudz(:,:,jz) )
+    gmtxz_half2(:,:,jz) = diff_coef*0.5_rprec*( dgmudz(:,:,jz) )
+#else
+    gmtxz(:,:,jz) = diff_coef*0.5_rprec*( dgmudz(:,:,jz) )
+#endif
+enddo
+
+! Exchange information between processors to set values at nz 
+! from jz=1 above to jz=nz below
+#ifdef PPCNDIFF
+call mpi_sync_real_array( gmtxz, 0, MPI_SYNC_DOWN )
+call mpi_sync_real_array( gmtxz_half2, 0, MPI_SYNC_DOWN )
+#else
+call mpi_sync_real_array( gmtxz, 0, MPI_SYNC_DOWN )
+#endif
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! Diffusive term
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! Calculate divergence of Stress for GMT
+! Compute stress gradients
+call gmt_ddy(gmtxy, dtydy, lbz)
+#ifdef PPCNDIFF
+! Do nothing, gmtxz_half was the gmwdx derivative, which is now zero
+! call ddz_w(gmtxz_half1, dtzdz, lbz)
+dtzdz = 0.0_rprec
+#else
+call ddz_w(gmtxz, dtzdz, lbz)
+#endif
+
+! Take sum, remember only 1:nz-1 are valid
+div_gmtx(:,:,1:nz-1) = dtydy(:,:,1:nz-1) + dtzdz(:,:,1:nz-1)
+
+! Set ld-1 and ld oddballs to 0
+div_gmtx(nxp+1:nxp+2,:,1:nz-1) = 0._rprec
+
+! Set boundary points to BOGUS
+#ifdef PPSAFETYMODE
+#ifdef PPMPI
+div_gmtx(:,:,0) = BOGUS
+#endif
+div_gmtx(:,:,nz) = BOGUS
+#endif
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! Advective term
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! This differs from the convec subroutine in the main loop in two main ways:
+! 1. Uses coupling between simulation velocities (u,v,w) and GMT velocities
+! 2. Is not u x omega, instead computed as u[sim]*grad(u[gmt])
+
+! Move variables to big domain
+if (fourier) then 
+    ! Transform RNL velocities to physical domain, same grid size as GMT
+    call wave2physF( v, vF )
+    call wave2physF( w, wF )
+else
+    ! v and vf should be the same size, just carry values over
+    vF = v
+    wF = w
+endif
+! Overwrite vF,wF with streamwise mean, will be overwritten later
+call x_avg_mfm( vF )
+call x_avg_mfm( wF )
+call to_big(vF, v_big)
+call to_big(wF, w_big)
+call to_big(dgmudy, dgmudy_big)
+call to_big(dgmudz, dgmudz_big)
+
+! Normalization for FFTs
+nxp2 = 3*nxp/2
+const = 1._rprec/(nxp2*ny2)
+
+! Compute advective term in x-GMT
+! Interpolate w and dudz onto uv-grid
+if (coord == 0) then
+    ! Bottom wall take w(jz=1) = 0
+    temp_big(:,:,1) = const*( v_big(:,:,1)*dgmudy_big(:,:,1) +          &
+        0.5_rprec*w_big(:,:,2)*dgmudz_big(:,:,2))
+    jz_min = 2
+else
+    jz_min = 1
+endif
+
+if (coord == nproc-1) then
+    ! Top wall take w(jz=nz) = 0
+    temp_big(:,:,nz-1) = const*( v_big(:,:,nz-1)*dgmudy_big(:,:,nz-1) + &
+        0.5_rprec*w_big(:,:,nz-1)*dgmudz_big(:,:,nz-1))
+    jz_max = nz-2
+else
+    jz_max = nz-1
+endif
+
+! For entire domain
+do jz = jz_min, jz_max
+    temp_big(:,:,jz) = const*( v_big(:,:,jz)*dgmudy_big(:,:,jz) +     &
+        0.5_rprec*(w_big(:,:,jz+1)*dgmudz_big(:,:,jz+1) +             &
+        w_big(:,:,jz)*dgmudz_big(:,:,jz)))
+enddo
+
+! Move temp_big into RHSx for GMT and make small
+call to_small(temp_big, rhs_gmx)
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! Add terms to the RHS
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! Add div-tau term 
+rhs_gmx(:,:,1:nz-1) = -rhs_gmx(:,:,1:nz-1) - div_gmtx(:,:,1:nz-1)
+
+! Add pressure forcing -- only use for debugging purposes
+!if (use_mean_p_force) rhs_gmx(:,:,1:nz-1)=rhs_gmx(:,:,1:nz-1)+mean_p_force_x
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! Calculate Intermediate Velocity
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+#ifdef PPCNDIFF
+call gmt_2d3c_diff_stag_array_uv(gmu,rhs_gmx,rhs_gmx_f,gmtxz_half2,gmtxz)
+#else
+gmu(:,:,1:nz-1) = gmu(:,:,1:nz-1) +                                         &
+    dt * ( tadv1 * rhs_gmx(:,:,1:nz-1) + tadv2 * rhs_gmx_f(:,:,1:nz-1) )
+#endif
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! Inverse Macroscopic Forcing
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! Compute difference in current macroscopic field and target
+! and update the intermediate velocity field with this difference
+! 
+! Adding this difference acts as the source term for the GMT and 
+! ensures the macroscopic field is unchanging with time-step
+do jz = 1, nz-1
+    ! Initialize averages
+    gmu_avg(jz) = 0.0_rprec
+
+    ! Average in x and y
+    do jx = 1, nxp
+    do jy = 1, ny
+        gmu_avg(jz) = gmu_avg(jz) + gmu(jx,jy,jz)
+    end do
+    end do
+    gmu_avg(jz) = gmu_avg(jz) / (nxp*ny)
+
+    ! Find difference
+    du(jz) = gmu_bar(jz) - gmu_avg(jz)
+
+    ! Update intermediate velocity
+    do jx = 1, nxp
+    do jy = 1, ny
+        gmu(jx,jy,jz) = gmu(jx,jy,jz) + du(jz)
+    end do
+    end do
+enddo
+
+! Output updated information on GMT to screen
+if (modulo (jt_total, wbase) == 0) then
+    call check_gmt_2d3c(gmu,du)
+
+    if(coord == 0) then
+        call write_gmt_tau_wall_bot()
+        write(*,*)
+        write(*,'(a,E15.7)') ' GM  Velocity divergence metric: ', rmsdivvel
+        write(*,'(a)') '===================== GMT BOTTOM ======================='
+        write(*,*) 'u: ', gmu(nxp/2,ny/2,1:2)
+        write(*,'(a)') '========================================================'
+    end if
+    call mpi_barrier(comm, ierr)
+    if(coord == nproc-1) then
+        call write_gmt_tau_wall_top()
+        write(*,'(a)') '====================== GMT TOP ========================='
+        write(*,*) 'u: ', gmu(nxp/2,ny/2,nz-2:nz-1)
+        write(*,'(a)') '========================================================'
+    end if
+    call mpi_barrier(comm, ierr)
+end if
+
+end subroutine gm_2d3c_transport
+
+!*****************************************************************************
 subroutine write_gmt_tau_wall_bot()
 !*****************************************************************************
 !
@@ -1209,6 +1471,72 @@ endif
 #endif
 
 end subroutine check_gmt
+
+!*****************************************************************************
+subroutine check_gmt_2d3c(u,du)
+!*****************************************************************************
+! 
+! Measure and write the average difference from the target macroscopic value.
+! Remember, these differences were measured in the main gm_2d3c routine
+! and were found by averaging in the x & y directions. Therefore, only 
+! averaging in the z direction here to get a global estimate.
+! 
+! Added computation of the energy of the u component
+! 
+use types, only : rprec
+use param
+use messages
+implicit none
+integer :: jx, jy, jz
+real(rprec), dimension(nxp+2,ny,lbz:nz), intent(in) :: u
+real(rprec), dimension(nz), intent(in) :: du
+real(rprec) :: uu, du_avg
+#ifdef PPMPI
+real(rprec) :: uu_global, du_global
+#endif
+
+! Initialize variables
+uu = 0._rprec
+du_avg = 0._rprec
+
+! Compute spatial average of squared velocities
+do jz = 1, nz-1
+do jy = 1, ny
+do jx = 1, nxp
+    uu = uu + u(jx,jy,jz)**2
+enddo
+enddo
+enddo
+uu = uu / (nxp*ny*(nz-1))
+
+! Perform spatial averaging for differences
+! Remember these are already averaged in the x & y directions
+do jz = 1, nz-1
+    du_avg = du_avg + du(jz)
+enddo
+du_avg = du_avg / (nz-1)
+
+#ifdef PPMPI
+call mpi_reduce (uu, uu_global, 1, MPI_RPREC, MPI_SUM, 0, comm, ierr)
+call mpi_reduce (du_avg, du_global, 1, MPI_RPREC, MPI_SUM, 0, comm, ierr)
+if (rank == 0) then ! note that it's rank here, not coord
+    uu = uu_global/nproc
+    du_avg = du_global/nproc
+#endif
+    open(2,file=path // 'output/check_gmt.dat', status='unknown',      &
+        form='formatted', position='append')
+
+    ! one time header output
+    if (jt_total==wbase) write(2,*) 'jt_total, uu, du_avg'
+
+    ! continual time-related output
+    write(2,*) jt_total, uu, du_avg
+    close(2)
+#ifdef PPMPI
+endif
+#endif
+
+end subroutine check_gmt_2d3c
 
 !*****************************************************************************
 subroutine gmt_ddx(f, dfdx, lbz)
@@ -1536,6 +1864,154 @@ u(:nxp,:ny,1:nz-1) = usol(:nxp,:ny,1:nz-1)
 v(:nxp,:ny,1:nz-1) = vsol(:nxp,:ny,1:nz-1)
 
 end subroutine gmt_diff_stag_array_uv
+
+!*****************************************************************************
+subroutine gmt_2d3c_diff_stag_array_uv(u,RHSx,RHSx_f,txz_half2,txz)
+!*****************************************************************************
+!
+! Calculate the intermediate xy-velocity from implicit CN scheme on exit.
+!
+use types, only : rprec
+use param
+use messages
+use sgs_param, only : nu
+use derivatives, only : ddz_w
+use fft
+#ifdef PPMAPPING
+use sim_param, only : jaco_w, jaco_uv, mesh_stretch
+#endif
+
+implicit none
+
+real(rprec), dimension(nxp+2,ny,lbz:nz), intent(inout) :: u
+real(rprec), dimension(nxp+2,ny,lbz:nz), intent(in) :: RHSx, RHSx_f
+real(rprec), dimension(nxp+2,ny,lbz:nz), intent(in) :: txz_half2, txz
+
+real(rprec), dimension(nxp+2,ny,0:nz) :: Rx, usol
+real(rprec), dimension(nxp,ny,0:nz) :: a, b, c
+real(rprec), dimension(nxp+2,ny,lbz:nz) :: dtxzdz_rhs
+real(rprec) :: nu_a, nu_b, nu_c, nu_r, const1, const2, const3
+integer :: jx, jy, jz, jz_min, jz_max
+
+! Set constants
+const1 = (dt/(2._rprec*dz))
+const2 = (1._rprec/dz)
+const3 = (1._rprec/(0.5_rprec*dz))
+
+! Get the RHS ready
+! Initialize with the explicit terms
+Rx(:,:,1:nz-1) = u(:,:,1:nz-1) +                                     &
+    dt * ( tadv1 * RHSx(:,:,1:nz-1) + tadv2 * RHSx_f(:,:,1:nz-1) )
+
+! Add explicit portion of Crank-Nicolson
+call ddz_w(txz_half2, dtxzdz_rhs, lbz)
+dtxzdz_rhs(nxp+1:nxp+2, :, 1:nz-1) = 0._rprec
+#ifdef PPSAFETYMODE
+#ifdef PPMPI
+dtxzdz_rhs(:,:,0) = BOGUS
+#endif
+dtxzdz_rhs(:,:,nz) = BOGUS
+#endif
+! Assuming fixed dt here!
+Rx(:,:,1:nz-1) = Rx(:,:,1:nz-1) - dt * 0.5_rprec * dtxzdz_rhs(:,:,1:nz-1)
+
+! Get bottom row 
+if (coord == 0) then
+#ifdef PPSAFETYMODE
+    a(:,:,1) = BOGUS
+#endif
+    ! Dirichlet BCs
+    do jy = 1, ny
+    do jx = 1, nxp
+        nu_c = nu
+        ! Discretized txz(jx,jy,1) as in wallstress,
+        ! Therefore BC treated implicitly
+#ifdef PPMAPPING
+        b(jx,jy,1) = 1._rprec + const1*(1._rprec/jaco_uv(1))*        &
+            (const2*(1._rprec/jaco_w(2))*nu_c + (nu/mesh_stretch(1)))
+        c(jx,jy,1) = -const1*(1._rprec/jaco_uv(1))*const2*(1._rprec/jaco_w(2))*nu_c
+        Rx(jx,jy,1) = Rx(jx,jy,1) + const1*(1._rprec/jaco_uv(1))*   &
+            (nu/mesh_stretch(1))*gmu_bot
+#else
+        b(jx,jy,1) = 1._rprec + const1*(const2*nu_c + const3*nu)
+        c(jx,jy,1) = -const1*const2*nu_c
+        Rx(jx,jy,1) = Rx(jx,jy,1) + const1*const3*nu*gmu_bot
+#endif
+    end do
+    end do
+
+    jz_min = 2
+else
+    jz_min = 1
+endif
+
+! Get top row
+#ifdef PPMPI
+if (coord == nproc-1) then
+#endif
+#ifdef PPSAFETYMODE
+    c(:,:,nz-1) = BOGUS
+#endif
+    ! Dirichlet BCs
+    do jy = 1, ny
+    do jx = 1, nxp
+        nu_a = nu
+        ! Discretized txz(jx,jy,nz) as in wallstress,
+        ! Therefore BC treated implicitly
+#ifdef PPMAPPING
+        a(jx,jy,nz-1) = -const1*(1._rprec/jaco_uv(nz-1))*const2*(1._rprec/jaco_w(nz-1))*nu_a
+        b(jx,jy,nz-1) = 1._rprec + const1*(1._rprec/jaco_uv(nz-1))*        &
+            (const2*(1._rprec/jaco_w(nz-1))*nu_a + (nu/(L_z-mesh_stretch(nz-1))))
+        Rx(jx,jy,nz-1) = Rx(jx,jy,nz-1) + const1*(1._rprec/jaco_uv(nz-1))* &
+            (nu/(L_z-mesh_stretch(nz-1)))*gmu_top
+#else
+        a(jx,jy,nz-1) = -const1*const2*nu_a
+        b(jx,jy,nz-1) = 1._rprec + const1*(const2*nu_a + const3*nu)
+        Rx(jx,jy,nz-1) = Rx(jx,jy,nz-1) + const1*const3*nu*gmu_top
+#endif
+    end do
+    end do
+
+    jz_max = nz-2
+#ifdef PPMPI
+else
+    jz_max = nz-1
+endif
+#endif
+
+! Compute coefficients in domain
+! Treating SGS viscosity explicitly!
+do jz = jz_min, jz_max
+do jy = 1, ny
+do jx = 1, nxp
+    nu_a = nu
+#ifdef PPMAPPING
+    nu_b = (nu/jaco_w(jz+1)) + (nu/jaco_w(jz))
+#else
+    nu_b = 2._rprec*nu
+#endif
+    nu_c = nu
+
+#ifdef PPMAPPING
+    a(jx, jy, jz) = -const1*(1._rprec/jaco_uv(jz))*const2*(1._rprec/jaco_w(jz))*nu_a
+    b(jx, jy, jz) = 1._rprec + const1*(1._rprec/jaco_uv(jz))*const2*nu_b
+    c(jx, jy, jz) = -const1*(1._rprec/jaco_uv(jz))*const2*(1._rprec/jaco_w(jz+1))*nu_c
+#else
+    a(jx, jy, jz) = -const1*const2*nu_a
+    b(jx, jy, jz) = 1._rprec + const1*const2*nu_b
+    c(jx, jy, jz) = -const1*const2*nu_c
+#endif
+end do
+end do
+end do
+
+! Find intermediate velocity in TDMA
+call tridag_array_diff_uv (a, b, c, Rx, usol, nxp)
+
+! Fill velocity solution
+u(:nxp,:ny,1:nz-1) = usol(:nxp,:ny,1:nz-1)
+
+end subroutine gmt_2d3c_diff_stag_array_uv
 
 !*****************************************************************************
 subroutine gmt_diff_stag_array_w(w,RHSz,RHSz_f,tzz)

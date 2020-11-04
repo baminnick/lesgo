@@ -74,7 +74,7 @@ use functions, only : gql_filter
 #endif
 
 #ifdef PPMFM
-use mfm, only : gm_transport
+use mfm, only : gm_transport, gm_2d3c_transport, total_advec
 #endif
 
 use messages
@@ -393,7 +393,11 @@ call clock_convec%stop
     if (coord == nproc-1) RHSz(:,:,nz) = -RHSz(:,:,nz)-divtz(:,:,nz)
 
 #ifdef PPMFM
-    call gm_transport()
+    if (total_advec) then
+        call gm_transport()
+    else
+        call gm_2d3c_transport()
+    endif
 #endif
 
     ! Coriolis: add forcing to RHS
