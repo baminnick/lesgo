@@ -891,7 +891,9 @@ do j = 1, jmax
     if (abs(dx) < xacc) return
 end do
 rtnewt = 1._rprec  ! if don't converge fast enough
+#ifdef PPOUTPUT_SGS
 write(6,*) 'using beta=1 at jz= ', jz
+#endif
 
 end function rtnewt
 

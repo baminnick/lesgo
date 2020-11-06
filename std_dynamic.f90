@@ -128,12 +128,12 @@ do jz = 1, nz
     S23_bar(2:ld,:) = 0.0_rprec
     S33_bar(2:ld,:) = 0.0_rprec
 
-    call test_filter ( S11_bar )
-    call test_filter ( S12_bar )
-    call test_filter ( S13_bar )
-    call test_filter ( S22_bar )
-    call test_filter ( S23_bar )
-    call test_filter ( S33_bar )
+    call test_filter_fourier ( S11_bar )
+    call test_filter_fourier ( S12_bar )
+    call test_filter_fourier ( S13_bar )
+    call test_filter_fourier ( S22_bar )
+    call test_filter_fourier ( S23_bar )
+    call test_filter_fourier ( S33_bar )
 
     S_bar(1,:) = sqrt(2._rprec*(S11_bar(1,:)**2 +                         &
         S22_bar(1,:)**2 + S33_bar(1,:)**2 +                               &
@@ -182,9 +182,6 @@ do jz = 1, nz
         sum(M11(1,:)**2 + M22(1,:)**2 + M33(1,:)**2 +                            &
             2._rprec*(M12(1,:)**2 + M13(1,:)**2 + M23(1,:)**2))
     Cs_1D(jz) = max(0._rprec, Cs_1D(jz))
-
-!debug
-!write(*,*) coord, jz, Cs_1D(jz)
 
     ! Calculate ee_now (the current value of eij*eij)
     LM(1,:) = L11(1,:)*M11(1,:) + L22(1,:)*M22(1,:) + L33(1,:)*M33(1,:) +  &

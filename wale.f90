@@ -27,7 +27,7 @@ subroutine wale
 use types, only : rprec
 use param
 use sim_param, only : dudx, dudy, dudz, dvdx, dvdy, dvdz, dwdx, dwdy, dwdz
-use sgs_param, only : Nu_t
+use sgs_param, only : Nu_t, delta
 use derivatives, only : dft_direct_back_2d_n_yonlyC, dft_direct_forw_2d_n_yonlyC
 #ifdef PPMPI
 use mpi_defs, only : mpi_sync_real_array, MPI_SYNC_DOWN
@@ -241,8 +241,13 @@ do jz = 1, nz
         2.0_rprec*(Sd12(1,:)**2 + Sd13(1,:)**2 + Sd23(1,:)**2)
 
     ! Compute eddy viscosity
+#ifdef PPMAPPING
     Nu_t(1,:,jz) = ((cwale*delta_stretch(jz))**2)*                    &
         ( (SdSd(1,:)**1.5_rprec) / ((SS(1,:)**2.5_rprec) + (SdSd(1,:)**1.25_rprec) + eps) )
+#else
+    Nu_t(1,:,jz) = ((cwale*delta)**2)*                    &
+        ( (SdSd(1,:)**1.5_rprec) / ((SS(1,:)**2.5_rprec) + (SdSd(1,:)**1.25_rprec) + eps) )
+#endif
 
     ! Zero-out non-zero kx modes
     Nu_t(2:ld,:,jz) = 0.0_rprec
@@ -420,8 +425,13 @@ do jz = 1, nz
         2.0_rprec*(Sd12**2 + Sd13**2 + Sd23**2)
 
     ! Compute eddy viscosity
+#ifdef PPMAPPING
     Nu_t(:,:,jz) = ((cwale*delta_stretch(jz))**2)*                    &
         ( (SdSd**1.5_rprec) / ((SS**2.5_rprec) + (SdSd**1.25_rprec) + eps) )
+#else
+    Nu_t(:,:,jz) = ((cwale*delta)**2)*                    &
+        ( (SdSd**1.5_rprec) / ((SS**2.5_rprec) + (SdSd**1.25_rprec) + eps) )
+#endif
 
 end do
 

@@ -221,7 +221,8 @@ end if
 #endif
 
 ! Transform velocities if starting a new simulation
-if ((.not. initu) .and. fourier) then
+! i.e., don't transform if interpolated or using same vel.out file
+if ((.not. initu) .and. (.not. interp_flag) .and. fourier) then
     if ( coord == 0 ) then 
         write(*,*) '--> Transforming initial velocity to kx space'
     endif
@@ -260,16 +261,34 @@ function check_for_interp() result(flag)
 !*******************************************************************************
 integer :: Nx_f, Ny_f, Nz_f, nproc_f
 real(rprec) :: Lx_f, Ly_f, Lz_f
-logical :: exst, flag
+real(rprec), allocatable, dimension(:) :: kxs_in_f
+logical :: exst, flag, fourier_f
+integer :: jx
 
 inquire (file='grid.out', exist=exst)
+inquire (file='grid_fourier.out', exist=fourier_f)
 if (exst) then
     open(12, file='grid.out', form='unformatted', convert=read_endian)
     read(12) nproc_f, Nx_f, Ny_f, Nz_f, Lx_f, Ly_f, Lz_f
     close(12)
+
     if (nproc_f == nproc .and. Nx_f == Nx .and. Ny_f == Ny .and. Nz_f == Nz    &
-        .and. Lx_f == L_x .and. Ly_f == L_y .and. Lz_f == L_z) then
+        .and. Lx_f == L_x .and. Ly_f == L_y .and. Lz_f == L_z .and. (fourier_f .eqv. fourier)) then
         flag = .false.
+
+        ! Determine if the same fourier case is being run by checking kx used
+        if ((Nx_f == Nx) .and. fourier_f .and. fourier) then
+            ! Grab old kx values
+            allocate( kxs_in_f(Nx_f/2+1) )
+            open(12, file='grid_fourier.out', form='unformatted', convert=read_endian)
+            read(12) kxs_in_f(:)
+            close(12)
+
+            ! Now compare new and old kx values
+            do jx = 1, kx_num
+                if (kxs_in_f(jx) .ne. kxs_in(jx)) flag = .true.
+            enddo
+        endif
     else !! interpolating to new grid
         flag = .true.
     end if
@@ -303,6 +322,12 @@ subroutine ic_interp()
 !
 use grid_m
 use functions
+use derivatives, only : phys2waveF
+use sim_param, only : uF, vF, wF
+#ifdef PPMAPPING
+use sim_param, only : mesh_stretch
+#endif
+include 'fftw3.f'
 integer :: nproc_f, Nx_f, Ny_f, Nz_f
 real(rprec) :: Lx_f, Ly_f, Lz_f
 integer :: i, j, k, z1, z2, ld_f, lh_f, Nz_tot_f
@@ -315,11 +340,38 @@ character(64) :: ff
 integer :: npr1, npr2, nproc_r, Nz_tot_r
 real(rprec), allocatable, dimension(:) :: z_r, zw_r
 ! real(rprec), allocatable, dimension(:,:,:) :: u_r, v_r, w_r
+logical :: fourier_f
+real(rprec), allocatable, dimension(:) :: kxs_in_f
+integer :: nxp_f, mxp, kx_num_f, iih, irh, ii, ir
+real(rprec), allocatable, dimension(:,:,:) :: ut_f, vt_f, wt_f
+integer*8 init_fourier
+real(rprec), allocatable, dimension(:,:) :: init_fourier_data
+logical :: add_noise
+real(rprec) :: dummy_rand, wall_noise, decay, z_noise, sigma_rv
+integer :: k_abs
 
 ! Read grid information from file
 open(12, file='grid.out', form='unformatted', convert=read_endian)
 read(12) nproc_f, Nx_f, Ny_f, Nz_f, Lx_f, Ly_f, Lz_f
 close(12)
+
+! Read fourier grid information from file
+inquire (file='grid_fourier.out', exist=fourier_f)
+if (fourier_f) then
+    kx_num_f = Nx_f/2 + 1
+    allocate( kxs_in_f(kx_num_f) )
+    open(12, file='grid_fourier.out', form='unformatted', convert=read_endian)
+    read(12) kxs_in_f(:)
+    close(12)
+
+    ! Determine smallest possible physical-grid size for this fourier case
+    mxp = int(2*kxs_in_f(Nx_f/2+1) + 2)
+    ! Now determine which nxp will be used to transform velocities onto
+    nxp_f = max( mxp, nxp )
+else
+    ! In physical space, nxp and nx variable should be the same
+    nxp_f = nx_f
+endif
 
 ! Compute intermediate values
 lh_f = nx_f/2+1
@@ -336,29 +388,11 @@ nproc_r = npr2-npr1+1
 Nz_tot_r = ( nz_f - 1 ) * nproc_r + 1
 ! write(*,*) coord, npr1, npr2, nproc_r, Nz_tot_r
 
-! Create file grid
-allocate( z_r(nz_tot_r), zw_r(nz_tot_r))
-do i = 1, nz_tot_r
-    zw_r(i) = (i - 1 + npr1*(nz_f-1)) * dz_f
-    z_r(i) = zw_r(i) + 0.5*dz_f
-end do
-
-! write(*,*) coord, ./bzw_r
-
-! Create file grid
-allocate( x_f(nx_f), y_f(ny_f))
-
-do i = 1, nx_f
-    x_f(i) = (i-1) * Lx_f/(nx_f)
-end do
-do i = 1, ny_f
-    y_f(i) = (i-1) * Ly_f/ny_f
-end do
-
 ! Read velocities from file
-allocate( u_f(ld_f, ny_f, nz_tot_r) )
-allocate( v_f(ld_f, ny_f, nz_tot_r) )
-allocate( w_f(ld_f, ny_f, nz_tot_r) )
+! Using ut_f, vt_f, and wt_f as a temp variables because of fourier mode
+allocate( ut_f(ld_f, ny_f, nz_tot_r) )
+allocate( vt_f(ld_f, ny_f, nz_tot_r) )
+allocate( wt_f(ld_f, ny_f, nz_tot_r) )
 
 ! Loop through all levels
 do i = 1, nproc_r
@@ -370,15 +404,91 @@ do i = 1, nproc_r
     write(ff,*) i+npr1-1
     ff = "./vel.out.c"//trim(adjustl(ff))
     open(12, file=ff,  action='read', form='unformatted')
-    read(12) u_f(:, :, z1:z2), v_f(:, :, z1:z2), w_f(:, :, z1:z2)
+    read(12) ut_f(:, :, z1:z2), vt_f(:, :, z1:z2), wt_f(:, :, z1:z2)
     close(12)
 end do
 
+allocate( u_f(nxp_f+2, ny_f, nz_tot_r) )
+allocate( v_f(nxp_f+2, ny_f, nz_tot_r) )
+allocate( w_f(nxp_f+2, ny_f, nz_tot_r) )
+
+! If previous case had fourier mode on, need to transform to physical space
+! This portion of code mimics wave2physF in derivaties.f90, however uses
+! kx wavenumbers from previous fourier case
+if (fourier_f) then
+    ! u_f is in fourier space and up_f will be in physical space
+
+    ! Fill physical u with zeroes everywhere
+    u_f(:,:,:) = 0.0_rprec
+    v_f(:,:,:) = 0.0_rprec
+    w_f(:,:,:) = 0.0_rprec
+
+    ! Create plan
+    allocate( init_fourier_data(nxp_f, ny_f) )
+    call dfftw_plan_dft_c2r_2d(init_fourier, nxp_f, ny_f, init_fourier_data,    &
+        init_fourier_data, FFTW_ESTIMATE)
+
+    ! Place uhat values in appropriate u index before inverse fourier transform
+    do i = 1, kx_num_f
+        ! uhat indices
+        iih = 2*i
+        irh = iih - 1
+
+        ! u indices
+        ii = 2 * int( kxs_in_f(i) ) + 2
+        ir = ii - 1
+
+        u_f(ir:ii, :, :) = ut_f( irh:iih, :, :)
+        v_f(ir:ii, :, :) = vt_f( irh:iih, :, :)
+        w_f(ir:ii, :, :) = wt_f( irh:iih, :, :)
+    enddo
+
+    ! Loop through horizontal slices
+    do k = 1, nz_tot_r
+        call dfftw_execute_dft_c2r(init_fourier, u_f(1:nxp_f+2,1:ny_f,k), u_f(1:nxp_f+2,1:ny_f,k))
+        call dfftw_execute_dft_c2r(init_fourier, v_f(1:nxp_f+2,1:ny_f,k), v_f(1:nxp_f+2,1:ny_f,k))
+        call dfftw_execute_dft_c2r(init_fourier, w_f(1:nxp_f+2,1:ny_f,k), w_f(1:nxp_f+2,1:ny_f,k))
+    enddo
+
+    ! Destroy plan
+    call dfftw_destroy_plan(init_fourier)
+    deallocate(init_fourier_data)
+else
+    ! Directly store temp variable into final velocities to be interpolated if in physical space
+    u_f(:,:,:) = ut_f(:,:,:)
+    v_f(:,:,:) = vt_f(:,:,:)
+    w_f(:,:,:) = wt_f(:,:,:)
+endif
+
+! Create file wall-normal grid
+allocate( z_r(nz_tot_r), zw_r(nz_tot_r))
+do i = 1, nz_tot_r
+    zw_r(i) = (i - 1 + npr1*(nz_f-1)) * dz_f
+    z_r(i) = zw_r(i) + 0.5*dz_f
+end do
+
+! write(*,*) coord, zw_r
+
+! Create file streamwise and spanwise grid
+! Note: Using nxp_f here, if in physical space then nxp_f = nx_f
+! if in fourier then need to use nxp_f since velocities have been transformed to physical space
+allocate( x_f(nxp_f), y_f(ny_f) )
+do i = 1, nxp_f
+    x_f(i) = (i-1) * Lx_f/(nxp_f)
+end do
+do i = 1, ny_f
+    y_f(i) = (i-1) * Ly_f/ny_f
+end do
+
 ! Calculate velocities
-do i = 1, nx
+! Using nxp and uF here
+! If in .not. fourier mode, then uF and u are the same size (nxp=nx)
+! If in fourier mode, need to interpolate u_f onto uF, then add noise
+! remember, if fourier, then grid is made using nxp not nx
+do i = 1, nxp
     xx = grid%x(i) - floor(grid%x(i)/Lx_f) * Lx_f
     i1 = binary_search(x_f, xx)
-    i2 = mod(i1, nx_f) + 1
+    i2 = mod(i1, nxp_f) + 1
     bx = (xx - x_f(i1)) / dx_f
     ax = 1._rprec - bx
     do j = 1, ny
@@ -387,28 +497,30 @@ do i = 1, nx
         j2 = mod(j1, ny_f) + 1
         by = (yy - y_f(j1)) / dy_f
         ay = 1._rprec - by
+        ! Interpolating based on z positions, not stretched grid position
+        ! i.e. not ready if PPMAPPING is on and a different stretch is used
         do k = 1, nz
             ! for u and v
             k1 = binary_search(z_r, grid%z(k))
             k2 = k1 + 1
             if (k1 == nz_tot_r) then
-                u(i,j,k) = ax*ay*u_f(i1,j1,k1) + bx*ay*u_f(i2,j1,k1)           &
+                uF(i,j,k) = ax*ay*u_f(i1,j1,k1) + bx*ay*u_f(i2,j1,k1)           &
                          + ax*by*u_f(i1,j2,k1) + bx*by*u_f(i2,j2,k1)
-                v(i,j,k) = ax*ay*v_f(i1,j1,k1) + bx*ay*v_f(i2,j1,k1)           &
+                vF(i,j,k) = ax*ay*v_f(i1,j1,k1) + bx*ay*v_f(i2,j1,k1)           &
                          + ax*by*v_f(i1,j2,k1) + bx*by*v_f(i2,j2,k1)
             else if (k1 == 0) then
-                u(i,j,k) = ax*ay*u_f(i1,j1,k2) + bx*ay*u_f(i2,j1,k2)           &
+                uF(i,j,k) = ax*ay*u_f(i1,j1,k2) + bx*ay*u_f(i2,j1,k2)           &
                          + ax*by*u_f(i1,j2,k2) + bx*by*u_f(i2,j2,k2)
-                v(i,j,k) = ax*ay*v_f(i1,j1,k2) + bx*ay*v_f(i2,j1,k2)           &
+                vF(i,j,k) = ax*ay*v_f(i1,j1,k2) + bx*ay*v_f(i2,j1,k2)           &
                          + ax*by*v_f(i1,j2,k2) + bx*by*v_f(i2,j2,k2)
             else
                 bz = (grid%z(k) - z_r(k1)) / dz_f
                 az = 1._rprec - bz
-                u(i,j,k) = ax*ay*az*u_f(i1,j1,k1) + bx*ay*az*u_f(i2,j1,k1)     &
+                uF(i,j,k) = ax*ay*az*u_f(i1,j1,k1) + bx*ay*az*u_f(i2,j1,k1)     &
                          + ax*by*az*u_f(i1,j2,k1) + bx*by*az*u_f(i2,j2,k1)     &
                          + ax*ay*bz*u_f(i1,j1,k2) + bx*ay*bz*u_f(i2,j1,k2)     &
                          + ax*by*bz*u_f(i1,j2,k2) + bx*by*bz*u_f(i2,j2,k2)
-                v(i,j,k) = ax*ay*az*v_f(i1,j1,k1) + bx*ay*az*v_f(i2,j1,k1)     &
+                vF(i,j,k) = ax*ay*az*v_f(i1,j1,k1) + bx*ay*az*v_f(i2,j1,k1)     &
                          + ax*by*az*v_f(i1,j2,k1) + bx*by*az*v_f(i2,j2,k1)     &
                          + ax*ay*bz*v_f(i1,j1,k2) + bx*ay*bz*v_f(i2,j1,k2)     &
                          + ax*by*bz*v_f(i1,j2,k2) + bx*by*bz*v_f(i2,j2,k2)
@@ -418,15 +530,15 @@ do i = 1, nx
             k1 = binary_search(zw_r, grid%zw(k))
             k2 = k1 + 1
             if (k1 == nz_tot_r) then
-                w(i,j,k) = ax*ay*w_f(i1,j1,k1) + bx*ay*w_f(i2,j1,k1)           &
+                wF(i,j,k) = ax*ay*w_f(i1,j1,k1) + bx*ay*w_f(i2,j1,k1)           &
                          + ax*by*w_f(i1,j2,k1) + bx*by*w_f(i2,j2,k1)
             else if (k1 == 0) then
-                w(i,j,k) = ax*ay*w_f(i1,j1,k2) + bx*ay*w_f(i2,j1,k2)           &
+                wF(i,j,k) = ax*ay*w_f(i1,j1,k2) + bx*ay*w_f(i2,j1,k2)           &
                          + ax*by*w_f(i1,j2,k2) + bx*by*w_f(i2,j2,k2)
             else
                 bz = (grid%zw(k) - zw_r(k1)) / dz_f
                 az = 1._rprec - bz
-                w(i,j,k) = ax*ay*az*w_f(i1,j1,k1) + bx*ay*az*w_f(i2,j1,k1)     &
+                wF(i,j,k) = ax*ay*az*w_f(i1,j1,k1) + bx*ay*az*w_f(i2,j1,k1)     &
                          + ax*by*az*w_f(i1,j2,k1) + bx*by*az*w_f(i2,j2,k1)     &
                          + ax*ay*bz*w_f(i1,j1,k2) + bx*ay*bz*w_f(i2,j1,k2)     &
                          + ax*by*bz*w_f(i1,j2,k2) + bx*by*bz*w_f(i2,j2,k2)
@@ -435,6 +547,66 @@ do i = 1, nx
         end do
     end do
 end do
+
+! Determine if noise needs to be added to activate new kx modes
+add_noise = .false.
+if (fourier_f .and. (.not. fourier)) add_noise = .true. !! add noise if running DNS or LES
+if ((nx_f == nx) .and. fourier_f .and. fourier) then
+    do i = 1, kx_num !! Add noise if running fourier mode with different kx values
+        if (kxs_in_f(i) .ne. kxs_in(i)) add_noise = .true.
+    enddo
+endif
+
+! Add noise if previous case was in fourier mode and different kx modes need to be activated
+if (add_noise) then
+    if (coord == 0) write(*,*) '--> Adding noise to interpolated velocity field'
+    sigma_rv = 0.289_rprec
+    wall_noise = 10 !! dictates how strong the noise is at the wall
+    call init_random_seed
+    do k = 1, nz
+         ! Rescale noise depending on distance from wall
+#ifdef PPMPI
+         k_abs = coord * (nz-1) + k
+#ifdef PPMAPPING
+         z_noise = mesh_stretch(k)
+#else
+         z_noise = (coord * (nz-1) + k - 0.5_rprec) * dz
+#endif
+#else
+         k_abs = k
+         z_noise = (k - 0.5_rprec) * dz
+#endif
+         ! Change z-value for different boundary conditions
+         ! For channel flow, choose closest wall
+         if (lbc_mom > 0 .and. ubc_mom > 0) z_noise = min(z_noise, L_z - z_noise)
+         ! For half-channel (lbc_mom > 0 .and. ubc_mom .eq. 0) leave as is
+         decay = (1-exp(-wall_noise*z_noise))/(1-exp(-wall_noise))
+
+        do j = 1, ny
+        do i = 1, nxp
+            call random_number(dummy_rand)
+            uF(i,j,k) = uF(i,j,k) + decay*(initial_noise/.289_rprec)*(dummy_rand-.5_rprec)/u_star
+            call random_number(dummy_rand)
+            vF(i,j,k) = vF(i,j,k) + decay*(initial_noise/.289_rprec)*(dummy_rand-.5_rprec)/u_star
+            call random_number(dummy_rand)
+            wF(i,j,k) = wF(i,j,k) + decay*(initial_noise/.289_rprec)*(dummy_rand-.5_rprec)/u_star
+        enddo
+        enddo
+    enddo
+endif
+
+! Finally, move temp uF,vF,wF variables into simulation variables u,v,w
+if (fourier) then
+    ! Transform from physical space to fourier, also band-limit onto kxs_in modes
+    call phys2waveF( uF, u )
+    call phys2waveF( vF, v )
+    call phys2waveF( wF, w )
+else
+    ! Only need to move data over
+    u(:,:,:) = uF(:,:,:)
+    v(:,:,:) = vF(:,:,:)
+    w(:,:,:) = wF(:,:,:)
+endif
 
 end subroutine ic_interp
 
