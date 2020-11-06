@@ -5163,13 +5163,13 @@ do jz = 1, nz
 #ifdef PPSCALARS
     thetapy = const2 * theta_w(jx,1:ny,jz)
 #ifdef PPOUTPUT_SPECBUDG
-    dTdxpy  = const1 * dTdx_w(jx,1:ny,jz)
-    dTdypy  = const1 * dTdy_w(jx,1:ny,jz)
-    dTdzpy  = const1 * dTdz(jx,1:ny,jz)
-    lapTpy  = const1 * lapT_w(jx,1:ny,jz)
-    udTdxpy = const1 * u_w(jx,1:ny,jz)*dTdx_w(jx,1:ny,jz)
-    vdTdypy = const1 * v_w(jx,1:ny,jz)*dTdy_w(jx,1:ny,jz)
-    wdTdzpy = const1 * w(jx,1:ny,jz)*dTdz(jx,1:ny,jz)
+    dTdxpy  = const2 * dTdx_w(jx,1:ny,jz)
+    dTdypy  = const2 * dTdy_w(jx,1:ny,jz)
+    dTdzpy  = const2 * dTdz(jx,1:ny,jz)
+    lapTpy  = const2 * lapT_w(jx,1:ny,jz)
+    udTdxpy = const2 * u_w(jx,1:ny,jz)*dTdx_w(jx,1:ny,jz)
+    vdTdypy = const2 * v_w(jx,1:ny,jz)*dTdy_w(jx,1:ny,jz)
+    wdTdzpy = const2 * w(jx,1:ny,jz)*dTdz(jx,1:ny,jz)
 #endif
 #endif
 

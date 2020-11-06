@@ -1869,8 +1869,8 @@ e(i,j,k) % pdiss = 2.0_rprec*(nu_molec/Pr_sgs)*real(CTxTx + CTyTy + CTzTz)
 ! Transport by diffusion
 ! CTlapT already multiplied by (nu/Pr) because div_pi was used
 ! Change sign of CTlapT because of how div_pi is set up
-! Note: lapT terms include x-deriveration terms from pseudo-dissipation
-!       which need to be canceled, which is why CTxTx terms have different sign
+! Note: lapT terms include x-derivative terms from pseudo-dissipation
+!       which need to be canceled, which is why the CTxTx term has a different sign
 e(i,j,k) % tvisc = 2.0_rprec*(nu_molec/Pr_sgs)*real(-CTxTx + CTyTy + CTzTz) - real( conjg(CTlapT) + CTlapT )
 
 end do
@@ -2011,8 +2011,8 @@ e(i,j,k) % pdiss = 2.0_rprec*(nu_molec/Pr_sgs)*real(CTxTx + CTyTy + CTzTz)
 ! Transport by diffusion
 ! CTlapT already multiplied by (nu/Pr) because div_pi was used
 ! Change sign of CTlapT because of how div_pi is set up
-! Note: lapT terms include y-deriveration terms from pseudo-dissipation
-!       which need to be canceled, which is why CTyTy terms have different sign
+! Note: lapT terms include y-derivative terms from pseudo-dissipation
+!       which need to be canceled, which is why the CTyTy terms has opposite sign
 e(i,j,k) % tvisc = 2.0_rprec*(nu_molec/Pr_sgs)*real(CTxTx - CTyTy + CTzTz) - real( conjg(CTlapT) + CTlapT )
 
 end do
