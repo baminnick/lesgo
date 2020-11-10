@@ -136,6 +136,22 @@ type budget_t
     real(rprec) :: prodxx, prodyy, prodzz, prodxy, prodxz, prodyz
     real(rprec) :: pdissxx, pdissyy, pdisszz, pdissxy, pdissxz, pdissyz
 end type budget_t
+
+#ifdef PPSCALARS
+type tavg_scal_budget_t
+    real(rprec) :: theta, utheta, vtheta, wtheta
+    real(rprec) :: dTdx, dTdy, dTdz
+    real(rprec) :: TdTdx, TdTdy, TdTdz
+    real(rprec) :: udTdx, vdTdy, wdTdz
+    real(rprec) :: uTdTdx, vTdTdy, wTdTdz
+    real(rprec) :: TxTx, TyTy, TzTz
+    real(rprec) :: lapT, TlapT
+end type tavg_scal_budget_t
+
+type scal_budget_t
+    real(rprec) :: adv, tfluc, tvisc, prod, pdiss
+end type scal_budget_t
+#endif
 #endif
 
 #ifdef PPOUTPUT_TURBSPEC
@@ -280,6 +296,10 @@ type(tavg_sgs_t), allocatable, dimension(:,:,:) :: tavg_sgs
 #ifdef PPOUTPUT_BUDGET
 type(tavg_budget_t), allocatable, dimension(:,:,:) :: tavg_budget
 type(budget_t), allocatable, dimension(:,:,:) :: budget
+#ifdef PPSCALARS
+type(tavg_scal_budget_t), allocatable, dimension(:,:,:) :: tavg_scal_budget
+type(scal_budget_t), allocatable, dimension(:,:,:) :: scal_budget
+#endif
 #endif
 
 #ifdef PPOUTPUT_TURBSPEC
@@ -830,6 +850,107 @@ c % pdissxz = - c % pdissxz
 c % pdissyz = - c % pdissyz
 
 end function budget_compute
+
+#ifdef PPSCALARS
+!*****************************************************************************
+function scal_budget_compute( a, b, lbz2) result(c)
+!*****************************************************************************
+use param, only: nu_molec
+use scalars, only: Pr_sgs
+implicit none
+integer, intent(in) :: lbz2
+type(tavg_scal_budget_t), dimension(:,:,lbz2:), intent(in) :: a
+type(tavg_t), dimension(:,:,lbz2:), intent(in) :: b
+type(scal_budget_t), allocatable, dimension(:,:,:) :: c
+
+integer :: ubx, uby, ubz, i, j, k
+real(rprec) :: CuT, CvT, CwT
+real(rprec) :: CTdTdx, CTdTdy, CTdTdz
+real(rprec) :: CuTdTdx, CvTdTdy, CwTdTdz
+real(rprec) :: CTxTx, CTyTy, CTzTz
+real(rprec) :: CTlapT
+
+ubx=ubound(a,1)
+uby=ubound(a,2)
+ubz=ubound(a,3)
+
+allocate(c(ubx,uby,lbz2:ubz))
+
+! -------------------------- Reynolds Stress Budget --------------------------
+
+do i = 1, ubx
+do j = 1, uby
+do k = 1, ubz
+
+! Compute intermediate terms used in the budget
+! Scalar-Velocity correlation, Reynolds stress
+! similar to scal_rs_compute, except all are on w-grid
+CuT = a(i,j,k) % utheta - b(i,j,k) % u_w * a(i,j,k) % theta
+CvT = a(i,j,k) % vtheta - b(i,j,k) % v_w * a(i,j,k) % theta
+CwT = a(i,j,k) % wtheta - b(i,j,k) % w   * a(i,j,k) % theta
+
+! Scalar-Scalar gradient correlation, T*dTdxj
+CTdTdx = a(i,j,k) % TdTdx - a(i,j,k) % theta * a(i,j,k) % dTdx
+CTdTdy = a(i,j,k) % TdTdx - a(i,j,k) % theta * a(i,j,k) % dTdy
+CTdTdz = a(i,j,k) % TdTdx - a(i,j,k) % theta * a(i,j,k) % dTdz
+
+! Velocity-Scalar gradient correlation, uj*dTdxj
+!CudTdx = a(i,j,k) % udTdx - b(i,j,k) % u_w * a(i,j,k) % dTdx
+!CvdTdy = a(i,j,k) % vdTdy - b(i,j,k) % v_w * a(i,j,k) % dTdy
+!CwdTdz = a(i,j,k) % wdTdz - b(i,j,k) % w   * a(i,j,k) % dTdz
+
+! Scalar-Velocity-Scalar gradient triple correlation, uj*T*dTdxj
+CuTdTdx = a(i,j,k) % uTdTdx - a(i,j,k) % utheta * a(i,j,k) % dTdx               &
+    - a(i,j,k) % udTdx * a(i,j,k) % theta - a(i,j,k) % TdTdx * b(i,j,k) % u_w   &
+    + 2.0_rprec * b(i,j,k) % u_w * a(i,j,k) % theta * a(i,j,k) % dTdx
+CvTdTdy = a(i,j,k) % vTdTdy - a(i,j,k) % vtheta * a(i,j,k) % dTdy               &
+    - a(i,j,k) % vdTdy * a(i,j,k) % theta - a(i,j,k) % TdTdy * b(i,j,k) % v_w   &
+    + 2.0_rprec * b(i,j,k) % v_w * a(i,j,k) % theta * a(i,j,k) % dTdy
+CwTdTdz = a(i,j,k) % wTdTdz - a(i,j,k) % wtheta * a(i,j,k) % dTdz               &
+    - a(i,j,k) % wdTdz * a(i,j,k) % theta - a(i,j,k) % TdTdz * b(i,j,k) % w     &
+    + 2.0_rprec * b(i,j,k) % w * a(i,j,k) % theta * a(i,j,k) % dTdz
+
+! Scalar Gradient-Scalar Gradient, dT'dxj*dT'dxj
+CTxTx = a(i,j,k) % TxTx - (a(i,j,k) % dTdx**2)
+CTyTy = a(i,j,k) % TyTy - (a(i,j,k) % dTdy**2)
+CTzTz = a(i,j,k) % TzTz - (a(i,j,k) % dTdz**2)
+
+! Scalar-Laplacian correlation, T*lap(T)
+CTlapT = a(i,j,k)%TlapT - a(i,j,k)%theta * a(i,j,k)%lapT
+
+! Now compute terms to be outputted
+! Advection, Uj*d(T'T')dxj
+c(i,j,k) % adv = b(i,j,k)%u_w*CTdTdx + b(i,j,k)%v_w*CTdTdy + b(i,j,k)%w*CTdTdz
+
+! Turbulent transport, d(uj'*T'*T')dxj
+c(i,j,k) % tfluc = CuTdTdx + CvTdTdy + CwTdTdz
+
+! Production Rate, (uj'*T')*dTdxj
+c(i,j,k) % prod = CuT * a(i,j,k)%dTdx + CvT * a(i,j,k)%dTdy + CwT * a(i,j,k)%dTdz
+
+! Pseudo-dissipation, kappa*(dT'dxj*dT'dxj)
+c(i,j,k) % pdiss = (nu_molec/Pr_sgs)*(CTxTx + CTyTy + CTzTz) 
+
+! Diffusive Transport
+! CTlapT already multiplied by (nu_molec/Pr_sgs) because div_pi was used
+! Change sign of CTlapT because of how div_pi is set up
+c(i,j,k) % tvisc = c(i,j,k) % pdiss - CTlapT
+
+! ---------------------- Mean kinetic energy balance -------------------------
+
+end do 
+end do
+end do
+
+! ---------------------------- Prepare Output --------------------------------
+! Move all terms to the RHS
+c % adv = - c % adv
+c % tfluc = - c % tfluc
+c % prod = - c % prod
+c % pdiss = - c % pdiss
+
+end function scal_budget_compute
+#endif
 #endif
 
 #ifdef PPOUTPUT_TURBSPEC

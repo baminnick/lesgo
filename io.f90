@@ -1579,6 +1579,11 @@ if (tavg_calc) then
                 call wave2phys( dwdx, lbz )
                 call wave2phys( dwdy, lbz )
                 call wave2phys( dwdz, lbz )
+#ifdef PPSCALARS
+                call wave2phys( theta, lbz )
+                call wave2phys( pi_z, lbz )
+#endif
+
 #ifdef PPOUTPUT_BUDGET
                 call wave2phys( p, lbz )
                 call wave2phys( dpdx, 1 )
@@ -1587,11 +1592,7 @@ if (tavg_calc) then
                 call wave2phys( divtx, lbz )
                 call wave2phys( divty, lbz )
                 call wave2phys( divtz, lbz )
-#endif
 #ifdef PPSCALARS
-                call wave2phys( theta, lbz )
-                call wave2phys( pi_z, lbz )
-#ifdef PPOUTPUT_SPECBUDG
                 call wave2phys( dTdx, lbz )
                 call wave2phys( dTdy, lbz )
                 call wave2phys( dTdz, lbz )
@@ -1630,6 +1631,11 @@ if (tavg_calc) then
                 call phys2wave( dwdx, lbz )
                 call phys2wave( dwdy, lbz )
                 call phys2wave( dwdz, lbz )
+#ifdef PPSCALARS
+                call phys2wave( theta, lbz )
+                call phys2wave( pi_z, lbz )
+#endif
+
 #ifdef PPOUTPUT_BUDGET
                 call phys2wave( p, lbz )
                 call phys2wave( dpdx, 1 )
@@ -1638,11 +1644,7 @@ if (tavg_calc) then
                 call phys2wave( divtx, lbz )
                 call phys2wave( divty, lbz )
                 call phys2wave( divtz, lbz )
-#endif
 #ifdef PPSCALARS
-                call phys2wave( theta, lbz )
-                call phys2wave( pi_z, lbz )
-#ifdef PPOUTPUT_SPECBUDG
                 call phys2wave( dTdx, lbz )
                 call phys2wave( dTdy, lbz )
                 call phys2wave( dTdz, lbz )
@@ -2918,6 +2920,9 @@ use stat_defs, only : point, xplane, yplane, zplane
 use stat_defs, only : tavg, tavg_zplane
 #ifdef PPSCALARS
 use stat_defs, only : tavg_scal
+#ifdef PPOUTPUT_BUDGET
+use stat_defs, only : tavg_scal_budget
+#endif
 #ifdef PPOUTPUT_TURBSPEC
 use stat_defs, only : tavg_scal_turbspecx, tavg_scal_turbspecy
 #endif
@@ -2970,6 +2975,9 @@ if( tavg_calc ) then
     ! allocate(tavg_zplane(nz))
 #ifdef PPSCALARS
     allocate(tavg_scal(nx,ny,lbz:nz))
+#ifdef PPOUTPUT_BUDGET
+    allocate(tavg_scal_budget(nx,ny,lbz:nz))
+#endif
 #ifdef PPOUTPUT_TURBSPEC
     allocate(tavg_scal_turbspecx(nx/2+1,ny,lbz:nz))
     allocate(tavg_scal_turbspecy(nx,ny/2+1,lbz:nz))
@@ -3048,6 +3056,44 @@ if( tavg_calc ) then
     end do
     end do
     end do
+
+#ifdef PPOUTPUT_BUDGET
+    do k = 1, Nz
+    do j = 1, Ny
+    do i = 1, Nx
+        tavg_scal_budget(i,j,k) % theta = 0._rprec
+
+        tavg_scal_budget(i,j,k) % utheta = 0._rprec
+        tavg_scal_budget(i,j,k) % vtheta = 0._rprec
+        tavg_scal_budget(i,j,k) % wtheta = 0._rprec
+
+        tavg_scal_budget(i,j,k) % dTdx = 0._rprec
+        tavg_scal_budget(i,j,k) % dTdy = 0._rprec
+        tavg_scal_budget(i,j,k) % dTdz = 0._rprec
+
+        tavg_scal_budget(i,j,k) % TdTdx = 0._rprec
+        tavg_scal_budget(i,j,k) % TdTdy = 0._rprec
+        tavg_scal_budget(i,j,k) % TdTdz = 0._rprec
+
+        tavg_scal_budget(i,j,k) % udTdx = 0._rprec
+        tavg_scal_budget(i,j,k) % vdTdy = 0._rprec
+        tavg_scal_budget(i,j,k) % wdTdz = 0._rprec
+
+        tavg_scal_budget(i,j,k) % uTdTdx = 0._rprec
+        tavg_scal_budget(i,j,k) % vTdTdy = 0._rprec
+        tavg_scal_budget(i,j,k) % wTdTdz = 0._rprec
+
+        tavg_scal_budget(i,j,k) % TxTx = 0._rprec
+        tavg_scal_budget(i,j,k) % TyTy = 0._rprec
+        tavg_scal_budget(i,j,k) % TzTz = 0._rprec
+
+        tavg_scal_budget(i,j,k) % lapT = 0._rprec
+        tavg_scal_budget(i,j,k) % TlapT = 0._rprec
+
+    enddo
+    enddo
+    enddo
+#endif
 
 #ifdef PPOUTPUT_TURBSPEC
     do k = 1, Nz
@@ -3837,6 +3883,9 @@ use stat_defs, only : tavg_turbspecx, tavg_turbspecy
 #endif
 #ifdef PPSCALARS
 use stat_defs, only : tavg_scal
+#ifdef PPOUTPUT_BUDGET
+use stat_defs, only : tavg_scal_budget
+#endif
 #ifdef PPOUTPUT_TURBSPEC
 use stat_defs, only : tavg_scal_turbspecx, tavg_scal_turbspecy
 #endif
@@ -3863,6 +3912,9 @@ character (*), parameter :: ftavg_turbspec_in = path // 'tavg_turbspec.out'
 #endif
 #ifdef PPSCALARS
 character (*), parameter :: ftavg_scal_in = path // 'tavg_scal.out'
+#ifdef PPOUTPUT_BUDGET
+character (*), parameter :: ftavg_scal_budget_in = path // 'tavg_scal_budget.out'
+#endif
 #ifdef PPOUTPUT_TURBSPEC
 character (*), parameter :: ftavg_scal_turbspec_in = path // 'tavg_scal_turbspec.out'
 #endif
@@ -3958,6 +4010,18 @@ else
     read(1) tavg_total_time
     read(1) tavg_scal
     close(1)
+
+#ifdef PPOUTPUT_BUDGET
+    fname = ftavg_scal_budget_in
+#ifdef PPMPI
+    call string_concat( fname, MPI_suffix, coord )
+#endif
+    open(1, file=fname, action='read', position='rewind', form='unformatted',  &
+        convert=read_endian)
+    read(1) tavg_total_time
+    read(1) tavg_scal_budget
+    close(1)
+#endif
 
 #ifdef PPOUTPUT_TURBSPEC
     fname = ftavg_scal_turbspec_in
@@ -4209,6 +4273,10 @@ use sim_param, only : dpdx, dpdy, dpdz
 use sim_param, only : divtx, divty, divtz
 use functions, only : interp_to_w_grid
 use mpi_defs, only: mpi_sync_real_array, MPI_SYNC_DOWNUP
+#ifdef PPSCALARS
+use scalars, only : theta, dTdx, dTdy, dTdz, div_pi
+use stat_defs, only : tavg_scal_budget
+#endif
 
 implicit none
 
@@ -4222,6 +4290,10 @@ real(rprec), allocatable, dimension(:,:,:) :: dudx_w, dudy_w, dvdx_w, dvdy_w
 real(rprec), allocatable, dimension(:,:,:) :: dwdz_w, divtx_w, divty_w
 real(rprec), allocatable, dimension(:,:,:) :: pres_real
 real(rprec), allocatable, dimension(:,:,:) :: dpdx_real, dpdy_real, dpdz_real
+#ifdef PPSCALARS
+real(rprec) :: theta_p, dTdx_p, dTdy_p, dTdz_p, lapT_p
+real(rprec), allocatable, dimension(:,:,:) :: theta_w, dTdx_w, dTdy_w, lapT_w
+#endif
 
 allocate(u_w(nx,ny,lbz:nz), v_w(nx,ny,lbz:nz), p_w(nx,ny,lbz:nz))
 allocate(dudx_w(nx,ny,lbz:nz), dudy_w(nx,ny,lbz:nz), dvdx_w(nx,ny,lbz:nz))
@@ -4229,6 +4301,9 @@ allocate(dvdy_w(nx,ny,lbz:nz), dwdz_w(nx,ny,lbz:nz))
 allocate(divtx_w(nx,ny,lbz:nz), divty_w(nx,ny,lbz:nz))
 allocate(pres_real(nx,ny,lbz:nz))
 allocate(dpdx_real(nx,ny,lbz:nz), dpdy_real(nx,ny,lbz:nz), dpdz_real(nx,ny,lbz:nz))
+#ifdef PPSCALARS
+allocate(theta_w(nx,ny,lbz:nz), dTdx_w(nx,ny,lbz:nz), dTdy_w(nx,ny,lbz:nz), lapT_w(nx,ny,lbz:nz))
+#endif
 
 ! Prepare variables that need to be interpolated onto the w-grid
 #ifdef PPMPI
@@ -4266,6 +4341,16 @@ dwdz_w(1:nx,1:ny,lbz:nz) = interp_to_w_grid(dwdz(1:nx,1:ny,lbz:nz), lbz )
 
 divtx_w(1:nx,1:ny,lbz:nz) = interp_to_w_grid(divtx(1:nx,1:ny,lbz:nz), lbz)
 divty_w(1:nx,1:ny,lbz:nz) = interp_to_w_grid(divty(1:nx,1:ny,lbz:nz), lbz)
+
+#ifdef PPSCALARS
+theta_w(1:nx,1:ny,lbz:nz) = interp_to_w_grid(theta(1:nx,1:ny,lbz:nz), lbz )
+dTdx_w(1:nx,1:ny,lbz:nz) = interp_to_w_grid(dTdx(1:nx,1:ny,lbz:nz), lbz )
+dTdy_w(1:nx,1:ny,lbz:nz) = interp_to_w_grid(dTdy(1:nx,1:ny,lbz:nz), lbz )
+
+lapT_w(1:nx,1:ny,lbz:nz) = div_pi(1:nx,1:ny,lbz:nz)
+call mpi_sync_real_array( lapT_w, lbz, MPI_SYNC_DOWNUP )
+lapT_w(1:nx,1:ny,lbz:nz) = interp_to_w_grid(lapT_w(1:nx,1:ny,lbz:nz), lbz)
+#endif
 
 ! Remove energy from dynamic simulation pressure for static pressure
 ! This is different than in tavg_compute since on w-grid
@@ -4390,6 +4475,14 @@ do i = 1, nx
     divtx_p = divtx_w(i,j,k)
     divty_p = divty_w(i,j,k)
     divtz_p = divtz(i,j,k)
+
+#ifdef PPSCALARS
+    theta_p = theta_w(i,j,k)
+    dTdx_p = dTdx_w(i,j,k)
+    dTdy_p = dTdy_w(i,j,k)
+    dTdz_p = dTdz(i,j,k)
+    lapT_p = lapT_w(i,j,k)
+#endif
 
     ! mean pressure on w-grid
     tavg_budget(i,j,k) % p = tavg_budget(i,j,k) % p + p_p * tavg_dt
@@ -4544,6 +4637,46 @@ do i = 1, nx
     tavg_budget(i,j,k)%wlapu = tavg_budget(i,j,k)%wlapu + w_p * divtx_p * tavg_dt
     tavg_budget(i,j,k)%wlapv = tavg_budget(i,j,k)%wlapv + w_p * divty_p * tavg_dt
     tavg_budget(i,j,k)%wlapw = tavg_budget(i,j,k)%wlapw + w_p * divtz_p * tavg_dt
+
+#ifdef PPSCALARS
+    ! Mean scalar (on w-grid)
+    tavg_scal_budget(i,j,k)%theta = tavg_scal_budget(i,j,k)%theta + theta_p * tavg_dt
+
+    ! Mean scalar gradients (all on w-grid)
+    tavg_scal_budget(i,j,k)%dTdx = tavg_scal_budget(i,j,k)%dTdx + dTdx_p * tavg_dt
+    tavg_scal_budget(i,j,k)%dTdy = tavg_scal_budget(i,j,k)%dTdy + dTdy_p * tavg_dt
+    tavg_scal_budget(i,j,k)%dTdz = tavg_scal_budget(i,j,k)%dTdz + dTdz_p * tavg_dt
+
+    ! Scalar-Velocity products (all on w-grid)
+    tavg_scal_budget(i,j,k)%utheta = tavg_scal_budget(i,j,k)%utheta + u_p * theta_p * tavg_dt
+    tavg_scal_budget(i,j,k)%vtheta = tavg_scal_budget(i,j,k)%vtheta + v_p * theta_p * tavg_dt
+    tavg_scal_budget(i,j,k)%wtheta = tavg_scal_budget(i,j,k)%wtheta + w_p * theta_p * tavg_dt
+
+    ! Scalar-Scalar gradient
+    tavg_scal_budget(i,j,k)%TdTdx = tavg_scal_budget(i,j,k)%TdTdx + theta_p * dTdx_p * tavg_dt
+    tavg_scal_budget(i,j,k)%TdTdy = tavg_scal_budget(i,j,k)%TdTdy + theta_p * dTdy_p * tavg_dt
+    tavg_scal_budget(i,j,k)%TdTdz = tavg_scal_budget(i,j,k)%TdTdz + theta_p * dTdz_p * tavg_dt
+
+    ! Velocity-Scalar gradient
+    tavg_scal_budget(i,j,k)%udTdx = tavg_scal_budget(i,j,k)%udTdx + u_p * dTdx_p * tavg_dt
+    tavg_scal_budget(i,j,k)%vdTdy = tavg_scal_budget(i,j,k)%vdTdy + v_p * dTdy_p * tavg_dt
+    tavg_scal_budget(i,j,k)%wdTdz = tavg_scal_budget(i,j,k)%wdTdz + w_p * dTdz_p * tavg_dt
+
+    ! Velocity-Scalar-Scalar gradient
+    tavg_scal_budget(i,j,k)%uTdTdx = tavg_scal_budget(i,j,k)%uTdTdx + u_p * theta_p * dTdx_p * tavg_dt
+    tavg_scal_budget(i,j,k)%vTdTdy = tavg_scal_budget(i,j,k)%vTdTdy + v_p * theta_p * dTdy_p * tavg_dt
+    tavg_scal_budget(i,j,k)%wTdTdz = tavg_scal_budget(i,j,k)%wTdTdz + w_p * theta_p * dTdz_p * tavg_dt
+
+    ! Scalar gradient-Scalar gradient
+    tavg_scal_budget(i,j,k)%TxTx = tavg_scal_budget(i,j,k)%TxTx + dTdx_p * dTdx_p * tavg_dt
+    tavg_scal_budget(i,j,k)%TyTy = tavg_scal_budget(i,j,k)%TyTy + dTdy_p * dTdy_p * tavg_dt
+    tavg_scal_budget(i,j,k)%TzTz = tavg_scal_budget(i,j,k)%TzTz + dTdz_p * dTdz_p * tavg_dt
+
+    ! Mean lap(T) and TlapT
+    tavg_scal_budget(i,j,k)%lapT = tavg_scal_budget(i,j,k)%lapT + lapT_p * tavg_dt
+    tavg_scal_budget(i,j,k)%TlapT = tavg_scal_budget(i,j,k)%TlapT + theta_p * lapT_p * tavg_dt
+
+#endif
 
 end do
 end do
@@ -5819,6 +5952,9 @@ use stat_defs, only : turbspec_compute
 
 #ifdef PPSCALARS
 use stat_defs, only : tavg_scal_t, tavg_scal, rs_scal_compute, rs_scal
+#ifdef PPOUTPUT_BUDGET
+use stat_defs, only : tavg_scal_budget, scal_budget_compute, scal_budget
+#endif
 #ifdef PPOUTPUT_TURBSPEC
 use stat_defs, only : tavg_scal_turbspecx, tavg_scal_turbspecy
 use stat_defs, only : scal_turbspecx, scal_turbspecy
@@ -5864,6 +6000,9 @@ character(64) :: fname_sxvel, fname_syvel, fname_sxvort, fname_syvort
 
 #ifdef PPSCALARS
 character(64) :: fname_scal
+#ifdef PPOUTPUT_BUDGET
+character(64) :: fname_scal_budget
+#endif
 #ifdef PPOUTPUT_TURBSPEC
 character(64) :: fname_sxscal, fname_syscal
 #endif
@@ -5919,6 +6058,9 @@ fname_syvort = path // 'output/syvort'
 
 #ifdef PPSCALARS
 fname_scal = path // 'output/scal'
+#ifdef PPOUTPUT_BUDGET
+fname_scal_budget = path // 'output/scal_budget'
+#endif
 #ifdef PPOUTPUT_TURBSPEC
 fname_sxscal = path // 'output/sxscal'
 fname_syscal = path // 'output/syscal'
@@ -5977,6 +6119,9 @@ call string_concat(fname_syvort, '.cgns')
 
 #ifdef PPSCALARS
 call string_concat(fname_scal, '.cgns')
+#ifdef PPOUTPUT_BUDGET
+call string_concat(fname_scal_budget, '.cgns')
+#endif
 #ifdef PPOUTPUT_TURBSPEC
 call string_concat(fname_sxscal, '.cgns')
 call string_concat(fname_syscal, '.cgns')
@@ -6039,6 +6184,9 @@ call string_concat(fname_syvort, bin_ext)
 #endif
 #ifdef PPSCALARS
 call string_concat(fname_scal, bin_ext)
+#ifdef PPOUTPUT_BUDGET
+call string_concat(fname_scal_budget, bin_ext)
+#endif
 #ifdef PPOUTPUT_TURBSPEC
 call string_concat(fname_sxscal, bin_ext)
 call string_concat(fname_syscal, bin_ext)
@@ -6296,6 +6444,46 @@ do i = 1, Nx
     tavg_budget(i,j,k) % wlapu = tavg_budget(i,j,k) % wlapu / tavg_total_time
     tavg_budget(i,j,k) % wlapv = tavg_budget(i,j,k) % wlapv / tavg_total_time
     tavg_budget(i,j,k) % wlapw = tavg_budget(i,j,k) % wlapw / tavg_total_time
+
+#ifdef PPSCALARS
+    ! Mean scalar
+    tavg_scal_budget(i,j,k) % theta = tavg_scal_budget(i,j,k) % theta / tavg_total_time
+
+    ! Mean scalar gradients
+    tavg_scal_budget(i,j,k) % dTdx = tavg_scal_budget(i,j,k) % dTdx / tavg_total_time
+    tavg_scal_budget(i,j,k) % dTdy = tavg_scal_budget(i,j,k) % dTdy / tavg_total_time
+    tavg_scal_budget(i,j,k) % dTdz = tavg_scal_budget(i,j,k) % dTdz / tavg_total_time
+
+    ! Scalar-Velocity products
+    tavg_scal_budget(i,j,k) % utheta = tavg_scal_budget(i,j,k) % utheta / tavg_total_time
+    tavg_scal_budget(i,j,k) % vtheta = tavg_scal_budget(i,j,k) % vtheta / tavg_total_time
+    tavg_scal_budget(i,j,k) % wtheta = tavg_scal_budget(i,j,k) % wtheta / tavg_total_time
+
+    ! Scalar-Scalar gradient
+    tavg_scal_budget(i,j,k) % TdTdx = tavg_scal_budget(i,j,k) % TdTdx / tavg_total_time
+    tavg_scal_budget(i,j,k) % TdTdy = tavg_scal_budget(i,j,k) % TdTdy / tavg_total_time
+    tavg_scal_budget(i,j,k) % TdTdz = tavg_scal_budget(i,j,k) % TdTdz / tavg_total_time
+
+    ! Velocity-Scalar gradient
+    tavg_scal_budget(i,j,k) % udTdx = tavg_scal_budget(i,j,k) % udTdx / tavg_total_time
+    tavg_scal_budget(i,j,k) % vdTdy = tavg_scal_budget(i,j,k) % vdTdy / tavg_total_time
+    tavg_scal_budget(i,j,k) % wdTdz = tavg_scal_budget(i,j,k) % wdTdz / tavg_total_time
+
+    ! Velocity-Scalar-Scalar gradient
+    tavg_scal_budget(i,j,k) % uTdTdx = tavg_scal_budget(i,j,k) % uTdTdx / tavg_total_time
+    tavg_scal_budget(i,j,k) % vTdTdy = tavg_scal_budget(i,j,k) % vTdTdy / tavg_total_time
+    tavg_scal_budget(i,j,k) % wTdTdz = tavg_scal_budget(i,j,k) % wTdTdz / tavg_total_time
+
+    ! Scalar gradient-Scalar gradient
+    tavg_scal_budget(i,j,k) % TxTx = tavg_scal_budget(i,j,k) % TxTx / tavg_total_time
+    tavg_scal_budget(i,j,k) % TyTy = tavg_scal_budget(i,j,k) % TyTy / tavg_total_time
+    tavg_scal_budget(i,j,k) % TzTz = tavg_scal_budget(i,j,k) % TzTz / tavg_total_time
+
+    ! Mean lap(T) and TlapT
+    tavg_scal_budget(i,j,k) % lapT = tavg_scal_budget(i,j,k) % lapT / tavg_total_time
+    tavg_scal_budget(i,j,k) % TlapT = tavg_scal_budget(i,j,k) % TlapT / tavg_total_time
+
+#endif
 
 end do
 end do
@@ -6951,6 +7139,46 @@ call mpi_sync_real_array( tavg_budget(1:nx,1:ny,lbz:nz)%wlapu, 0, MPI_SYNC_DOWNU
 call mpi_sync_real_array( tavg_budget(1:nx,1:ny,lbz:nz)%wlapv, 0, MPI_SYNC_DOWNUP )
 call mpi_sync_real_array( tavg_budget(1:nx,1:ny,lbz:nz)%wlapw, 0, MPI_SYNC_DOWNUP )
 
+#ifdef PPSCALARS
+! Mean scalar
+call mpi_sync_real_array( tavg_scal_budget(1:nx,1:ny,lbz:nz)%theta, 0, MPI_SYNC_DOWNUP )
+
+! Mean scalar gradients
+call mpi_sync_real_array( tavg_scal_budget(1:nx,1:ny,lbz:nz)%dTdx, 0, MPI_SYNC_DOWNUP )
+call mpi_sync_real_array( tavg_scal_budget(1:nx,1:ny,lbz:nz)%dTdy, 0, MPI_SYNC_DOWNUP )
+call mpi_sync_real_array( tavg_scal_budget(1:nx,1:ny,lbz:nz)%dTdz, 0, MPI_SYNC_DOWNUP )
+
+! Scalar-Velocity products
+call mpi_sync_real_array( tavg_scal_budget(1:nx,1:ny,lbz:nz)%utheta, 0, MPI_SYNC_DOWNUP )
+call mpi_sync_real_array( tavg_scal_budget(1:nx,1:ny,lbz:nz)%vtheta, 0, MPI_SYNC_DOWNUP )
+call mpi_sync_real_array( tavg_scal_budget(1:nx,1:ny,lbz:nz)%wtheta, 0, MPI_SYNC_DOWNUP )
+
+! Scalar-Scalar gradient
+call mpi_sync_real_array( tavg_scal_budget(1:nx,1:ny,lbz:nz)%TdTdx, 0, MPI_SYNC_DOWNUP )
+call mpi_sync_real_array( tavg_scal_budget(1:nx,1:ny,lbz:nz)%TdTdy, 0, MPI_SYNC_DOWNUP )
+call mpi_sync_real_array( tavg_scal_budget(1:nx,1:ny,lbz:nz)%TdTdz, 0, MPI_SYNC_DOWNUP )
+
+! Velocity-Scalar gradient
+call mpi_sync_real_array( tavg_scal_budget(1:nx,1:ny,lbz:nz)%udTdx, 0, MPI_SYNC_DOWNUP )
+call mpi_sync_real_array( tavg_scal_budget(1:nx,1:ny,lbz:nz)%vdTdy, 0, MPI_SYNC_DOWNUP )
+call mpi_sync_real_array( tavg_scal_budget(1:nx,1:ny,lbz:nz)%wdTdz, 0, MPI_SYNC_DOWNUP )
+
+! Velocity-Scalar-Scalar gradient
+call mpi_sync_real_array( tavg_scal_budget(1:nx,1:ny,lbz:nz)%uTdTdx, 0, MPI_SYNC_DOWNUP )
+call mpi_sync_real_array( tavg_scal_budget(1:nx,1:ny,lbz:nz)%vTdTdy, 0, MPI_SYNC_DOWNUP )
+call mpi_sync_real_array( tavg_scal_budget(1:nx,1:ny,lbz:nz)%wTdTdz, 0, MPI_SYNC_DOWNUP )
+
+! Scalar gradient-Scalar gradient
+call mpi_sync_real_array( tavg_scal_budget(1:nx,1:ny,lbz:nz)%TxTx, 0, MPI_SYNC_DOWNUP )
+call mpi_sync_real_array( tavg_scal_budget(1:nx,1:ny,lbz:nz)%TyTy, 0, MPI_SYNC_DOWNUP )
+call mpi_sync_real_array( tavg_scal_budget(1:nx,1:ny,lbz:nz)%TzTz, 0, MPI_SYNC_DOWNUP )
+
+! Mean lap(T) and TlapT
+call mpi_sync_real_array( tavg_scal_budget(1:nx,1:ny,lbz:nz)%lapT, 0, MPI_SYNC_DOWNUP )
+call mpi_sync_real_array( tavg_scal_budget(1:nx,1:ny,lbz:nz)%TlapT, 0, MPI_SYNC_DOWNUP )
+
+#endif
+
 #endif
 
 #endif
@@ -7207,6 +7435,11 @@ close(13)
 allocate(budget(nx,ny,lbz:nz))
 budget = budget_compute(tavg_budget, tavg , lbz)
 
+#ifdef PPSCALARS
+allocate(scal_budget(nx,ny,lbz:nz))
+scal_budget = scal_budget_compute(tavg_scal_budget, tavg, lbz)
+#endif
+
 #ifdef PPCGNS
 ! Write CGNS data
 call write_parallel_cgns(fname_rxx,nx,ny,nz- nz_end,nz_tot,                 &
@@ -7299,6 +7532,19 @@ call write_parallel_cgns(fname_ryz,nx,ny,nz- nz_end,nz_tot,                 &
 !    budget(1:nx,1:ny,1:nz- nz_end) % mpdiss,                              &
 !    budget(1:nx,1:ny,1:nz- nz_end) % mdiss /) )
 
+#ifdef PPSCALARS
+call write_parallel_cgns(fname_scal_budget,nx,ny,nz- nz_end,nz_tot,         &
+    (/ 1, 1,   (nz-1)*coord + 1 /),                                         &
+    (/ nx, ny, (nz-1)*(coord+1) + 1 - nz_end /),                            &
+    x(1:nx) , y(1:ny) , z(1:(nz-nz_end) ), 7,                               &
+    (/ 'adv', 'tfluc', 'tvisc', 'prod', 'pdiss'/),                          &
+    (/ scal_budget(1:nx,1:ny,1:nz- nz_end) % adv,                           &
+    scal_budget(1:nx,1:ny,1:nz- nz_end) % tfluc,                            &
+    scal_budget(1:nx,1:ny,1:nz- nz_end) % tvisc,                            &
+    scal_budget(1:nx,1:ny,1:nz- nz_end) % prod,                             &
+    scal_budget(1:nx,1:ny,1:nz- nz_end) % pdiss /) )
+#endif
+
 #else
 ! Write binary data
 open(unit=13, file=fname_rxx, form='unformatted', convert=write_endian,     &
@@ -7376,9 +7622,24 @@ close(13)
 !write(13,rec=5) budget(:nx,:ny,1:nz)%mpdiss
 !write(13,rec=6) budget(:nx,:ny,1:nz)%mdiss
 !close(13)
+
+#ifdef PPSCALARS
+open(unit=13, file=fname_scal_budget, form='unformatted', convert=write_endian,     &
+    access='direct', recl=nx*ny*nz*rprec)
+write(13,rec=1) scal_budget(:nx,:ny,1:nz)%adv
+write(13,rec=2) scal_budget(:nx,:ny,1:nz)%tfluc
+write(13,rec=3) scal_budget(:nx,:ny,1:nz)%tvisc
+write(13,rec=4) scal_budget(:nx,:ny,1:nz)%prod
+write(13,rec=5) scal_budget(:nx,:ny,1:nz)%pdiss
+close(13)
+#endif
+
 #endif
 
 deallocate(budget)
+#ifdef PPSCALARS
+deallocate(scal_budget)
+#endif
 
 #endif
 
@@ -7754,6 +8015,10 @@ use stat_defs, only : tavg_turbspecx, tavg_turbspecy
 #ifdef PPSCALARS
 use param, only : checkpoint_tavg_scal_file
 use stat_defs, only : tavg_scal
+#ifdef PPOUTPUT_BUDGET
+use param, only : checkpoint_tavg_scal_budget_file
+use stat_defs, only : tavg_scal_budget
+#endif
 #ifdef PPOUTPUT_TURBSPEC
 use param, only : checkpoint_tavg_scal_turbspec_file
 use stat_defs, only : tavg_scal_turbspecx, tavg_scal_turbspecy
@@ -7846,6 +8111,19 @@ open(1, file=fname, action='write', position='rewind',form='unformatted',      &
 write(1) tavg_total_time
 write(1) tavg_scal
 close(1)
+
+#ifdef PPOUTPUT_BUDGET
+fname = checkpoint_tavg_scal_budget_file
+#ifdef PPMPI
+call string_concat( fname, '.c', coord)
+#endif
+!  Write data to tavg_budget.out
+open(1, file=fname, action='write', position='rewind',form='unformatted',   &
+    convert=write_endian)
+write(1) tavg_total_time
+write(1) tavg_scal_budget
+close(1)
+#endif
 
 #ifdef PPOUTPUT_TURBSPEC
 fname = checkpoint_tavg_scal_turbspec_file
