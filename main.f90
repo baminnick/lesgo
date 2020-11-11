@@ -75,6 +75,7 @@ use functions, only : gql_filter
 
 #ifdef PPSCALARS
 use scalars, only : buoyancy_force, scalars_transport, scalars_deriv
+use scalars, only : theta, thetaF
 #endif
 
 use messages
@@ -589,6 +590,9 @@ call clock_convec%stop
             call wave2physF( w, wF )
             call wave2physF( txz, txzF )
             call wave2physF( tyz, tyzF )
+#ifdef PPSCALARS
+            call wave2physF( theta, thetaF )
+#endif
         endif
 
         ! Calculate rms divergence of velocity
