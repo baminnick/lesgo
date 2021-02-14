@@ -26,7 +26,6 @@ subroutine finalize()
 !
 use param, only : coord, lbc_mom
 use iwmles, only : iwm_finalize
-use tlwmles, only : tlwm_finalize
 #ifdef PPMPI
 use param, only : MPI_COMM_WORLD, ierr
 #endif
@@ -47,12 +46,6 @@ call turbines_finalize ()   ! must come before MPI finalize
 ! Integral wall model:
 if (lbc_mom == 3) then
     if (coord==0) call iwm_finalize()
-endif
-
-! Two layer wall model:
-if ((lbc_mom == 5) .or. (lbc_mom == 6) .or.                   &
-    (lbc_mom == 7) .or. (lbc_mom == 8)) then
-    if (coord==0) call tlwm_finalize()
 endif
 
 ! Actuator Turbine Model:

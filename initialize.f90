@@ -17,9 +17,9 @@
 !!  along with lesgo.  If not, see <http://www.gnu.org/licenses/>.
 !!
 
-!*******************************************************************************
+!******************************************************************************
 subroutine initialize()
-!*******************************************************************************
+!******************************************************************************
 !
 ! This subroutine is a driver that calls all top-level initialization
 ! subroutines.
@@ -29,7 +29,6 @@ use param, only : path
 use param, only : USE_MPI, coord, dt, jt_total, nsteps
 use param, only : use_cfl_dt, cfl, cfl_f, dt_dim, z_i, u_star
 use iwmles
-use tlwmles, only : tlwm_init
 use param, only : lbc_mom
 use param, only : fourier
 #ifdef PPMPI
@@ -71,6 +70,10 @@ use hit_inflow, only : initialize_HIT
 
 #ifdef PPATM
 use atm_lesgo_interface, only: atm_lesgo_initialize
+#endif
+
+#ifdef PPTLWMLES
+use tlwmles, only : tlwm_init
 #endif
 
 implicit none
@@ -128,12 +131,6 @@ endif
 !  Initialize variables used for output statistics and instantaneous data
 call output_init()
 
-! Initialize two layer wall model
-if ((lbc_mom == 5) .or. (lbc_mom == 6) .or.                        &
-    (lbc_mom == 7) .or. (lbc_mom == 8)) then
-    if (coord==0) call tlwm_init()
-endif
-
 ! Write simulation data to file
 if (coord == 0) call param_output()
 
@@ -157,6 +154,10 @@ call initialize_HIT()
 #ifdef PPLVLSET
 call level_set_base_init()
 call level_set_init ()
+#endif
+
+#ifdef PPTLWMLES
+call tlwm_init()
 #endif
 
 ! Formulate the fft plans--may want to use FFTW_USE_WISDOM

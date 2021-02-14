@@ -17,9 +17,9 @@
 !!  along with lesgo.  If not, see <http://www.gnu.org/licenses/>.
 !!
 
-!*******************************************************************************
+!*****************************************************************************
 module input_util
-!*******************************************************************************
+!*****************************************************************************
 use types, only : rprec
 use param, only : path, CHAR_BUFF_LENGTH
 implicit none
@@ -51,9 +51,9 @@ end interface
 
 contains
 
-!*******************************************************************************
+!******************************************************************************
 subroutine read_input_conf ()
-!*******************************************************************************
+!******************************************************************************
 use param
 use messages
 use string_util, only : eat_whitespace, uppercase
@@ -79,7 +79,7 @@ end if
 
 line = 0
 do
-    call readline( lun, line, buff, block_entry_pos, block_exit_pos,           &
+    call readline( lun, line, buff, block_entry_pos, block_exit_pos,         &
         equal_pos, ios )
 
     if (ios /= 0) exit
@@ -108,12 +108,16 @@ do
         case ('TURBINES')
             call turbines_block()
 #endif
+#ifdef PPTLWMLES
+        case ('TLWMLES')
+            call tlwmles_block()
+#endif
         case default
-            ! if (coord == 0) write(*,*) 'Found unused input block: '//          &
+            ! if (coord == 0) write(*,*) 'Found unused input block: '//      &
             !     buff(1:block_entry_pos-1)
             ! Now need to 'fast-forward' until we reach the end of the block
             do while ( block_exit_pos == 0 )
-                call readline( lun, line, buff, block_entry_pos,               &
+                call readline( lun, line, buff, block_entry_pos,             &
                     block_exit_pos, equal_pos, ios )
                 ! exit if end of file is reached
                 if (ios /= 0) exit
@@ -125,9 +129,9 @@ close (lun)
 
 contains
 
-!*******************************************************************************
+!******************************************************************************
 subroutine domain_block()
-!*******************************************************************************
+!******************************************************************************
 use types, only : rprec
 use param
 implicit none
@@ -139,7 +143,7 @@ integer :: np
 real(rprec) :: val_read
 
 do
-    call readline( lun, line, buff, block_entry_pos, block_exit_pos,           &
+    call readline( lun, line, buff, block_entry_pos, block_exit_pos,         &
         equal_pos, ios )
 
     if (ios /= 0) call error( sub_name, 'Bad read in block')
@@ -187,7 +191,7 @@ do
 #else
 ! check if run-time number of processes agrees with nproc parameter
         if (np /= nproc) then
-            call error(sub_name, 'Runtime number of procs = ', nproc,          &
+            call error(sub_name, 'Runtime number of procs = ', nproc,        &
                 ' is not equal to nproc = ', np)
         endif
 #endif
@@ -198,7 +202,7 @@ do
         ! Recompute nz_tot to be compliant with computed nz
         ival_read = nz_tot
         nz_tot = ( nz - 1 ) * nproc + 1
-        if (coord == 0 .AND. ival_read /= nz_tot )                             &
+        if (coord == 0 .AND. ival_read /= nz_tot )                           &
            write(*,*) 'Reseting Nz (total) to: ', nz_tot
 
         ! All grid size variables involving nx are changed later if:
@@ -221,13 +225,13 @@ do
             ! Adjust L_y
             val_read = L_y
             L_y = ny * dx
-            if (coord == 0 .AND. abs( val_read - L_y ) >= thresh)              &
+            if (coord == 0 .AND. abs( val_read - L_y ) >= thresh)            &
                 call mesg( sub_name, 'Reseting Ly to: ', L_y )
 
             ! Adjust L_z
             val_read = L_z
             L_z = (nz_tot - 1 ) * dx
-            if (coord == 0 .AND. abs( val_read - L_z ) >= thresh)              &
+            if (coord == 0 .AND. abs( val_read - L_z ) >= thresh)            &
                 call mesg( sub_name, 'Reseting Lz to: ', L_z )
         endif
 
@@ -237,23 +241,23 @@ do
 
         return
     else
-        call error( sub_name, block_name //                                    &
+        call error( sub_name, block_name //                                  &
             'data block not formatted correctly: ' // buff(1:equal_pos-1) )
     endif
 enddo
 
 end subroutine domain_block
 
-!*******************************************************************************
+!******************************************************************************
 subroutine model_block()
-!*******************************************************************************
+!******************************************************************************
 use param
 implicit none
 
 character(*), parameter :: block_name = 'MODEL'
 
 do
-    call readline( lun, line, buff, block_entry_pos, block_exit_pos,           &
+    call readline( lun, line, buff, block_entry_pos, block_exit_pos,         &
         equal_pos, ios )
 
     if (ios /= 0) call error( sub_name, 'Bad read in block')
@@ -359,7 +363,7 @@ do
 
         return
     else
-        call error( sub_name, block_name //                                    &
+        call error( sub_name, block_name //                                  &
             ' data block not formatted correctly: ' // buff(1:equal_pos-1) )
     endif
 
@@ -367,9 +371,9 @@ enddo
 
 end subroutine model_block
 
-!*******************************************************************************
+!******************************************************************************
 subroutine time_block()
-!*******************************************************************************
+!******************************************************************************
 use types, only : rprec
 use param
 implicit none
@@ -377,7 +381,7 @@ implicit none
 character(*), parameter :: block_name = 'TIME'
 
 do
-    call readline( lun, line, buff, block_entry_pos, block_exit_pos,           &
+    call readline( lun, line, buff, block_entry_pos, block_exit_pos,         &
         equal_pos, ios )
 
     if (ios /= 0) call error( sub_name, 'Bad read in block')
@@ -425,16 +429,16 @@ do
 
         return
     else
-        call error( sub_name, block_name //                                    &
+        call error( sub_name, block_name //                                  &
             ' data block not formatted correctly: ' // buff(1:equal_pos-1) )
     endif
 enddo
 
 end subroutine  time_block
 
-!*******************************************************************************
+!******************************************************************************
 subroutine flow_cond_block()
-!*******************************************************************************
+!******************************************************************************
 use param
 
 #ifdef PPHIT
@@ -449,7 +453,7 @@ character(*), parameter :: block_name = 'FLOW_COND'
 real(rprec) :: val_read
 
 do
-    call readline( lun, line, buff, block_entry_pos, block_exit_pos,           &
+    call readline( lun, line, buff, block_entry_pos, block_exit_pos,         &
         equal_pos, ios )
 
     if (ios /= 0) call error( sub_name, 'Bad read in block')
@@ -469,10 +473,6 @@ do
                 Read (buff(equal_pos+1:), *) lbc_mom
             case ('UBC_MOM')
                 Read (buff(equal_pos+1:), *) ubc_mom
-            case ('IHWM')
-                Read (buff(equal_pos+1:), *) ihwm
-            case ('TLWM_KXIN')
-                call parse_vector( buff(equal_pos+1:), tlwm_kxnum, tlwm_kxin )
             case ('UBOT')
                 Read (buff(equal_pos+1:), *) ubot
             case ('UTOP')
@@ -537,7 +537,7 @@ do
 #endif
 
             case default
-                ! if (coord == 0) write(*,*) 'Found unused data value in '       &
+                ! if (coord == 0) write(*,*) 'Found unused data value in '   &
                 !     // block_name // ' block: ' // buff(1:equal_pos-1)
         end select
     elseif (block_exit_pos == 1) then
@@ -556,23 +556,23 @@ do
         endif
         return
     else
-        call error( sub_name, block_name //                                    &
+        call error( sub_name, block_name //                                  &
         ' data block not formatted correctly: ' // buff(1:equal_pos-1) )
     endif
 enddo
 
 end subroutine  flow_cond_block
 
-!*******************************************************************************
+!******************************************************************************
 subroutine output_block()
-!*******************************************************************************
+!******************************************************************************
 use param
 implicit none
 
 character(*), parameter :: block_name = 'OUTPUT'
 
 do
-    call readline(lun, line, buff, block_entry_pos, block_exit_pos,            &
+    call readline(lun, line, buff, block_entry_pos, block_exit_pos,          &
         equal_pos, ios )
 
     if (ios /= 0) call error( sub_name, 'Bad read in block')
@@ -658,7 +658,7 @@ do
     elseif (block_exit_pos == 1 ) then
         return
     else
-        call error( sub_name, block_name //                                    &
+        call error( sub_name, block_name //                                  &
             ' data block not formatted correctly: ' // buff(1:equal_pos-1) )
     endif
 enddo
@@ -666,16 +666,16 @@ enddo
 end subroutine  output_block
 
 #ifdef PPLVLSET
-!*******************************************************************************
+!******************************************************************************
 subroutine level_set_block()
-!*******************************************************************************
+!******************************************************************************
 use level_set_base
 implicit none
 
 character(*), parameter :: block_name = 'LEVEL_SET'
 
 do
-    call readline( lun, line, buff, block_entry_pos, block_exit_pos,           &
+    call readline( lun, line, buff, block_entry_pos, block_exit_pos,         &
         equal_pos, ios )
 
     if (ios /= 0) call error( sub_name, 'Bad read in block')
@@ -733,13 +733,13 @@ do
                 read (buff(equal_pos+1:), *) nFMMbot
 #endif
             case default
-                ! if (coord == 0) write(*,*) 'Found unused data value in '       &
+                ! if (coord == 0) write(*,*) 'Found unused data value in '   &
                 !     // block_name // ' block: ' // buff(1:equal_pos-1)
         end select
     elseif( block_exit_pos == 1 ) then
         return
     else
-        call error( sub_name, block_name //                                    &
+        call error( sub_name, block_name //                                  &
             ' data block not formatted correctly: ' // buff(1:equal_pos-1) )
 
     endif
@@ -749,16 +749,16 @@ end subroutine  level_set_block
 #endif
 
 #ifdef PPTURBINES
-!*******************************************************************************
+!******************************************************************************
 subroutine turbines_block()
-!*******************************************************************************
+!******************************************************************************
 use turbines
 implicit none
 
 character(*), parameter :: block_name = 'TURBINES'
 
 do
-    call readline( lun, line, buff, block_entry_pos, block_exit_pos,           &
+    call readline( lun, line, buff, block_entry_pos, block_exit_pos,         &
         equal_pos, ios )
 
     if (ios /= 0) call error( sub_name, 'Bad read in block')
@@ -810,13 +810,13 @@ do
             case ('TBASE')
                 read (buff(equal_pos+1:), *) tbase
             case default
-                ! if (coord == 0) write(*,*) 'Found unused data value in '       &
+                ! if (coord == 0) write(*,*) 'Found unused data value in '   &
                 !     // block_name // ' block: ' // buff(1:equal_pos-1)
         end select
     elseif (block_exit_pos == 1) then
         return
     else
-        call error( sub_name, block_name //                                    &
+        call error( sub_name, block_name //                                  &
             ' data block not formatted correctly: ' // buff(1:equal_pos-1) )
     endif
 enddo
@@ -824,25 +824,89 @@ enddo
 end subroutine turbines_block
 #endif
 
-!*******************************************************************************
-subroutine checkentry()
-!*******************************************************************************
+#ifdef PPTLWMLES
+!*****************************************************************************
+subroutine tlwmles_block()
+!*****************************************************************************
+use tlwmles
 implicit none
 
-if( equal_pos == 0 ) call error( sub_name,                                     &
+character(*), parameter :: block_name = 'TLWMLES'
+integer :: ival_read
+
+do
+    call readline( lun, line, buff, block_entry_pos, block_exit_pos,       &
+        equal_pos, ios )
+
+    if (ios /= 0) call error( sub_name, 'Bad read in block')
+
+    if (block_exit_pos == 0) then
+
+        ! Check that the data entry conforms to correct format
+        call checkentry()
+
+        select case (uppercase(buff(1:equal_pos-1)))
+            case ('NXR')
+                read (buff(equal_pos+1:), *) nxr
+            case ('NYR')
+                read (buff(equal_pos+1:), *) nyr
+            case ('NZR')
+                read (buff(equal_pos+1:), *) nzr_tot
+            case ('JZ_R')
+                read (buff(equal_pos+1:), *) jz_r
+            case default
+                ! if (coord == 0) write(*,*) 'Found unused data value in '  &
+                !     // block_name // ' block: ' // buff(1:equal_pos-1)
+        end select
+    elseif (block_exit_pos == 1) then
+        ! Set the processor owned vertical grid spacing
+        nzr = floor ( real( nzr_tot, rprec ) / nproc ) + 1
+
+        ! Recompute nz_tot to be compliant with computed nz
+        ival_read = nzr_tot
+        nzr_tot = ( nzr - 1 ) * nproc + 1
+        if (coord == 0 .AND. ival_read /= nzr_tot )                         &
+           write(*,*) 'Reseting Nz (total) of TLWM to: ', nzr_tot
+
+        ! Grid spacing
+        dxr = L_x / nxr
+        dyr = L_y / nyr
+        ! Remember height of TLWM is based on jz_r
+        L_zr = (jz_r-1)*dz + (dz/2._rprec)
+        dzr = L_zr / ( nzr_tot - 0.5_rprec )
+        ! Note: dzr is defined differently here because 
+        ! zw = 0 at wall, zuv = hwm as LES BC, zw(end) = hwm-dz/2
+        ! The outer LESGO solver uses zw=0 at wall, zw=L_z (not zuv=L_z)
+
+        return
+    else
+        call error( sub_name, block_name //                                 &
+            ' data block not formatted correctly: ' // buff(1:equal_pos-1) )
+    endif
+enddo
+
+end subroutine tlwmles_block
+#endif
+
+!*****************************************************************************
+subroutine checkentry()
+!*****************************************************************************
+implicit none
+
+if( equal_pos == 0 ) call error( sub_name,                                   &
     'Bad read in block at line', line, ': ' // trim(adjustl(buff)))
 ! invalid if nothing after equals
-if (len_trim (buff) == equal_pos) call error (sub_name,                        &
+if (len_trim (buff) == equal_pos) call error (sub_name,                      &
     'nothing after equals sign in line', line)
 
 end subroutine checkentry
 
 end subroutine read_input_conf
 
-!*******************************************************************************
-subroutine readline(lun, line, buff, block_entry_pos,                          &
+!******************************************************************************
+subroutine readline(lun, line, buff, block_entry_pos,                        &
     block_exit_pos, equal_pos, ios )
-!*******************************************************************************
+!******************************************************************************
 !
 ! This subroutine reads the specified line and determines the attributes
 ! of the contents of the line.
@@ -880,9 +944,9 @@ enddo
 
 end subroutine readline
 
-!*******************************************************************************
+!******************************************************************************
 subroutine parse_vector_real( string, nelem, vector )
-!*******************************************************************************
+!******************************************************************************
 use types, only : rprec
 use messages
 use string_util, only : split_string
@@ -900,7 +964,7 @@ call split_string( string, delim_minor, nelem, svector )
 
 if (allocated( vector )) then
     ! Check that things are consistent
-    if (nelem /= size( vector ) ) call error(sub_name,                         &
+    if (nelem /= size( vector ) ) call error(sub_name,                       &
         'mismatch in element number and vector size')
 else
     ! Now allocate the output vector if not allocated
@@ -915,9 +979,9 @@ deallocate(svector)
 
 end subroutine parse_vector_real
 
-!*******************************************************************************
+!******************************************************************************
 subroutine parse_vector_point3D( string, nelem, vector )
-!*******************************************************************************
+!******************************************************************************
 use types, only : rprec, point3D_t
 use messages
 use string_util, only : split_string
@@ -940,7 +1004,7 @@ call split_string( string, delim_major, nelem, svector )
 
 if (allocated( vector )) then
     ! Check that things are consistent
-    if( nelem /= size( vector ) ) call error( sub_name,                        &
+    if( nelem /= size( vector ) ) call error( sub_name,                      &
         'mismatch in element number and vector size')
     else
     ! Now allocate the output vector if not allocated

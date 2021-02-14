@@ -17,9 +17,9 @@
 !!  along with lesgo.  If not, see <http://www.gnu.org/licenses/>.
 !!
 
-!*******************************************************************************
+!******************************************************************************
 program main
-!*******************************************************************************
+!******************************************************************************
 !
 ! Main file for lesgo solver
 ! Contains main time loop
@@ -71,6 +71,10 @@ use functions, only : x_avg
 
 #ifdef PPGQL
 use functions, only : gql_filter
+#endif
+
+#ifdef PPTLWMLES
+use tlwmles, only : tlwm_wallstress
 #endif
 
 use messages
@@ -238,6 +242,9 @@ time_loop: do jt_step = nstart, nsteps
     ! Calculate wall stress and derivatives at the wall
     ! (txz, tyz, dudz, dvdz at jz=1)
     ! MPI: bottom and top processes only
+#ifdef PPTLWMLES
+    call tlwm_wallstress()
+#else
     if (coord == 0) then
 #ifdef PPOUTPUT_CLOCK
         call clock_wm%start
@@ -253,6 +260,7 @@ time_loop: do jt_step = nstart, nsteps
         tyz_half2(1:nx,:,1) = tyz(1:nx,:,1)
 #endif
     endif
+#endif
     if (coord == nproc-1) then
         call wallstress()
 #ifdef PPCNDIFF

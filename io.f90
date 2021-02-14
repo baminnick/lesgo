@@ -2479,6 +2479,9 @@ use string_util, only : string_concat
 #if PPUSE_TURBINES
 use turbines, only : turbines_checkpoint
 #endif
+#ifdef PPTLWMLES
+use tlwmles, only : tlwm_checkpoint
+#endif
 
 ! HIT Inflow
 #ifdef PPHIT
@@ -2546,6 +2549,10 @@ end if
 
 #if PPUSE_TURBINES
 call turbines_checkpoint
+#endif
+
+#ifdef PPTLWMLES
+call tlwm_checkpoint
 #endif
 
 !  Update total_time.dat after simulation

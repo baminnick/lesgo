@@ -224,13 +224,6 @@ logical :: inilag = .true.
 integer :: lbc_mom = 1
 integer :: ubc_mom = 0
 
-! Inputs for All TLWMLES
-integer :: ihwm = 1
-
-! Inputs for RNL TLWMLES
-real(rprec), allocatable, dimension(:) :: tlwm_kxin
-integer :: tlwm_kxnum = 3
-
 ! Prescribe bottom and top wall streamwise velocity
 ! Only for DNS (sgs=.false.) and full channel (lbc_mom = ubc_mom = 1)
 real(rprec) :: ubot = 0.0_rprec   ! nondimensional
@@ -310,5 +303,16 @@ logical :: zplane_calc=.false.
 integer :: zplane_nstart=10000, zplane_nend=50000, zplane_nskip=10000
 integer :: zplane_nloc=1
 real(rprec), allocatable, dimension(:) :: zplane_loc
+
+!---------------------------------------------------
+! TLWMLES PARAMETERS
+!---------------------------------------------------
+! Domain parameters
+integer :: nxr = 64
+integer :: nyr = 64
+integer :: nzr = 64
+integer :: nzr_tot = 64
+integer :: jz_r = 1
+real(rprec) :: dxr, dyr, dzr, L_zr
 
 end module param

@@ -17,9 +17,9 @@
 !!  along with lesgo.  If not, see <http://www.gnu.org/licenses/>.
 !!
 
-!*******************************************************************************
+!******************************************************************************
 ! fftw 3.X version
-!*******************************************************************************
+!******************************************************************************
 module fft
 use types, only : rprec
 use param, only : ld, lh, ny, ld_big, ny2
@@ -36,14 +36,23 @@ public :: forw_x, back_x, forw_y, forw_x_fourier
 public :: forw_fourier, back_fourier
 public :: ycomp_forw_big, ycomp_back_big
 public :: ycomp_forw, ycomp_back
+#ifdef PPTLWMLES
+public :: wm_forw, wm_back, wm_forw_big, wm_back_big
+#endif
 
 real(rprec), allocatable, dimension(:,:) :: kx, ky, k2
+#ifdef PPTLWMLES
+real(rprec), allocatable, dimension(:,:) :: kxr, kyr, k2r
+#endif
 
 integer*8 :: forw, back, forw_big, back_big
 integer*8 :: forw_x, back_x, forw_y, forw_x_fourier
 integer*8 :: forw_fourier, back_fourier
 integer*8 :: ycomp_forw_big, ycomp_back_big
 integer*8 :: ycomp_forw, ycomp_back
+#ifdef PPTLWMLES
+integer*8 :: wm_forw, wm_back, wm_forw_big, wm_back_big
+#endif
 
 real (rprec), dimension (:, :), allocatable :: data, data_big
 
@@ -56,11 +65,15 @@ complex (rprec), dimension(:), allocatable :: ycomp_data_big
 
 complex (rprec), dimension(:), allocatable :: ycomp_data
 
+#ifdef PPTLWMLES
+real(rprec), dimension(:,:), allocatable :: wm_data, wm_data_big
+#endif
+
 contains
 
-!*******************************************************************************
+!******************************************************************************
 subroutine padd (u_big,u)
-!*******************************************************************************
+!******************************************************************************
 ! puts arrays into larger, zero-padded arrays
 ! automatically zeroes the oddballs
 use types, only : rprec
@@ -89,9 +102,9 @@ u_big(:nx,j_big_s:ny2) = u(:nx,j_s:ny)
 
 end subroutine padd
 
-!*******************************************************************************
+!******************************************************************************
 subroutine unpadd(cc,cc_big)
-!*******************************************************************************
+!******************************************************************************
 use types, only : rprec
 use param, only : ld,nx,ny,ny2,ld_big
 implicit none
@@ -117,10 +130,13 @@ cc(:nx,j_s:ny) = cc_big(:nx,j_big_s:ny2)
 
 end subroutine unpadd
 
-!*******************************************************************************
+!******************************************************************************
 subroutine init_fft()
-!*******************************************************************************
+!******************************************************************************
 use param, only : nx, ny, nx2, ny2, nxp
+#ifdef PPTLWMLES
+use param, only : nxr, nyr
+#endif
 implicit none
 
 ! Allocate temporary arrays for creating the FFTW plans
@@ -140,41 +156,57 @@ allocate( ycomp_data_big(ny2) ) !! complex stored as real
 
 allocate( ycomp_data(ny) ) !! complex stored as real
 
+#ifdef PPTLWMLES
+allocate( wm_data(nxr+2,nyr) )
+allocate( wm_data_big(3*nxr/2+2, 3*nyr/2) )
+#endif
+
 ! Create the forward and backward plans for the unpadded and padded
 ! domains. Notice we are using FFTW_UNALIGNED since the arrays used will not be
 ! guaranteed to be memory aligned.
-call dfftw_plan_dft_r2c_2d(forw, nx, ny, data,                                 &
+call dfftw_plan_dft_r2c_2d(forw, nx, ny, data,                               &
     data, FFTW_PATIENT, FFTW_UNALIGNED)
-call dfftw_plan_dft_c2r_2d(back, nx, ny, data,                                 &
+call dfftw_plan_dft_c2r_2d(back, nx, ny, data,                               &
     data, FFTW_PATIENT, FFTW_UNALIGNED)
-call dfftw_plan_dft_r2c_2d(forw_big, nx2, ny2, data_big,                       &
+call dfftw_plan_dft_r2c_2d(forw_big, nx2, ny2, data_big,                     &
     data_big, FFTW_PATIENT, FFTW_UNALIGNED)
-call dfftw_plan_dft_c2r_2d(back_big, nx2, ny2, data_big,                       &
+call dfftw_plan_dft_c2r_2d(back_big, nx2, ny2, data_big,                     &
     data_big, FFTW_PATIENT, FFTW_UNALIGNED)
 
-call dfftw_plan_dft_r2c_1d(forw_x, nx, data_x_in,                              &
+call dfftw_plan_dft_r2c_1d(forw_x, nx, data_x_in,                            &
     data_x_out, FFTW_PATIENT, FFTW_UNALIGNED)
-call dfftw_plan_dft_c2r_1d(back_x, nx, data_x_out,                             &
+call dfftw_plan_dft_c2r_1d(back_x, nx, data_x_out,                           &
     data_x_in, FFTW_PATIENT, FFTW_UNALIGNED)
-call dfftw_plan_dft_r2c_1d(forw_y, ny, data_y_in,                              &
+call dfftw_plan_dft_r2c_1d(forw_y, ny, data_y_in,                            &
     data_y_out, FFTW_PATIENT, FFTW_UNALIGNED)
-call dfftw_plan_dft_r2c_1d(forw_x_fourier, nxp, data_x_fourier_in,             &
+call dfftw_plan_dft_r2c_1d(forw_x_fourier, nxp, data_x_fourier_in,           &
     data_x_fourier_out, FFTW_PATIENT, FFTW_UNALIGNED)
 
-call dfftw_plan_dft_r2c_2d(forw_fourier, nxp, ny, data_fourier,                &
+call dfftw_plan_dft_r2c_2d(forw_fourier, nxp, ny, data_fourier,              &
     data_fourier, FFTW_PATIENT, FFTW_UNALIGNED)
-call dfftw_plan_dft_c2r_2d(back_fourier, nxp, ny, data_fourier,                &
+call dfftw_plan_dft_c2r_2d(back_fourier, nxp, ny, data_fourier,              &
     data_fourier, FFTW_PATIENT, FFTW_UNALIGNED)
 
-call dfftw_plan_dft_1d(ycomp_forw_big, ny2, ycomp_data_big,                    &
+call dfftw_plan_dft_1d(ycomp_forw_big, ny2, ycomp_data_big,                  &
     ycomp_data_big, FFTW_FORWARD, FFTW_PATIENT, FFTW_UNALIGNED)
-call dfftw_plan_dft_1d(ycomp_back_big, ny2, ycomp_data_big,                    &
+call dfftw_plan_dft_1d(ycomp_back_big, ny2, ycomp_data_big,                  &
     ycomp_data_big, FFTW_BACKWARD, FFTW_PATIENT, FFTW_UNALIGNED)
 
-call dfftw_plan_dft_1d(ycomp_forw, ny, ycomp_data,                             &
+call dfftw_plan_dft_1d(ycomp_forw, ny, ycomp_data,                           &
     ycomp_data, FFTW_FORWARD, FFTW_PATIENT, FFTW_UNALIGNED)
-call dfftw_plan_dft_1d(ycomp_back, ny, ycomp_data,                             &
+call dfftw_plan_dft_1d(ycomp_back, ny, ycomp_data,                           &
     ycomp_data, FFTW_BACKWARD, FFTW_PATIENT, FFTW_UNALIGNED)
+
+#ifdef PPTLWMLES
+call dfftw_plan_dft_r2c_2d(wm_forw, nxr, nyr, wm_data,                       &
+    wm_data, FFTW_PATIENT, FFTW_UNALIGNED)
+call dfftw_plan_dft_c2r_2d(wm_back, nxr, nyr, wm_data,                       &
+    wm_data, FFTW_PATIENT, FFTW_UNALIGNED)
+call dfftw_plan_dft_r2c_2d(wm_forw_big, 3*nxr/2, 3*nyr/2, wm_data_big,       &
+    wm_data_big, FFTW_PATIENT, FFTW_UNALIGNED)
+call dfftw_plan_dft_c2r_2d(wm_back_big, 3*nxr/2, 3*nyr/2, wm_data_big,       &
+    wm_data_big, FFTW_PATIENT, FFTW_UNALIGNED)
+#endif
 
 deallocate(data)
 deallocate(data_big)
@@ -193,19 +225,30 @@ deallocate(ycomp_data_big)
 
 deallocate(ycomp_data)
 
+#ifdef PPTLWMLES
+deallocate(wm_data)
+deallocate(wm_data_big)
+#endif
+
 call init_wavenumber()
 end subroutine init_fft
 
-!*******************************************************************************
+!******************************************************************************
 subroutine init_wavenumber()
-!*******************************************************************************
+!******************************************************************************
 use param, only : lh, ny, L_x, L_y, pi
 use param, only : kxs_in, fourier, kx_num, coord
+#ifdef PPTLWMLES
+use param, only : nxr, nyr
+#endif
 implicit none
 integer :: jx, jy
 
 ! Allocate wavenumbers
 allocate( kx(lh,ny), ky(lh,ny), k2(lh,ny) )
+#ifdef PPTLWMLES
+allocate( kxr(nxr/2+1,nyr), kyr(nxr/2+1,nyr), k2r(nxr/2+1,nyr) )
+#endif
 
 do jx = 1, lh-1
     kx(jx,:) = real(jx-1,kind=rprec)
@@ -233,6 +276,29 @@ ky = 2._rprec*pi/L_y*ky
 
 ! magnitude squared: will have 0's around the edge
 k2 = kx*kx + ky*ky
+
+#ifdef PPTLWMLES
+do jx = 1, nxr/2
+    kxr(jx,:) = real(jx-1,kind=rprec)
+end do
+
+do jy = 1, nyr
+    kyr(:,jy) = real(modulo(jy - 1 + nyr/2,nyr) - nyr/2,kind=rprec)
+end do
+
+! Nyquist: makes doing derivatives easier
+kxr(nxr/2+1,:) = 0._rprec
+kyr(nxr/2+1,:) = 0._rprec
+kxr(:,nyr/2+1) = 0._rprec
+kyr(:,nyr/2+1) = 0._rprec
+
+! for the aspect ratio change
+kxr = 2._rprec*pi/L_x*kxr
+kyr = 2._rprec*pi/L_y*kyr
+
+! magnitude squared: will have 0's around the edge
+k2r = kxr*kxr + kyr*kyr
+#endif
 
 if ((coord == 0) .and. fourier) then
     write(*,*) '>>>>>>>>>>>>>>>>>>>>>>>>>>>'
