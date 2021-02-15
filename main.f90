@@ -253,14 +253,18 @@ time_loop: do jt_step = nstart, nsteps
 #ifdef PPOUTPUT_CLOCK
         call clock_wm%stop
 #endif
+    endif
+#endif
+
 
 #ifdef PPCNDIFF
+    if (coord == 0) then
         ! Add boundary condition to explicit portion
         txz_half2(1:nx,:,1) = txz(1:nx,:,1)
         tyz_half2(1:nx,:,1) = tyz(1:nx,:,1)
-#endif
     endif
 #endif
+
     if (coord == nproc-1) then
         call wallstress()
 #ifdef PPCNDIFF
