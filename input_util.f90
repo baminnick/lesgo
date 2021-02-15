@@ -854,6 +854,10 @@ do
                 read (buff(equal_pos+1:), *) nzr_tot
             case ('JZ_R')
                 read (buff(equal_pos+1:), *) jz_r
+            case ('STR_ON')
+                read (buff(equal_pos+1:), *) str_on
+            case ('STR_R')
+                read (buff(equal_pos+1:), *) str_r
             case default
                 ! if (coord == 0) write(*,*) 'Found unused data value in '  &
                 !     // block_name // ' block: ' // buff(1:equal_pos-1)

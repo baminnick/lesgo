@@ -51,7 +51,7 @@ real(rprec), dimension(:,:,:), allocatable :: ur_big, vr_big, wr_big,   &
     temp_big
 
 ! Grid variables
-real(rprec), dimension(:), allocatable :: zr, zwr
+real(rprec), dimension(:), allocatable :: zuvr, zwr, jaco_uvr, jaco_wr
 
 ! Whether to initialize tlwm field
 logical, public :: init_tlwm = .true.
@@ -123,7 +123,11 @@ allocate ( dwdzr_big(3*nxr/2 + 2, 3*nyr/2, lbz:nzr) ); dwdzr_big = 0._rprec
 allocate ( temp_big(3*nxr/2 + 2, 3*nyr/2, lbz:nzr) ); temp_big = 0._rprec
 
 ! Create TLWM inner layer wall-normal grid
-call tlwm_grid()
+if (str_on) then
+    call tlwm_grid_stretched()
+else
+    call tlwm_grid_uniform()
+endif
 
 ! Additional TLWMLES Variables
 
@@ -206,25 +210,91 @@ end if
 end subroutine tlwm_wallstress
 
 !*****************************************************************************
-subroutine tlwm_grid
+subroutine tlwm_grid_uniform
 !*****************************************************************************
 !
-! This subroutine creates the inner-layer wall-normal grid for the uv and w
-! variables for the TLWM.
+! This subroutine creates a inner-layer wall-normal uniform grid for the 
+! uv and w variables for the TLWM.
 !
 use param, only : nzr, dzr, lbz, coord
 implicit none
 integer :: jz
 
-allocate(zr(lbz:nzr), zwr(lbz:nzr))
+allocate(zuvr(lbz:nzr), zwr(lbz:nzr), jaco_uvr(lbz:nzr), jaco_wr(lbz:nzr))
+
 
 do jz = lbz, nzr
-    zr(jz) = (coord*(nzr-1) + jz - 0.5_rprec) * dzr
+    zuvr(jz) = (coord*(nzr-1) + jz - 0.5_rprec) * dzr
 enddo
 
-zwr = zr - dzr/2._rprec
+zwr = zuvr - dzr/2._rprec
 
-end subroutine tlwm_grid
+! Define Jacobian values as 1, no stretching
+jaco_uvr(:) = 1._rprec
+jaco_wr(:) = 1._rprec
+
+end subroutine tlwm_grid_uniform
+
+!*****************************************************************************
+subroutine tlwm_grid_stretched
+!*****************************************************************************
+!
+! This subroutine creates a inner-layer wall-normal stretched grid for the 
+! uv and w variables for the TLWM. This is done in a similar fashion to
+! what is done in load_jacobian.f90, where a uniform grid is mapped to the
+! stretched grid.
+!
+use param, only : nzr, nzr_tot, dzr, lbz, coord, str_r, L_zr
+implicit none
+integer :: jz
+real(rprec), dimension(nzr_tot) :: z_w, z_uv, f1, f2, f3, f4 !! temp grid variables
+
+allocate(zuvr(lbz:nzr), zwr(lbz:nzr), jaco_uvr(lbz:nzr), jaco_wr(lbz:nzr))
+
+! Create unstretched grid to be mapped to new grid
+! NOTE: using nzr_tot here
+do jz = 1, nzr_tot
+    z_uv(jz) = (jz-0.5_rprec)*dzr !! z-locations on uv-grid
+enddo
+z_w(:) = z_uv(:) - dzr/2._rprec !! z-locations on w-grid
+
+! Mapped to stretched grid
+! For the uv-grid
+f3(:) = L_zr*(1.0_rprec+(tanh(str_r*(z_uv(:)/L_zr-1.0_rprec)) &
+    /tanh(str_r)))
+! For the w-grid
+f4(:) = L_zr*(1.0_rprec+(tanh(str_r*(z_w(:)/L_zr-1.0_rprec))  &
+    /tanh(str_r)))
+
+! Compute Jacobian values for both w- and uv-grids
+! Using analytical derivative expression
+f1(:) = L_zr*(str_r/L_zr)*                                 &
+    (1-(tanh(str_r*(z_w(:)/L_zr-1)))**2)/tanh(str_r)
+f2(:) = L_zr*(str_r/L_zr)*                                 &
+    (1-(tanh(str_r*(z_uv(:)/L_zr-1)))**2)/tanh(str_r)
+
+! Store variables into what TLWM will use
+do jz = 1, nzr
+    jaco_wr(jz) = f1(coord*(nzr-1)+jz)
+    jaco_uvr(jz) = f2(coord*(nzr-1)+jz)
+    zuvr(jz) = f3(coord*(nzr-1)+jz)
+    zwr(jz) = f4(coord*(nzr-1)+jz)
+enddo
+
+if (coord == 0) then
+    jaco_wr(lbz) = jaco_wr(1)
+    jaco_uvr(lbz) = jaco_uvr(1)
+    zuvr(lbz) = -zuvr(1)
+    zwr(lbz) = - zwr(lbz)
+    write(*,*) '--> Inner-layer grid stretched using mapping function'
+else
+    jaco_wr(lbz) = f1((coord-1)*(nzr-1)+nzr-1)
+    jaco_uvr(lbz) = f2((coord-1)*(nzr-1)+nzr-1)
+    zuvr(lbz) = f3((coord-1)*(nzr-1)+nzr-1)
+    zwr(lbz) = f4((coord-1)*(nzr-1)+nzr-1)
+endif
+
+end subroutine tlwm_grid_stretched
 
 !*****************************************************************************
 subroutine ic_tlwm
@@ -287,12 +357,12 @@ read(12) ur(:,:,1:nzr), vr(:,:,1:nzr), wr(:,:,1:nzr),           &
 close(12)
 
 #ifdef PPMPI
-call mpi_sync_real_array(ur, 0, MPI_SYNC_DOWNUP)
-call mpi_sync_real_array(vr, 0, MPI_SYNC_DOWNUP)
-call mpi_sync_real_array(wr, 0, MPI_SYNC_DOWNUP)
-call mpi_sync_real_array(rhs_xr, 0, MPI_SYNC_DOWNUP)
-call mpi_sync_real_array(rhs_yr, 0, MPI_SYNC_DOWNUP)
-call mpi_sync_real_array(rhs_zr, 0, MPI_SYNC_DOWNUP)
+!call mpi_sync_real_array(ur, 0, MPI_SYNC_DOWNUP)
+!call mpi_sync_real_array(vr, 0, MPI_SYNC_DOWNUP)
+!call mpi_sync_real_array(wr, 0, MPI_SYNC_DOWNUP)
+!call mpi_sync_real_array(rhs_xr, 0, MPI_SYNC_DOWNUP)
+!call mpi_sync_real_array(rhs_yr, 0, MPI_SYNC_DOWNUP)
+!call mpi_sync_real_array(rhs_zr, 0, MPI_SYNC_DOWNUP)
 #endif
 
 end subroutine ic_tlwm_file
@@ -453,8 +523,10 @@ real(rprec), dimension(nx,ny) :: dummy_out
 do jy = 1, nyr
 do jx = 1, nxr
     ! This is at it is in wallstress.f90/ws_dns_lbc
-    dudzr(jx,jy,1) = ( ur(jx,jy,1) - ubot ) / (0.5_rprec*dzr)
-    dvdzr(jx,jy,1) = vr(jx,jy,1) / (0.5_rprec*dzr) !! vbot = 0
+!    dudzr(jx,jy,1) = ( ur(jx,jy,1) - ubot ) / (0.5_rprec*dzr)
+!    dvdzr(jx,jy,1) = vr(jx,jy,1) / (0.5_rprec*dzr) !! vbot = 0
+    dudzr(jx,jy,1) = ( ur(jx,jy,1) - ubot ) / zuvr(1)
+    dvdzr(jx,jy,1) = vr(jx,jy,1) / zuvr(1) !! vbot = 0
     txzr(jx,jy,1) = -nu_molec/(z_i*u_star)*dudzr(jx,jy,1)
     tyzr(jx,jy,1) = -nu_molec/(z_i*u_star)*dvdzr(jx,jy,1)
 enddo
@@ -498,7 +570,7 @@ subroutine tlwm_eq_solve
 ! used to invert the resulting matrix equation.
 ! 
 use messages
-use param, only : nxr, nyr, nzr, nu_molec, z_i, ubot, u_star, jt_total, dzr
+use param, only : nxr, nyr, nzr, nu_molec, z_i, ubot, u_star, jt_total, dzr, L_zr
 use param, only : coord, nproc
 #ifdef PPSAFETYMODE
 use param, only : BOGUS
@@ -510,7 +582,10 @@ real(rprec) :: const1
 real(rprec), dimension(nxr,nyr,0:nzr) :: a, b, c
 real(rprec), dimension(nxr+2,nyr,0:nzr) :: Rx, usol, Ry, vsol
 
-const1 = 1._rprec/(dzr**2)
+!const1 = 1._rprec/(dzr**2)
+const1 = 1._rprec/dzr
+! Commented out old code for uniform grid which used const1=1/(dzr**2)
+! Now using stretched grid with Jacobians
 
 ! Find constant ustar for wall model eddy viscosity
 ! 1. Take the average of previous timesteps tau value
@@ -538,9 +613,18 @@ if (coord == 0) then
     do jx = 1, nxr
         !! Coefficients are different on bottom row because using one-sided
         !! finite difference at wall, also nu_t(z=0)=0
-        b(jx,jy,1) = -const1*((nu_r(jx,jy,2)+nu_molec)+(nu_molec/0.5_rprec))
-        c(jx,jy,1) = const1*(nu_r(jx,jy,2)+nu_molec)
-        Rx(jx,jy,1) = Rx(jx,jy,1) - const1*(nu_molec/0.5_rprec)*ubot
+        !b(jx,jy,1) = -const1*((nu_r(jx,jy,2)+nu_molec)+(nu_molec/0.5_rprec))
+        !c(jx,jy,1) = const1*(nu_r(jx,jy,2)+nu_molec)
+        !Rx(jx,jy,1) = Rx(jx,jy,1) - const1*(nu_molec/0.5_rprec)*ubot
+        !Ry(jx,jy,1) = Ry(jx,jy,1) !! vbot = 0
+
+        b(jx,jy,1) = -const1*(1._rprec/jaco_uvr(1))*                        &
+            (const1*(nu_r(jx,jy,2)+nu_molec)/jaco_wr(2) + nu_molec/zuvr(1))
+        c(jx,jy,1) = const1*(1._rprec/jaco_uvr(1))*                         &
+            const1*(nu_r(jx,jy,2)+nu_molec)/jaco_wr(2)
+
+        Rx(jx,jy,1) = Rx(jx,jy,1) - const1*(1._rprec/jaco_uvr(1))*          &
+            (nu_molec/zuvr(1))*ubot
         Ry(jx,jy,1) = Ry(jx,jy,1) !! vbot = 0
     enddo
     enddo
@@ -556,11 +640,23 @@ if (coord == nproc-1) then
 #endif
     do jy = 1, nyr
     do jx = 1, nxr
-        a(jx,jy,nzr-1) = const1*(nu_r(jx,jy,nzr-1)+nu_molec)
-        b(jx,jy,nzr-1) = -const1*(nu_r(jx,jy,nzr)+nu_r(jx,jy,nzr-1)+2._rprec*nu_molec)
+        !a(jx,jy,nzr-1) = const1*(nu_r(jx,jy,nzr-1)+nu_molec)
+        !b(jx,jy,nzr-1) = -const1*(nu_r(jx,jy,nzr)+nu_r(jx,jy,nzr-1)+2._rprec*nu_molec)
         !! interpolated/filtered LES velocity as upper BC
-        Rx(jx,jy,nzr-1) = Rx(jx,jy,nzr-1) - const1*(nu_r(jx,jy,nzr)+nu_molec)*ur(jx,jy,nzr)
-        Ry(jx,jy,nzr-1) = Ry(jx,jy,nzr-1) - const1*(nu_r(jx,jy,nzr)+nu_molec)*vr(jx,jy,nzr)
+        !Rx(jx,jy,nzr-1) = Rx(jx,jy,nzr-1) - const1*(nu_r(jx,jy,nzr)+nu_molec)*ur(jx,jy,nzr)
+        !Ry(jx,jy,nzr-1) = Ry(jx,jy,nzr-1) - const1*(nu_r(jx,jy,nzr)+nu_molec)*vr(jx,jy,nzr)
+
+        a(jx,jy,nzr-1) = const1*(1._rprec/jaco_uvr(nzr-1))*                 &
+            const1*(nu_r(jx,jy,nzr-1)+nu_molec)/jaco_wr(nzr-1)
+        b(jx,jy,nzr-1) = -const1*(1._rprec/jaco_uvr(nzr-1))*                &
+            (const1*(nu_r(jx,jy,nzr-1)+nu_molec)/jaco_wr(nzr-1) +           &
+            (nu_r(jx,jy,nzr)+nu_molec)/(L_zr-zwr(nzr)))
+
+        !! interpolated/filtered LES velocity as upper BC
+        Rx(jx,jy,nzr-1) = Rx(jx,jy,nzr-1) - const1*(1._rprec/jaco_uvr(nzr-1))*   &
+            ((nu_r(jx,jy,nzr)+nu_molec)/(L_zr-zwr(nzr)))*ur(jx,jy,nzr)
+        Rx(jx,jy,nzr-1) = Rx(jx,jy,nzr-1) - const1*(1._rprec/jaco_uvr(nzr-1))*   &
+            ((nu_r(jx,jy,nzr)+nu_molec)/(L_zr-zwr(nzr)))*vr(jx,jy,nzr)
     enddo
     enddo
     jz_max = nzr-2
@@ -572,9 +668,17 @@ endif
 do jz = jz_min, jz_max
 do jy = 1, nyr
 do jx = 1, nxr
-    a(jx,jy,jz) = const1*(nu_r(jx,jy,jz-1)+nu_molec)
-    b(jx,jy,jz) = -const1*(nu_r(jx,jy,jz)+nu_r(jx,jy,jz-1)+2._rprec*nu_molec)
-    c(jx,jy,jz) = const1*(nu_r(jx,jy,jz)+nu_molec)
+    !a(jx,jy,jz) = const1*(nu_r(jx,jy,jz)+nu_molec)
+    !b(jx,jy,jz) = -const1*(nu_r(jx,jy,jz+1)+nu_r(jx,jy,jz)+2._rprec*nu_molec)
+    !c(jx,jy,jz) = const1*(nu_r(jx,jy,jz+1)+nu_molec)
+
+    a(jx,jy,jz) = const1*(1._rprec/jaco_uvr(jz))*                         &
+        const1*(nu_r(jx,jy,jz)+nu_molec)/jaco_wr(jz)
+    b(jx,jy,jz) = -const1*(1._rprec/jaco_uvr(jz))*                        &
+        (const1*(nu_r(jx,jy,jz+1)+nu_molec)/jaco_wr(jz+1) +               &
+        const1*(nu_r(jx,jy,jz)+nu_molec)/jaco_wr(jz))
+    c(jx,jy,jz) = const1*(1._rprec/jaco_uvr(jz))*                         &
+        const1*(nu_r(jx,jy,jz+1)+nu_molec)/jaco_wr(jz+1)
 enddo
 enddo
 enddo

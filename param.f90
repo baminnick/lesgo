@@ -314,5 +314,7 @@ integer :: nzr = 64
 integer :: nzr_tot = 64
 integer :: jz_r = 1
 real(rprec) :: dxr, dyr, dzr, L_zr
+logical :: str_on = .false.
+real(rprec) :: str_r = 1.25
 
 end module param
