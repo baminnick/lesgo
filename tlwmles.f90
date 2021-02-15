@@ -571,13 +571,14 @@ subroutine tlwm_eq_solve
 ! 
 use messages
 use param, only : nxr, nyr, nzr, nu_molec, z_i, ubot, u_star, jt_total, dzr, L_zr
-use param, only : coord, nproc
+use param, only : coord, nproc, comm, ierr, MPI_RPREC
 #ifdef PPSAFETYMODE
 use param, only : BOGUS
 #endif
+use mpi
 implicit none
 integer :: jx, jy, jz, jz_min, jz_max
-real(rprec), dimension(nxr, nyr) :: ustar
+real(rprec), dimension(nxr, nyr) :: ustar, dummy
 real(rprec) :: const1
 real(rprec), dimension(nxr,nyr,0:nzr) :: a, b, c
 real(rprec), dimension(nxr+2,nyr,0:nzr) :: Rx, usol, Ry, vsol
@@ -587,15 +588,24 @@ const1 = 1._rprec/dzr
 ! Commented out old code for uniform grid which used const1=1/(dzr**2)
 ! Now using stretched grid with Jacobians
 
-! Find constant ustar for wall model eddy viscosity
-! 1. Take the average of previous timesteps tau value
+! Find ustar for wall model eddy viscosity
+! 1. Use wall-stress value
 if (jt_total > 1) then
-    ustar = sqrt(abs(txzr(1:nxr,1:nyr,1)) + abs(tyzr(1:nxr,1:nyr,1)))
-else !! first time-step, should use nonzero ustar
+    ! Compute wall-stress on only bottom coord
+    if (coord == 0) then
+        ustar = sqrt(abs(txzr(1:nxr,1:nyr,1)) + abs(tyzr(1:nxr,1:nyr,1)))
+    else
+        ustar = 0._rprec
+    endif
+    ! Send wall-stress to all coords
+    call mpi_allreduce(ustar, dummy, nxr*nyr, mpi_rprec,                  &
+        MPI_SUM, comm, ierr)
+    ustar = dummy
+else !! first time-step, use assumed nonzero ustar
     ustar = u_star
-end if
+endif
 ! 2. Use constant value specified by user - only for debugging
-!ustar = u_star 
+! ustar = u_star
 
 ! Compute eddy viscosity values on inner layer grid
 call wm_eddyvisc(ustar)
