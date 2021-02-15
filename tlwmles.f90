@@ -635,7 +635,7 @@ if (coord == 0) then
 
         Rx(jx,jy,1) = Rx(jx,jy,1) - const1*(1._rprec/jaco_uvr(1))*          &
             (nu_molec/zuvr(1))*ubot
-        Ry(jx,jy,1) = Ry(jx,jy,1) !! vbot = 0
+        ! Ry(jx,jy,1) = Ry(jx,jy,1) !! vbot = 0, so do nothing
     enddo
     enddo
     jz_min = 2
@@ -665,7 +665,7 @@ if (coord == nproc-1) then
         !! interpolated/filtered LES velocity as upper BC
         Rx(jx,jy,nzr-1) = Rx(jx,jy,nzr-1) - const1*(1._rprec/jaco_uvr(nzr-1))*   &
             ((nu_r(jx,jy,nzr)+nu_molec)/(L_zr-zwr(nzr)))*ur(jx,jy,nzr)
-        Rx(jx,jy,nzr-1) = Rx(jx,jy,nzr-1) - const1*(1._rprec/jaco_uvr(nzr-1))*   &
+        Ry(jx,jy,nzr-1) = Ry(jx,jy,nzr-1) - const1*(1._rprec/jaco_uvr(nzr-1))*   &
             ((nu_r(jx,jy,nzr)+nu_molec)/(L_zr-zwr(nzr)))*vr(jx,jy,nzr)
     enddo
     enddo
