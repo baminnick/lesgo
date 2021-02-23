@@ -858,6 +858,8 @@ do
                 read (buff(equal_pos+1:), *) str_on
             case ('STR_R')
                 read (buff(equal_pos+1:), *) str_r
+            case ('WM_COUNT')
+                read (buff(equal_pos+1:), *) wm_count
             case default
                 ! if (coord == 0) write(*,*) 'Found unused data value in '  &
                 !     // block_name // ' block: ' // buff(1:equal_pos-1)

@@ -37,7 +37,7 @@ public :: forw_fourier, back_fourier
 public :: ycomp_forw_big, ycomp_back_big
 public :: ycomp_forw, ycomp_back
 #ifdef PPTLWMLES
-public :: wm_forw, wm_back, wm_forw_big, wm_back_big
+public :: tlwm_forw, tlwm_back, tlwm_forw_big, tlwm_back_big
 #endif
 
 real(rprec), allocatable, dimension(:,:) :: kx, ky, k2
@@ -51,7 +51,7 @@ integer*8 :: forw_fourier, back_fourier
 integer*8 :: ycomp_forw_big, ycomp_back_big
 integer*8 :: ycomp_forw, ycomp_back
 #ifdef PPTLWMLES
-integer*8 :: wm_forw, wm_back, wm_forw_big, wm_back_big
+integer*8 :: tlwm_forw, tlwm_back, tlwm_forw_big, tlwm_back_big
 #endif
 
 real (rprec), dimension (:, :), allocatable :: data, data_big
@@ -66,7 +66,7 @@ complex (rprec), dimension(:), allocatable :: ycomp_data_big
 complex (rprec), dimension(:), allocatable :: ycomp_data
 
 #ifdef PPTLWMLES
-real(rprec), dimension(:,:), allocatable :: wm_data, wm_data_big
+real(rprec), dimension(:,:), allocatable :: tlwm_data, tlwm_data_big
 #endif
 
 contains
@@ -157,8 +157,8 @@ allocate( ycomp_data_big(ny2) ) !! complex stored as real
 allocate( ycomp_data(ny) ) !! complex stored as real
 
 #ifdef PPTLWMLES
-allocate( wm_data(nxr+2,nyr) )
-allocate( wm_data_big(3*nxr/2+2, 3*nyr/2) )
+allocate( tlwm_data(nxr+2,nyr) )
+allocate( tlwm_data_big(3*nxr/2+2, 3*nyr/2) )
 #endif
 
 ! Create the forward and backward plans for the unpadded and padded
@@ -198,14 +198,14 @@ call dfftw_plan_dft_1d(ycomp_back, ny, ycomp_data,                           &
     ycomp_data, FFTW_BACKWARD, FFTW_PATIENT, FFTW_UNALIGNED)
 
 #ifdef PPTLWMLES
-call dfftw_plan_dft_r2c_2d(wm_forw, nxr, nyr, wm_data,                       &
-    wm_data, FFTW_PATIENT, FFTW_UNALIGNED)
-call dfftw_plan_dft_c2r_2d(wm_back, nxr, nyr, wm_data,                       &
-    wm_data, FFTW_PATIENT, FFTW_UNALIGNED)
-call dfftw_plan_dft_r2c_2d(wm_forw_big, 3*nxr/2, 3*nyr/2, wm_data_big,       &
-    wm_data_big, FFTW_PATIENT, FFTW_UNALIGNED)
-call dfftw_plan_dft_c2r_2d(wm_back_big, 3*nxr/2, 3*nyr/2, wm_data_big,       &
-    wm_data_big, FFTW_PATIENT, FFTW_UNALIGNED)
+call dfftw_plan_dft_r2c_2d(tlwm_forw, nxr, nyr, tlwm_data,                   &
+    tlwm_data, FFTW_PATIENT, FFTW_UNALIGNED)
+call dfftw_plan_dft_c2r_2d(tlwm_back, nxr, nyr, tlwm_data,                   &
+    tlwm_data, FFTW_PATIENT, FFTW_UNALIGNED)
+call dfftw_plan_dft_r2c_2d(tlwm_forw_big, 3*nxr/2, 3*nyr/2, tlwm_data_big,   &
+    tlwm_data_big, FFTW_PATIENT, FFTW_UNALIGNED)
+call dfftw_plan_dft_c2r_2d(tlwm_back_big, 3*nxr/2, 3*nyr/2, tlwm_data_big,   &
+    tlwm_data_big, FFTW_PATIENT, FFTW_UNALIGNED)
 #endif
 
 deallocate(data)
@@ -226,8 +226,8 @@ deallocate(ycomp_data_big)
 deallocate(ycomp_data)
 
 #ifdef PPTLWMLES
-deallocate(wm_data)
-deallocate(wm_data_big)
+deallocate(tlwm_data)
+deallocate(tlwm_data_big)
 #endif
 
 call init_wavenumber()
