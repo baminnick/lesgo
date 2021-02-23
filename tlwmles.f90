@@ -818,7 +818,7 @@ do jtr = 1, wm_count
     ! ustar = u_star
 
     ! Compute eddy viscosity values on inner layer grid
-    call wm_eddyvisc(ustar)
+    call wm_eddyvisc_blend(ustar)
 
     ! Exchange ghost node information
     ! send info down from jz=1 on coord to jz=nzr on coord-1
@@ -1779,9 +1779,6 @@ integer :: i, j, k
 
 ! Model parameters
 a_plus = 17.0_rprec !! used in decay portion
-!alpha = 0.48_rprec !! proportionality constant for kwm in ktype = 3
-!max_dx = max(dx,dy)
-!zcr = alpha*max_dx
 
 ! Compute eddy viscosity
 do i = 1, nxr
@@ -1796,6 +1793,45 @@ end do
 end do
 
 end subroutine wm_eddyvisc
+
+!******************************************************************************
+subroutine wm_eddyvisc_blend(ustar)
+!******************************************************************************
+! 
+! This subroutine outputs the eddy viscosity for the inner-layer wall-model
+! on both the uv- and w-grid. A blended approach is used, if the wall-model 
+! grid is coarse, a RANS mixing length is used (vonk*z), if not a LES mixing 
+! length is used (C0*delta) with delta = (dx*dy*dz)^(1/3). A van Driest
+! decay portion is included to ensure the eddy viscosity approaches zero
+! at the wall.
+!
+
+use types, only : rprec
+use param, only : nu_molec, nxr, nyr, nzr, vonk, lbz, Co, dxr, dyr, dzr
+implicit none
+real(rprec), dimension(nxr, nyr), intent(in) :: ustar
+real(rprec) :: a_plus, decay, Lm
+integer :: i, j, k
+
+! Model parameters
+a_plus = 17.0_rprec !! used in decay portion
+
+! Compute eddy viscosity
+do i = 1, nxr
+do j = 1, nyr
+do k = lbz, nzr
+    decay = (1.0_rprec - exp(-zuvr(k)*ustar(i,j)/(a_plus*nu_molec)))**2
+    Lm = min(vonk*zuvr(k),Co*(dxr*dyr*jaco_uvr(k)*dzr)**(1._rprec/3._rprec))
+    nu_uvr(i,j,k) = ustar(i,j)*Lm*decay
+
+    decay = (1.0_rprec - exp(-zwr(k)*ustar(i,j)/(a_plus*nu_molec)))**2
+    Lm = min(vonk*zwr(k),Co*(dxr*dyr*jaco_wr(k)*dzr)**(1._rprec/3._rprec))
+    nu_wr(i,j,k) = ustar(i,j)*Lm*decay
+end do
+end do
+end do
+
+end subroutine wm_eddyvisc_blend
 
 !******************************************************************************
 subroutine tlwm_rmsdiv(rms_global)
