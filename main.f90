@@ -658,8 +658,10 @@ call clock_convec%stop
             ! write(*,'(1a,E15.7)') '  Cumulative Forcing: ', clock_total_f
             ! write(*,'(1a,E15.7)') '  Forcing %: ',                        &
             !     clock_total_f /clock_total % time
-#ifdef PPOUTPUT_WMLES
+#ifdef PPOUTPUT_WMLES 
+#ifdef PPOUTPUT_CLOCK
             write(*,'(1a,E15.7)') '  WM Iteration: ', clock_wm % time
+#endif
 #endif
             write(*,'(a)') '========================================================'
             call write_tau_wall_bot()

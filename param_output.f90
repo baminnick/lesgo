@@ -246,10 +246,13 @@ write(2,c_fmt) ''
 write(2,c_fmt) '---------------------------------------------------'
 write(2,c_fmt) 'TLWMLES PARAMETERS'
 write(2,c_fmt) '---------------------------------------------------'
-write(2,i_fmt) 'nxr : ', nxr
-write(2,i_fmt) 'nyr : ', nyr
-write(2,i_fmt) 'nzr_tot : ', nzr_tot
+write(2,x4i_fmt) 'nxr, nyr, nzr, nzr_tot : ', nxr, nyr, nzr, nzr_tot
 write(2,i_fmt) 'jz_r : ', jz_r
+write(2,f_fmt) 'L_zr : ', L_zr
+write(2,x3f_fmt) 'dxr, dyr, dzr : ', dxr, dyr, dzr
+write(2,x3l_fmt) 'str_on : ', str_on
+write(2,x3f_fmt) 'str_r : ', str_r
+write(2,i_fmt) 'wm_count : ', wm_count
 #endif
 
 close(2)

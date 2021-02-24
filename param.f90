@@ -55,7 +55,9 @@ character(*), parameter :: checkpoint_tavg_turbspec_file = path // 'tavg_turbspe
 character(*), parameter :: checkpoint_tavg_specbudg_file = path // 'tavg_specbudg.out'
 #endif
 #ifdef PPOUTPUT_WMLES
-character(*), parameter :: checkpoint_tavg_wmles_file = path // 'tavg_wmles.out'
+#ifdef PPTLWMLES
+character(*), parameter :: checkpoint_tavg_tlwm_file = path // 'tavg_tlwm.out'
+#endif
 #endif
 character(*), parameter :: checkpoint_spectra_file = path // 'spectra.out'
 #ifdef PPWRITE_BIG_ENDIAN

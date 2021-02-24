@@ -33,7 +33,7 @@ implicit none
 save
 private
 
-public :: tlwm_init, ic_tlwm, tlwm_checkpoint, tlwm_wallstress
+public :: tlwm_init, ic_tlwm, tlwm_checkpoint, tlwm_wallstress, tavg_tlwm_finalize
 
 ! Main simulation variables for the TLWMLES
 real(rprec), public, dimension(:,:,:), allocatable :: ur, vr, wr
@@ -143,7 +143,7 @@ use messages, only : error
 #ifdef PPOUTPUT_WMLES
 use param, only : dt, tavg_nstart, tavg_nend, tavg_nskip, tavg_calc
 use param, only : domain_calc, domain_nstart, domain_nskip, domain_nend
-use stat_defs, only : tavg_initialized, tavg_wmles_dt
+use stat_defs, only : tavg_initialized, tavg_tlwm_dt
 #endif
 implicit none
 character(*), parameter :: sub_name = 'tlwm_wallstress'
@@ -171,20 +171,13 @@ if (coord == 0) then
     call les_lbc()
 endif
 
-! Determine if we are to checkpoint intermediate times
-if (checkpoint_data) then
-    ! Now check if data should be checkpointed this time step
-    if ( modulo (jt_total, checkpoint_nskip ) == 0) call tlwm_checkpoint()
-end if
-
 #ifdef PPOUTPUT_WMLES
 ! OUTPUT LOOP (for TLWMLES)
-
 ! Instantaneous Domain Velocities
 if (domain_calc) then
     if (jt_total >= domain_nstart .and. jt_total <= domain_nend .and.  &
         (mod(jt_total-domain_nstart,domain_nskip)==0) ) then
-        call wmles_inst_write()
+        call tlwm_inst_write()
     endif
 endif
 
@@ -193,23 +186,22 @@ endif
 if (tavg_calc) then
     ! Are we between the start and stop timesteps?
     if ((jt_total >= tavg_nstart).and.(jt_total <= tavg_nend)) then
-        ! Every timestep (between nstart and nend), add to tavg_wmles_dt
-        tavg_wmles_dt = tavg_wmles_dt + dt
+        ! Every timestep (between nstart and nend), add to tavg_tlwm_dt
+        tavg_tlwm_dt = tavg_tlwm_dt + dt
 
         ! Are we at the beginning or a multiple of nstart?
         if ( mod(jt_total-tavg_nstart,tavg_nskip)==0 ) then
             ! Check if we have initialized tavg
+
             if (.not.tavg_initialized) then
-                call tavg_wmles_init()
+                call tavg_tlwm_init()
             else
-                call tavg_wmles_compute ()
+                call tavg_tlwm_compute ()
             end if
         end if
     end if
 end if
 #endif
-
-
 
 end subroutine tlwm_wallstress
 
@@ -308,11 +300,6 @@ subroutine ic_tlwm
 !
 use param, only : coord, lbc_mom, BOGUS, lbz, nz
 use string_util
-use grid_m
-use mpi_defs, only : mpi_sync_real_array, MPI_SYNC_DOWNUP
-#ifdef PPMAPPING
-use sim_param, only : mesh_stretch
-#endif
 
 fname = path // 'tlwm.out'
 #ifdef PPMPI
@@ -331,19 +318,11 @@ else
     call ic_tlwm_vel
 endif
 
-#ifdef PPMPI
-! Exchange ghost node information for u, v, and w
-!call mpi_sync_real_array( ur, 0, MPI_SYNC_DOWNUP )
-!call mpi_sync_real_array( vr, 0, MPI_SYNC_DOWNUP )
-!call mpi_sync_real_array( wr, 0, MPI_SYNC_DOWNUP )
-
 !--set 0-level velocities to BOGUS
 if (coord == 0) then
     ur(:, :, lbz) = BOGUS
     vr(:, :, lbz) = BOGUS
-    wr(:, :, lbz) = BOGUS
 end if
-#endif
 
 end subroutine ic_tlwm
 
@@ -352,19 +331,10 @@ subroutine ic_tlwm_file
 !*****************************************************************************
 ! Read initial profile for TLWM equation from a file
 use param, only : nzr, read_endian
-use mpi_defs, only : mpi_sync_real_array, MPI_SYNC_DOWNUP
-use grid_m
 
 open(12, file=fname, form='unformatted', convert=read_endian)
 read(12) ur(:,:,1:nzr), vr(:,:,1:nzr), rhs_xr(:,:,1:nzr), rhs_yr(:,:,1:nzr)
 close(12)
-
-#ifdef PPMPI
-!call mpi_sync_real_array(ur, 0, MPI_SYNC_DOWNUP)
-!call mpi_sync_real_array(vr, 0, MPI_SYNC_DOWNUP)
-!call mpi_sync_real_array(rhs_xr, 0, MPI_SYNC_DOWNUP)
-!call mpi_sync_real_array(rhs_yr, 0, MPI_SYNC_DOWNUP)
-#endif
 
 end subroutine ic_tlwm_file
 
@@ -390,21 +360,6 @@ if (coord == 0) then
 endif
 
 end subroutine ic_tlwm_vel
-
-!*****************************************************************************
-subroutine tlwm_checkpoint
-!*****************************************************************************
-!
-! This subroutine saves checkpoint variables for MFM analysis
-!
-use param, only : nzr, write_endian
-
-open(11, file=fname, form='unformatted', convert=write_endian,              &
-    status='unknown', position='rewind')
-write (11) ur(:,:,1:nzr), vr(:,:,1:nzr), rhs_xr(:,:,1:nzr), rhs_yr(:,:,1:nzr)
-close(11)
-
-end subroutine tlwm_checkpoint
 
 !*****************************************************************************
 subroutine tlwm_eq_ubc
@@ -808,7 +763,7 @@ do jtr = 1, wm_count
             ustar = 0._rprec
         endif
         ! Send wall-stress to all coords
-        call mpi_allreduce(ustar, dummy, nxr*nyr, mpi_rprec,                  &
+        call mpi_allreduce(ustar, dummy, nxr*nyr, mpi_rprec,                &
             MPI_SUM, comm, ierr)
         ustar = dummy
     else !! first time-step, use assumed nonzero ustar
@@ -822,14 +777,14 @@ do jtr = 1, wm_count
 
     ! Exchange ghost node information
     ! send info down from jz=1 on coord to jz=nzr on coord-1
-    call mpi_sendrecv( ur(:,:,1), (nxr+2)*nyr, MPI_RPREC, down, 1,            &
+    call mpi_sendrecv( ur(:,:,1), (nxr+2)*nyr, MPI_RPREC, down, 1,          &
         ur(:,:,nzr), (nxr+2)*nyr, MPI_RPREC, up, 1, comm, status, ierr)
-    call mpi_sendrecv( vr(:,:,1), (nxr+2)*nyr, MPI_RPREC, down, 1,            &
+    call mpi_sendrecv( vr(:,:,1), (nxr+2)*nyr, MPI_RPREC, down, 1,          &
         vr(:,:,nzr), (nxr+2)*nyr, MPI_RPREC, up, 1, comm, status, ierr)
     ! send info up from jz=nzr-1 on coord to jz=0 on coord+1
-    call mpi_sendrecv( ur(:,:,nzr-1), (nxr+2)*nyr, MPI_RPREC, up, 2,          &
+    call mpi_sendrecv( ur(:,:,nzr-1), (nxr+2)*nyr, MPI_RPREC, up, 2,        &
         ur(:,:,0), (nxr+2)*nyr, MPI_RPREC, down, 2, comm, status, ierr)
-    call mpi_sendrecv( vr(:,:,nzr-1), (nxr+2)*nyr, MPI_RPREC, up, 2,          &
+    call mpi_sendrecv( vr(:,:,nzr-1), (nxr+2)*nyr, MPI_RPREC, up, 2,        &
         vr(:,:,0), (nxr+2)*nyr, MPI_RPREC, down, 2, comm, status, ierr)
 
     ! Save previous timestep's RHS
@@ -1609,7 +1564,7 @@ use param, only : nxr, nyr, nzr, dzr, coord, nproc
 use param, only : status, comm, ierr, MPI_RPREC, up, down
 use mpi
 implicit none
-integer :: jx, jy, jz, jz_min
+integer :: jx, jy, jz
 real(rprec), dimension(nxr+2,nyr,0:nzr) :: rhs
 
 ! Prepare the RHS
@@ -1618,28 +1573,23 @@ rhs(:,:,:) = -( dudxr(:,:,:) + dvdyr(:,:,:) )
 ! No-penetration boundary condition
 if (coord == 0) then
     wr(1:nxr,1:nyr,1) = 0._rprec
-    jz_min = 2
-else
-    jz_min = 1
 endif
 
 ! This ODE is solved starting at the bottom wall, then moving up
 ! wait for wr(:,:,1) from "down"
 if (coord /= 0) then
-    call mpi_recv(wr(1,1,1), (nxr+2)*nyr, MPI_RPREC, down, 11,            &
-        comm, status, ierr)
+    call mpi_recv(wr(1,1,1), (nxr+2)*nyr, MPI_RPREC, down, 8, comm, status, ierr)
 endif
 
-! Solve ODE on given coord with known lower boundary
-do jz = jz_min, nzr
+! Solve ODE on given coord with known lower boundary (at jz=1)
+do jz = 2, nzr
     wr(1:nxr,1:nyr,jz) = (jaco_uvr(jz-1)*dzr)*rhs(1:nxr,1:nyr,jz-1) +     &
         wr(1:nxr,1:nyr,jz-1)
 enddo
 
 ! Send wr(:,:,nzr) to "up" 
 if (coord /= nproc-1) then
-    call mpi_send(wr(1,1,nzr), (nxr+2)*nyr, MPI_RPREC, up, 11,            &
-        comm, ierr)
+    call mpi_send(wr(1,1,nzr), (nxr+2)*nyr, MPI_RPREC, up, 8, comm, ierr)
 endif
 
 end subroutine div_calc_w
@@ -2021,5 +1971,358 @@ do q = 1, nchunks
 end do
 
 end subroutine tridag_array_tlwm_diff
+
+!*****************************************************************************
+subroutine tlwm_checkpoint
+!*****************************************************************************
+!
+! This subroutine saves checkpoint variables for MFM analysis
+!
+use param, only : nzr, write_endian
+
+open(11, file=fname, form='unformatted', convert=write_endian,              &
+    status='unknown', position='rewind')
+write (11) ur(:,:,1:nzr), vr(:,:,1:nzr), rhs_xr(:,:,1:nzr), rhs_yr(:,:,1:nzr)
+close(11)
+
+end subroutine tlwm_checkpoint
+
+#ifdef PPOUTPUT_WMLES
+!*****************************************************************************
+subroutine tlwm_inst_write()
+!*****************************************************************************
+! 
+! This subroutine writes an instantaneous snapshot of the inner layer velocity
+! field. This is similar to io.f90/inst_write, but only for tlwmles and does 
+! not write for plane snapshots, only for the full domain.
+! 
+! Also, only writes binary output, not CGNS.
+! 
+use param, only : nxr, nyr, nzr, lbz, write_endian, jt_total, path
+use param, only : coord, nproc, comm, ierr, MPI_RPREC, up, down, status
+use string_util, only : string_splice, string_concat
+use mpi
+implicit none
+integer :: jz
+character(64) :: fname, bin_ext
+real(rprec), dimension(1:nxr,1:nyr,1:nzr) :: wr_uv, vortxr, vortyr, vortzr, vortzr_w
+
+call string_splice(bin_ext, '.c', coord, '.bin')
+
+! Solve for wr that satisfies continuity for given u and v before writing
+call div_calc_w()
+
+! Also take horizontal derivatives of this w to compute vorticity
+call tlwm_filt_da(wr, dwdxr, dwdyr, lbz)
+
+! Interpolate wr onto uv-grid
+wr_uv(1:nxr,:,1:nzr-1) = 0.5_rprec*(wr(1:nxr,:,2:nzr) + wr(1:nxr,:,1:nzr-1))
+! Take care of top boundary
+if (coord == nproc-1) wr_uv(1:nxr,:,nzr) = wr_uv(1:nxr,:,nzr-1)
+! Sync overlapping data
+call mpi_sendrecv( wr_uv(:,:,1), nxr*nyr, MPI_RPREC, down, 1,              &
+        wr_uv(:,:,nzr), nxr*nyr, MPI_RPREC, up, 1, comm, status, ierr)
+
+! Compute vorticity
+vortxr(1:nxr,:,1:nzr) = dwdyr(1:nxr,:,1:nzr) - dvdzr(1:nxr,:,1:nzr)
+vortyr(1:nxr,:,1:nzr) = dudzr(1:nxr,:,1:nzr) - dwdxr(1:nxr,:,1:nzr)
+vortzr(1:nxr,:,1:nzr) = dvdxr(1:nxr,:,1:nzr) - dudyr(1:nxr,:,1:nzr)
+
+! Interpolate vortzr onto w-grid
+vortzr_w(1:nxr,:,2:nzr) = 0.5_rprec*(vortzr(1:nxr,:,1:nzr-1) + vortzr(1:nxr,:,2:nzr))
+! Take care of bottom boundary
+if (coord == 0) vortzr_w(1:nxr,:,1) = 0.0_rprec !! no-slip
+! Sync overlapping data
+call mpi_sendrecv( vortzr_w(:,:,nzr), nxr*nyr, MPI_RPREC, up, 2,           &
+    vortzr_w(:,:,1), nxr*nyr, MPI_RPREC, down, 2, comm, status, ierr)
+
+! write binary output
+! Instantaneous velocity output (all components on uv-grid)
+call string_splice(fname, path // 'output/tlwm_vel.', jt_total)
+call string_concat(fname, bin_ext)
+open(unit=13, file=fname, form='unformatted', convert=write_endian,         &
+    access='direct', recl=nxr*nyr*nzr*rprec)
+write(13,rec=1) ur(:nxr,:nyr,1:nzr)
+write(13,rec=2) vr(:nxr,:nyr,1:nzr)
+write(13,rec=3) wr_uv(:nxr,:nyr,1:nzr)
+close(13)
+
+! Instantaneous vorticity output (all components on w-grid)
+call string_splice(fname, path // 'output/tlwm_vort.', jt_total)
+call string_concat(fname, bin_ext)
+open(unit=13, file=fname, form='unformatted', convert=write_endian,         &
+    access='direct', recl=nxr*nyr*nzr*rprec)
+write(13,rec=1) vortxr(:nxr,:nyr,1:nzr)
+write(13,rec=2) vortyr(:nxr,:nyr,1:nzr)
+write(13,rec=3) vortzr_w(:nxr,:nyr,1:nzr)
+close(13)
+
+end subroutine tlwm_inst_write
+
+!*****************************************************************************
+subroutine tavg_tlwm_init()
+!*****************************************************************************
+!
+! This subroutine loads the tavg_tlwm.out file or creates it
+!
+use types, only : rprec
+use param, only : read_endian, path, coord
+use stat_defs, only : tavg_tlwm_total_time, tavg_tlwm
+use string_util
+implicit none
+character (*), parameter :: ftavg_tlwm_in = path // 'tavg_tlwm.out'
+character (128) :: fname
+logical :: exst
+
+! Does a tavg file already exist?
+inquire (file=ftavg_tlwm_in, exist=exst)
+if (.not. exst) then !! No, so initialize tavg_tlwm_total_time
+    tavg_tlwm_total_time = 0._rprec
+else !! Yes, extract tavg_total_time and tavg data
+    fname = ftavg_tlwm_in
+    call string_concat( fname, '.c', coord )
+    open(1, file=fname, action='read', position='rewind',         &
+        form='unformatted', convert=read_endian)
+    read(1) tavg_tlwm_total_time
+    read(1) tavg_tlwm
+    close(1)
+end if
+
+end subroutine tavg_tlwm_init
+
+!*****************************************************************************
+subroutine tavg_tlwm_compute()
+!*****************************************************************************
+!
+! Running time-average computations for inner-layer wall-model
+!
+
+use param, only : nxr, nyr, nzr, lbz
+use param, only : coord, nproc, comm, ierr, MPI_RPREC, up, down, status
+use stat_defs, only : tavg_tlwm, tavg_tlwm_total_time, tavg_tlwm_dt
+implicit none
+integer :: i, j, k
+real(rprec), dimension(1:nxr,1:nyr,1:nzr) :: wr_uv, vortxr, vortyr, vortzr, vortzr_w
+
+! Solve for wr that satisfies continuity for given u and v before writing
+call div_calc_w()
+
+! Also take horizontal derivatives of this w to compute vorticity
+call tlwm_filt_da(wr, dwdxr, dwdyr, lbz)
+
+! Interpolate wr onto uv-grid
+wr_uv(1:nxr,:,1:nzr-1) = 0.5_rprec*(wr(1:nxr,:,2:nzr) + wr(1:nxr,:,1:nzr-1))
+! Take care of top boundary
+if (coord == nproc-1) wr_uv(1:nxr,:,nzr) = wr_uv(1:nxr,:,nzr-1)
+! Sync overlapping data
+call mpi_sendrecv( wr_uv(:,:,1), nxr*nyr, MPI_RPREC, down, 1,              &
+        wr_uv(:,:,nzr), nxr*nyr, MPI_RPREC, up, 1, comm, status, ierr)
+
+! Compute vorticity
+vortxr(1:nxr,:,1:nzr) = dwdyr(1:nxr,:,1:nzr) - dvdzr(1:nxr,:,1:nzr)
+vortyr(1:nxr,:,1:nzr) = dudzr(1:nxr,:,1:nzr) - dwdxr(1:nxr,:,1:nzr)
+vortzr(1:nxr,:,1:nzr) = dvdxr(1:nxr,:,1:nzr) - dudyr(1:nxr,:,1:nzr)
+
+! Interpolate vortzr onto w-grid
+vortzr_w(1:nxr,:,2:nzr) = 0.5_rprec*(vortzr(1:nxr,:,1:nzr-1) + vortzr(1:nxr,:,2:nzr))
+! Take care of bottom boundary
+if (coord == 0) vortzr_w(1:nxr,:,1) = 0.0_rprec !! no-slip
+! Sync overlapping data
+call mpi_sendrecv( vortzr_w(:,:,nzr), nxr*nyr, MPI_RPREC, up, 2,           &
+    vortzr_w(:,:,1), nxr*nyr, MPI_RPREC, down, 2, comm, status, ierr)
+
+! time-averaging sum
+do j = 1, nyr
+do i = 1, nxr
+do k = 1, nzr
+    tavg_tlwm(i,j,k) % u  = tavg_tlwm(i,j,k) % u + ur(i,j,k) * tavg_tlwm_dt
+    tavg_tlwm(i,j,k) % v  = tavg_tlwm(i,j,k) % v + vr(i,j,k) * tavg_tlwm_dt
+    tavg_tlwm(i,j,k) % w  = tavg_tlwm(i,j,k) % w + wr_uv(i,j,k) * tavg_tlwm_dt
+
+    tavg_tlwm(i,j,k) % nu_t = tavg_tlwm(i,j,k) % nu_t + nu_uvr(i,j,k) * tavg_tlwm_dt
+
+    tavg_tlwm(i,j,k) % uu = tavg_tlwm(i,j,k) % uu + ur(i,j,k) * ur(i,j,k) * tavg_tlwm_dt
+    tavg_tlwm(i,j,k) % vv = tavg_tlwm(i,j,k) % vv + vr(i,j,k) * vr(i,j,k) * tavg_tlwm_dt
+    tavg_tlwm(i,j,k) % ww = tavg_tlwm(i,j,k) % ww + wr_uv(i,j,k) * wr_uv(i,j,k) * tavg_tlwm_dt
+    tavg_tlwm(i,j,k) % uv = tavg_tlwm(i,j,k) % uv + ur(i,j,k) * vr(i,j,k) * tavg_tlwm_dt
+    tavg_tlwm(i,j,k) % uw = tavg_tlwm(i,j,k) % uw + ur(i,j,k) * wr_uv(i,j,k) * tavg_tlwm_dt
+    tavg_tlwm(i,j,k) % vw = tavg_tlwm(i,j,k) % vw + vr(i,j,k) * wr_uv(i,j,k) * tavg_tlwm_dt
+
+    tavg_tlwm(i,j,k) % vortx = tavg_tlwm(i,j,k) % vortx + vortxr(i,j,k) * tavg_tlwm_dt
+    tavg_tlwm(i,j,k) % vorty = tavg_tlwm(i,j,k) % vorty + vortyr(i,j,k) * tavg_tlwm_dt
+    tavg_tlwm(i,j,k) % vortz = tavg_tlwm(i,j,k) % vortz + vortzr_w(i,j,k) * tavg_tlwm_dt
+
+    tavg_tlwm(i,j,k) % vortx2 = tavg_tlwm(i,j,k) % vortx2 + vortxr(i,j,k) * vortxr(i,j,k) * tavg_tlwm_dt
+    tavg_tlwm(i,j,k) % vorty2 = tavg_tlwm(i,j,k) % vorty2 + vortyr(i,j,k) * vortyr(i,j,k) * tavg_tlwm_dt
+    tavg_tlwm(i,j,k) % vortz2 = tavg_tlwm(i,j,k) % vortz2 + vortzr_w(i,j,k) * vortzr_w(i,j,k) * tavg_tlwm_dt
+
+end do
+end do
+end do
+
+! Update tavg_tlwm_total_time for variable time stepping
+tavg_tlwm_total_time = tavg_tlwm_total_time + tavg_tlwm_dt
+
+! Set tavg_wmles_dt back to zero for next increment
+tavg_tlwm_dt = 0._rprec
+
+end subroutine tavg_tlwm_compute
+
+!*****************************************************************************
+subroutine tavg_tlwm_checkpoint
+!*****************************************************************************
+!
+! This subroutine writes the restart data for the wall model statistics. It
+! is called by tavg_tlwm_finalize and tlwm_checkpoint.
+!
+use param, only : checkpoint_tavg_tlwm_file, write_endian, coord
+use stat_defs, only : tavg_tlwm, tavg_tlwm_total_time
+use string_util
+implicit none
+character(64) :: fname
+
+! Write data to tavg_tlwm.out
+fname = checkpoint_tavg_tlwm_file
+call string_concat( fname, '.c', coord )
+open(1, file=fname, action='write', position='rewind', &
+    form='unformatted', convert=write_endian)
+write(1) tavg_tlwm_total_time
+write(1) tavg_tlwm
+close(1)
+
+end subroutine tavg_tlwm_checkpoint
+
+!*****************************************************************************
+subroutine tavg_tlwm_finalize
+!*****************************************************************************
+!
+! Writes time-averaged data to be outputted.
+! Currently only uses a binary file
+! 
+
+use stat_defs, only : tavg_tlwm, tavg_tlwm_t, tavg_tlwm_total_time
+use param, only : nxr, nyr, nzr, write_endian, path, coord
+use string_util
+implicit none
+character(64) :: fname_tlwm_vel, fname_tlwm_rs, fname_tlwm_nu,              &
+    fname_tlwm_vort, fname_tlwm_vortrms
+integer :: i, j, k
+real(rprec), dimension(nxr,nyr,nzr) :: upup, vpvp, wpwp, upvp, upwp, vpwp,  &
+    vortxrms, vortyrms, vortzrms
+character(64) :: bin_ext
+
+fname_tlwm_vel = path // 'output/tlwm_veluv_avg'
+fname_tlwm_nu = path // 'output/tlwm_nu_t_avg'
+fname_tlwm_rs = path // 'output/tlwm_rs'
+fname_tlwm_vort = path // 'output/tlwm_vort_avg'
+fname_tlwm_vortrms = path // 'output/tlwm_vortrms'
+
+call string_splice(bin_ext, '.c', coord, '.bin')
+
+! Final checkpoint all restart data
+call tavg_tlwm_checkpoint()
+
+! Normalize sums by total time
+do j = 1, nyr
+do i = 1, nxr
+do k = 1, nzr
+    tavg_tlwm(i,j,k) % u = tavg_tlwm(i,j,k) % u / tavg_tlwm_total_time
+    tavg_tlwm(i,j,k) % v = tavg_tlwm(i,j,k) % v / tavg_tlwm_total_time
+    tavg_tlwm(i,j,k) % w = tavg_tlwm(i,j,k) % w / tavg_tlwm_total_time
+
+    tavg_tlwm(i,j,k) % nu_t = tavg_tlwm(i,j,k) % nu_t / tavg_tlwm_total_time
+
+    tavg_tlwm(i,j,k) % uu = tavg_tlwm(i,j,k) % uu / tavg_tlwm_total_time
+    tavg_tlwm(i,j,k) % vv = tavg_tlwm(i,j,k) % vv / tavg_tlwm_total_time
+    tavg_tlwm(i,j,k) % ww = tavg_tlwm(i,j,k) % ww / tavg_tlwm_total_time
+    tavg_tlwm(i,j,k) % uv = tavg_tlwm(i,j,k) % uv / tavg_tlwm_total_time
+    tavg_tlwm(i,j,k) % uw = tavg_tlwm(i,j,k) % uw / tavg_tlwm_total_time
+    tavg_tlwm(i,j,k) % vw = tavg_tlwm(i,j,k) % vw / tavg_tlwm_total_time
+
+    tavg_tlwm(i,j,k) % vortx = tavg_tlwm(i,j,k) % vortx / tavg_tlwm_total_time
+    tavg_tlwm(i,j,k) % vorty = tavg_tlwm(i,j,k) % vorty / tavg_tlwm_total_time
+    tavg_tlwm(i,j,k) % vortz = tavg_tlwm(i,j,k) % vortz / tavg_tlwm_total_time
+
+    tavg_tlwm(i,j,k) % vortx2 = tavg_tlwm(i,j,k) % vortx2 / tavg_tlwm_total_time
+    tavg_tlwm(i,j,k) % vorty2 = tavg_tlwm(i,j,k) % vorty2 / tavg_tlwm_total_time
+    tavg_tlwm(i,j,k) % vortz2 = tavg_tlwm(i,j,k) % vortz2 / tavg_tlwm_total_time
+end do
+end do 
+end do
+
+! Write binary data
+! write time-averaged velocity
+call string_concat(fname_tlwm_vel, bin_ext)
+open(unit=13, file=fname_tlwm_vel, form='unformatted', convert=write_endian, &
+    access='direct',recl=nxr*nyr*nzr*rprec) 
+write(13,rec=1) tavg_tlwm(:nxr,:nyr,1:nzr)%u
+write(13,rec=2) tavg_tlwm(:nxr,:nyr,1:nzr)%v
+write(13,rec=3) tavg_tlwm(:nxr,:nyr,1:nzr)%w
+close(13)
+
+! Write time-averaged wall-model eddy viscosity
+call string_concat(fname_tlwm_nu, bin_ext)
+open(unit=13, file=fname_tlwm_nu, form='unformatted', convert=write_endian,  &
+    access='direct',recl=nxr*nyr*nzr*rprec) 
+write(13,rec=1) tavg_tlwm(:nxr,:nyr,1:nzr)%nu_t
+close(13)
+
+! Compute Reynolds stresses
+do j = 1, nyr
+do i = 1, nxr
+do k = 1, nzr
+upup(i,j,k) = tavg_tlwm(i,j,k) % uu - tavg_tlwm(i,j,k) % u * tavg_tlwm(i,j,k) % u
+vpvp(i,j,k) = tavg_tlwm(i,j,k) % vv - tavg_tlwm(i,j,k) % v * tavg_tlwm(i,j,k) % v
+wpwp(i,j,k) = tavg_tlwm(i,j,k) % ww - tavg_tlwm(i,j,k) % w * tavg_tlwm(i,j,k) % w
+upvp(i,j,k) = tavg_tlwm(i,j,k) % uv - tavg_tlwm(i,j,k) % u * tavg_tlwm(i,j,k) % v
+upwp(i,j,k) = tavg_tlwm(i,j,k) % uw - tavg_tlwm(i,j,k) % u * tavg_tlwm(i,j,k) % w
+vpwp(i,j,k) = tavg_tlwm(i,j,k) % vw - tavg_tlwm(i,j,k) % v * tavg_tlwm(i,j,k) % w
+enddo
+enddo
+enddo
+
+! Output Reynolds stresses
+call string_concat(fname_tlwm_rs, bin_ext)
+open(unit=13, file=fname_tlwm_rs, form='unformatted', convert=write_endian,  &
+    access='direct',recl=nxr*nyr*nzr*rprec)
+write(13,rec=1) upup(:nxr,:nyr,1:nzr)
+write(13,rec=2) vpvp(:nxr,:nyr,1:nzr)
+write(13,rec=3) wpwp(:nxr,:nyr,1:nzr)
+write(13,rec=4) upvp(:nxr,:nyr,1:nzr)
+write(13,rec=5) upwp(:nxr,:nyr,1:nzr)
+write(13,rec=6) vpwp(:nxr,:nyr,1:nzr)
+close(13)
+
+! Write time-averaged vorticity
+call string_concat(fname_tlwm_vort, bin_ext)
+open(unit=13, file=fname_tlwm_vort, form='unformatted', convert=write_endian, &
+    access='direct',recl=nxr*nyr*nzr*rprec) 
+write(13,rec=1) tavg_tlwm(:nxr,:nyr,1:nzr)%vortx
+write(13,rec=2) tavg_tlwm(:nxr,:nyr,1:nzr)%vorty
+write(13,rec=3) tavg_tlwm(:nxr,:nyr,1:nzr)%vortz
+close(13)
+
+! Compute Vorticity RMS
+do j = 1, nyr
+do i = 1, nxr
+do k = 1, nzr
+vortxrms(i,j,k) = tavg_tlwm(i,j,k) % vortx2 - tavg_tlwm(i,j,k) % vortx * tavg_tlwm(i,j,k) % vortx
+vortyrms(i,j,k) = tavg_tlwm(i,j,k) % vorty2 - tavg_tlwm(i,j,k) % vorty * tavg_tlwm(i,j,k) % vorty
+vortzrms(i,j,k) = tavg_tlwm(i,j,k) % vortz2 - tavg_tlwm(i,j,k) % vortz * tavg_tlwm(i,j,k) % vortz
+enddo
+enddo
+enddo
+
+! Output Vorticity RMS 
+call string_concat(fname_tlwm_vortrms, bin_ext)
+open(unit=13, file=fname_tlwm_vortrms, form='unformatted', convert=write_endian, &
+    access='direct',recl=nxr*nyr*nzr*rprec) 
+write(13,rec=1) vortxrms(:nxr,:nyr,1:nzr)
+write(13,rec=2) vortyrms(:nxr,:nyr,1:nzr)
+write(13,rec=3) vortzrms(:nxr,:nyr,1:nzr)
+close(13)
+
+end subroutine tavg_tlwm_finalize
+#endif
 
 end module tlwmles

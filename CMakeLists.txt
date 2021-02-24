@@ -36,11 +36,11 @@ option(USE_LVLSET_STRETCH "Enable simplified level set with mapping." OFF)
 option(USE_CNDIFF "Enable Crank-Nicolson time marching for wall-normal diffusion." ON)
 option(USE_TLWMLES "Enable two-layer wall-modeling capabilities for LES." ON)
 
-option(OUTPUT_SGS "Output time-averaging statistics on SGS model." OFF)
+option(OUTPUT_SGS "Output time-averaging statistics on SGS model." ON)
 option(OUTPUT_BUDGET "Output time-averaging statistics needed for budgets." OFF)
 option(OUTPUT_TURBSPEC "Output time-averaging spectra data." OFF)
 option(OUTPUT_SPECBUDG "Output time-averaging spectral budget data." OFF)
-option(OUTPUT_WMLES "Output time-averaging statistics on wall model." OFF)
+option(OUTPUT_WMLES "Output time-averaging statistics on wall model." ON)
 option(OUTPUT_SSP "Output self-sustaining process analysis." OFF)
 option(OUTPUT_CLOCK "Output time data for each simulation step." OFF)
 

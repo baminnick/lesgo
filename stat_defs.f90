@@ -162,11 +162,14 @@ type specbudg_t
 end type specbudg_t
 #endif
 
+#ifdef PPTLWMLES
 #ifdef PPOUTPUT_WMLES
-real(rprec) :: tavg_wmles_total_time, tavg_wmles_dt
-type tavg_wmles_t
-    real(rprec) :: u, v, nu, uu, vv, uv
-end type tavg_wmles_t
+real(rprec) :: tavg_tlwm_total_time, tavg_tlwm_dt
+type tavg_tlwm_t
+    real(rprec) :: u, v, w, nu_t, uu, vv, ww, uv, uw, vw
+    real(rprec) :: vortx, vorty, vortz, vortx2, vorty2, vortz2
+end type tavg_tlwm_t
+#endif
 #endif
 
 ! Types for including wind turbines as drag disks
@@ -250,8 +253,10 @@ type(tavg_specbudg_t), allocatable, dimension(:,:,:) :: tavg_specbudgy
 type(specbudg_t), allocatable, dimension(:,:,:) :: specbudgy
 #endif
 
+#ifdef PPTLWMLES
 #ifdef PPOUTPUT_WMLES
-type(tavg_wmles_t), allocatable, dimension(:,:,:) :: tavg_wmles
+type(tavg_tlwm_t), allocatable, dimension(:,:,:) :: tavg_tlwm
+#endif
 #endif
 
 contains

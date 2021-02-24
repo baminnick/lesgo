@@ -2593,6 +2593,11 @@ use param, only : xplane_calc, xplane_nloc, xplane_loc
 use param, only : yplane_calc, yplane_nloc, yplane_loc
 use param, only : zplane_calc, zplane_nloc, zplane_loc
 use param, only : tavg_calc
+#ifdef PPOUTPUT_WMLES
+#ifdef PPTLWMLES
+use param, only : nxr, nyr, nzr
+#endif
+#endif
 use grid_m
 use functions, only : cell_indx
 use stat_defs, only : point, xplane, yplane, zplane
@@ -2609,6 +2614,11 @@ use stat_defs, only : tavg_turbspecx, tavg_turbspecy
 #endif
 #ifdef PPOUTPUT_SPECBUDG
 use stat_defs, only : tavg_specbudgx, tavg_specbudgy
+#endif
+#ifdef PPOUTPUT_WMLES
+#ifdef PPTLWMLES
+use stat_defs, only : tavg_tlwm
+#endif
 #endif
 
 implicit none
@@ -2654,6 +2664,11 @@ if( tavg_calc ) then
 #ifdef PPOUTPUT_SPECBUDG
     allocate(tavg_specbudgx(nx/2+1,ny,lbz:nz))
     allocate(tavg_specbudgy(nx,ny/2+1,lbz:nz))
+#endif
+#ifdef PPOUTPUT_WMLES
+#ifdef PPTLWMLES
+    allocate(tavg_tlwm(nxr,nyr,lbz:nzr))
+#endif
 #endif
 
   ! Initialize the derived types tavg and tavg_zplane
@@ -3258,6 +3273,37 @@ if( tavg_calc ) then
     end do
     end do
     end do
+#endif
+
+#ifdef PPOUTPUT_WMLES
+#ifdef PPTLWMLES
+    do i = 1, nxr
+    do j = 1, nyr
+    do k = 1, nzr
+        tavg_tlwm(i,j,k) % u = 0._rprec
+        tavg_tlwm(i,j,k) % v = 0._rprec
+        tavg_tlwm(i,j,k) % w = 0._rprec
+
+        tavg_tlwm(i,j,k) % nu_t = 0._rprec
+
+        tavg_tlwm(i,j,k) % uu = 0._rprec
+        tavg_tlwm(i,j,k) % vv = 0._rprec
+        tavg_tlwm(i,j,k) % ww = 0._rprec
+        tavg_tlwm(i,j,k) % uv = 0._rprec
+        tavg_tlwm(i,j,k) % uw = 0._rprec
+        tavg_tlwm(i,j,k) % vw = 0._rprec
+
+        tavg_tlwm(i,j,k) % vortx = 0._rprec
+        tavg_tlwm(i,j,k) % vorty = 0._rprec
+        tavg_tlwm(i,j,k) % vortz = 0._rprec
+
+        tavg_tlwm(i,j,k) % vortx2 = 0._rprec
+        tavg_tlwm(i,j,k) % vorty2 = 0._rprec
+        tavg_tlwm(i,j,k) % vortz2 = 0._rprec
+    enddo
+    enddo
+    enddo
+#endif
 #endif
 
 end if
@@ -5064,6 +5110,12 @@ use mpi_defs, only : mpi_sync_real_array,MPI_SYNC_DOWNUP
 use param, only : ierr,comm
 #endif
 
+#ifdef PPTLWMLES
+#ifdef PPOUTPUT_WMLES
+use tlwmles, only : tavg_tlwm_finalize
+#endif
+#endif
+
 implicit none
 
 #ifndef PPCGNS
@@ -6681,6 +6733,12 @@ deallocate(specbudgy)
 #ifdef PPOUTPUT_TURBSEC
 deallocate(turbspecx)
 deallocate(turbspecy)
+#endif
+
+#ifdef PPTLWMLES
+#ifdef PPOUTPUT_WMLES
+call tavg_tlwm_finalize()
+#endif
 #endif
 
 #ifdef PPMPI
