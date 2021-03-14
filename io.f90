@@ -4935,12 +4935,14 @@ dpdz_real(1:nx,1:ny,lbz:nz) = dpdz_real(1:nx,1:ny,lbz:nz)                   &
 #ifdef PPSCALARS
 theta_w(:,:,:) = theta(:,:,:)
 theta_w(1:nx,1:ny,lbz:nz) = interp_to_w_grid(theta_w(1:nx,1:ny,lbz:nz), lbz)
+#ifdef PPOUTPUT_SPECBUDG
 dTdx_w(1:nx,1:ny,lbz:nz) = interp_to_w_grid(dTdx(1:nx,1:ny,lbz:nz), lbz)
 dTdy_w(1:nx,1:ny,lbz:nz) = interp_to_w_grid(dTdy(1:nx,1:ny,lbz:nz), lbz)
 ! Using lapT_w as temp variable for div_pi interpolation onto w-grid
 lapT_w(1:nx,1:ny,lbz:nz) = div_pi(1:nx,1:ny,lbz:nz)
 call mpi_sync_real_array( lapT_w, lbz, MPI_SYNC_DOWNUP )
 lapT_w(1:nx,1:ny,lbz:nz) = interp_to_w_grid(lapT_w(1:nx,1:ny,lbz:nz), lbz)
+#endif
 #endif
 
 do jy = 1, ny
