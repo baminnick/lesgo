@@ -852,6 +852,8 @@ do
                 read (buff(equal_pos+1:), *) nyr
             case ('NZR')
                 read (buff(equal_pos+1:), *) nzr_tot
+            case ('JZ_COORD')
+                read (buff(equal_pos+1:), *) jz_coord
             case ('JZ_R')
                 read (buff(equal_pos+1:), *) jz_r
             case ('STR_ON')
@@ -878,7 +880,7 @@ do
         dxr = L_x / nxr
         dyr = L_y / nyr
         ! Remember height of TLWM is based on jz_r
-        L_zr = (jz_r-1)*dz + (dz/2._rprec)
+        L_zr = ((nz-1)*jz_coord + jz_r-1)*dz + (dz/2._rprec)
         dzr = L_zr / ( nzr_tot - 0.5_rprec )
         ! Note: dzr is defined differently here because 
         ! zw = 0 at wall, zuv = hwm as LES BC, zw(end) = hwm-dz/2

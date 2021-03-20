@@ -314,6 +314,7 @@ integer :: nxr = 64
 integer :: nyr = 64
 integer :: nzr = 64
 integer :: nzr_tot = 64
+integer :: jz_coord = 0
 integer :: jz_r = 1
 real(rprec) :: dxr, dyr, dzr, L_zr
 logical :: str_on = .false.

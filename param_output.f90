@@ -247,6 +247,7 @@ write(2,c_fmt) '---------------------------------------------------'
 write(2,c_fmt) 'TLWMLES PARAMETERS'
 write(2,c_fmt) '---------------------------------------------------'
 write(2,x4i_fmt) 'nxr, nyr, nzr, nzr_tot : ', nxr, nyr, nzr, nzr_tot
+write(2,i_fmt) 'jz_coord : ', jz_coord
 write(2,i_fmt) 'jz_r : ', jz_r
 write(2,f_fmt) 'L_zr : ', L_zr
 write(2,x3f_fmt) 'dxr, dyr, dzr : ', dxr, dyr, dzr

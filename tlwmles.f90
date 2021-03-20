@@ -372,7 +372,7 @@ subroutine tlwm_eq_ubc
 ! 
 ! The equilibrium wall-model only requires the u, v velocity from the LES.
 ! 
-use param, only : nx, ny, jz_r, nzr
+use param, only : nx, ny, jz_coord, jz_r, nzr
 use param, only : coord, nproc, comm, ierr, MPI_RPREC
 use param, only : nxr, nyr
 use sim_param, only : u, v
@@ -381,7 +381,7 @@ implicit none
 real(rprec), dimension(nx,ny) :: dummy_in, u_les, v_les
 real(rprec), dimension(nxr,nyr) :: dummy_out
 
-if (coord == 0) then
+if (coord == jz_coord) then
     u_les = u(1:nx,1:ny,jz_r)
     v_les = v(1:nx,1:ny,jz_r)
 else
@@ -418,7 +418,7 @@ subroutine tlwm_noneq_ubc
 ! for the TLWM non-equilibrium upper-boundary condition. Necessary 
 ! interpolations are taken.
 !
-use param, only : ld, nx, ny, jz_r, nzr, ld_big, nx2, ny2
+use param, only : ld, nx, ny, jz_coord, jz_r, nzr, ld_big, nx2, ny2
 use param, only : coord, nproc, comm, ierr, MPI_RPREC
 use param, only : nxr, nyr
 use sim_param, only : u, v, w, dudx, dvdx, dwdx, dudy, dvdy, dwdy, dpdx, dpdy
@@ -434,7 +434,7 @@ real(rprec), dimension(ld_big,ny2) :: ut_big, vt_big, wt_big,                &
 real(rprec), dimension(nxr,nyr) :: dummy_out
 real(rprec) :: const
 
-if (coord == 0) then
+if (coord == jz_coord) then
     u_les = u(1:nx,1:ny,jz_r)
     v_les = v(1:nx,1:ny,jz_r)
 
@@ -510,7 +510,7 @@ else
     v_les = 0.0_rprec
 endif
 
-! Gather data and interpolate on top coord
+! Gather u & v velocity data and interpolate on top coord
 call mpi_allreduce(u_les, dummy_in, nx*ny, mpi_rprec, MPI_SUM, comm, ierr)
 if (coord == nproc-1) then
     call interp_les_to_tlwm(dummy_in,dummy_out)
@@ -525,7 +525,7 @@ endif
 
 ! Since dpdx and dpdy will be used on all processors, interpolate 
 ! on coord where it was computed, then send out to all processors
-if (coord == 0) then
+if (coord == jz_coord) then
     dummy_in = dpdx_les
     call interp_les_to_tlwm(dummy_in,dummy_out)
 else
@@ -533,7 +533,7 @@ else
 endif
 call mpi_allreduce(dummy_out, dpdxr, nxr*nyr, mpi_rprec, MPI_SUM, comm, ierr)
 
-if (coord == 0) then
+if (coord == jz_coord) then
     dummy_in = dpdy_les
     call interp_les_to_tlwm(dummy_in,dummy_out)
 else
