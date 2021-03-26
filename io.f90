@@ -7784,8 +7784,8 @@ close(13)
 ! Write spectral budget data
 allocate(scal_specbudgx(nx/2+1,ny,lbz:nz))
 allocate(scal_specbudgy(nx,ny/2+1,lbz:nz))
-scal_specbudgx = scal_specbudgx_compute(tavg_scal_specbudgx, scal_turbspecx, tavg_scal_turbspecx, tavg_budget, tavg, lbz)
-scal_specbudgy = scal_specbudgy_compute(tavg_scal_specbudgy, scal_turbspecy, tavg_scal_turbspecy, tavg_budget, tavg, lbz)
+scal_specbudgx = scal_specbudgx_compute(tavg_scal_specbudgx, scal_turbspecx, tavg_scal_turbspecx, tavg_budget, tavg, tavg_scal_budget, lbz)
+scal_specbudgy = scal_specbudgy_compute(tavg_scal_specbudgy, scal_turbspecy, tavg_scal_turbspecy, tavg_budget, tavg, tavg_scal_budget, lbz)
 
 #ifdef PPCGNS
 ! Not ready

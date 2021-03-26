@@ -1866,7 +1866,7 @@ end function specbudgy_compute
 
 #ifdef PPSCALARS
 !*****************************************************************************
-function scal_specbudgx_compute( a, b, bb, c, d, lbz2 ) result( e )
+function scal_specbudgx_compute( a, b, bb, c, d, e, lbz2 ) result( f )
 !*****************************************************************************
 ! 
 ! Compute the spectral budget for scalar equation. 
@@ -1881,7 +1881,8 @@ type(scal_turbspec_t), dimension(:,:,lbz2:), intent(in) :: b
 type(tavg_scal_turbspec_t), dimension(:,:,lbz2:), intent(in) :: bb
 type(tavg_budget_t), dimension(:,:,lbz2:), intent(in) :: c
 type(tavg_t), dimension(:,:,lbz2:), intent(in) :: d
-type(scal_specbudg_t), allocatable, dimension(:,:,:) :: e
+type(tavg_scal_budget_t), dimension(:,:,lbz2:), intent(in) :: e
+type(scal_specbudg_t), allocatable, dimension(:,:,:) :: f
 
 integer :: ubx, uby, ubz, vbx, vby, vbz, i, j, k
 
@@ -1893,17 +1894,17 @@ complex(rprec) :: CTudTdx, CTvdTdy, CTwdTdz
 complex(rprec) :: CTxTx, CTyTy, CTzTz
 complex(rprec) :: CTlapT
 
-! Size of a, b, and e
+! Size of a, b, and f
 ubx = ubound(a,1)
 uby = ubound(a,2)
 ubz = ubound(a,3)
 
-! Size of c and d
+! Size of c, d, and e
 vbx = ubound(c,1)
 vby = ubound(c,2)
 vbz = ubound(c,3)
 
-allocate(e(ubx,uby,lbz2:ubz))
+allocate(f(ubx,uby,lbz2:ubz))
 
 allocate(u_avg(ubx,vby,lbz2:vbz))
 allocate(v_avg(ubx,vby,lbz2:vbz))
@@ -1928,15 +1929,18 @@ do i = 1, vbx
     u_avg(1,:,:) = u_avg(1,:,:) + d(i,:,:) % u_w
     v_avg(1,:,:) = v_avg(1,:,:) + d(i,:,:) % v_w
     w_avg(1,:,:) = w_avg(1,:,:) + d(i,:,:) % w
+    theta_avg(1,:,:) = theta_avg(1,:,:) + e(i,:,:) % theta
+    dTdx_avg(1,:,:) = dTdx_avg(1,:,:) + e(i,:,:) % dTdx
+    dTdy_avg(1,:,:) = dTdy_avg(1,:,:) + e(i,:,:) % dTdy
+    dTdz_avg(1,:,:) = dTdz_avg(1,:,:) + e(i,:,:) % dTdz
 enddo
 u_avg(1,:,:) = u_avg(1,:,:) / vbx
 v_avg(1,:,:) = v_avg(1,:,:) / vbx
 w_avg(1,:,:) = w_avg(1,:,:) / vbx
-! Use kx=0 as streamwise average to avoid having to time-average dTdxj
-theta_avg(1,:,:) = real( bb(1,:,:)%thetaf )
-dTdx_avg(1,:,:) = real( a(1,:,:)%dTdx )
-dTdy_avg(1,:,:) = real( a(1,:,:)%dTdy )
-dTdz_avg(1,:,:) = real( a(1,:,:)%dTdz )
+theta_avg(1,:,:) = theta_avg(1,:,:) / vbx
+dTdx_avg(1,:,:) = dTdx_avg(1,:,:) / vbx
+dTdy_avg(1,:,:) = dTdy_avg(1,:,:) / vbx
+dTdz_avg(1,:,:) = dTdz_avg(1,:,:) / vbx
 
 do i = 1, ubx
 do j = 1, uby
@@ -1971,28 +1975,26 @@ CTlapT = a(i,j,k)%TlapT - bb(i,j,k)%thetaf * conjg(a(i,j,k)%lapT)
 ! ------------------------- Compute Budget Terms -----------------------------
 ! Mean Advection, Uk*d(T*T)dxk
 ! Multiplying by kx=0 mode time-average here
-e(i,j,k) % adv = u_avg(1,j,k)*real(conjg(CTdTdx) + CTdTdx)       &
+f(i,j,k) % adv = u_avg(1,j,k)*real(conjg(CTdTdx) + CTdTdx)       &
     + v_avg(1,j,k)*real(conjg(CTdTdy) + CTdTdy)                  &
     + w_avg(1,j,k)*real(conjg(CTdTdz) + CTdTdz)
 
 ! Turbulent Transport
-e(i,j,k) % tfluc = real( CTudTdx + conjg(CTudTdx) +              &
+f(i,j,k) % tfluc = real( CTudTdx + conjg(CTudTdx) +              &
     CTvdTdy + conjg(CTvdTdy) + CTwdTdz + conjg(CTwdTdz) )
 
 ! Production Rate, -(Rik*dUjdxk + Rjk*dUidxk)
 ! Multiplying by kx=0 mode time-average here
-e(i,j,k) % prod = 2.0_rprec*( b(i,j,k)%upthetap*dTdx_avg(1,j,k) +           &
+f(i,j,k) % prod = 2.0_rprec*( b(i,j,k)%upthetap*dTdx_avg(1,j,k) +           &
     b(i,j,k)%vpthetap*dTdy_avg(1,j,k) + b(i,j,k)%wpthetap*dTdz_avg(1,j,k) )
 
 ! Pseudo-dissipation, 2*kappa*dTdxj*dTdxj
-e(i,j,k) % pdiss = 2.0_rprec*(nu_molec/Pr_sgs)*real(CTxTx + CTyTy + CTzTz)
+f(i,j,k) % pdiss = 2.0_rprec*(nu_molec/Pr_sgs)*real(CTxTx + CTyTy + CTzTz)
 
 ! Transport by diffusion
 ! CTlapT already multiplied by (nu/Pr) because div_pi was used
 ! Change sign of CTlapT because of how div_pi is set up
-! Note: lapT terms include x-derivative terms from pseudo-dissipation
-!       which need to be canceled, which is why the CTxTx term has a different sign
-e(i,j,k) % tvisc = 2.0_rprec*(nu_molec/Pr_sgs)*real(-CTxTx + CTyTy + CTzTz) - real( conjg(CTlapT) + CTlapT )
+f(i,j,k) % tvisc = 2.0_rprec*(nu_molec/Pr_sgs)*real(CTxTx + CTyTy + CTzTz) - real( conjg(CTlapT) + CTlapT )
 
 end do
 end do
@@ -2000,15 +2002,15 @@ end do
 
 ! ---------------------------- Prepare Output --------------------------------
 ! Move all terms to the RHS
-e % adv   = - e % adv
-e % tfluc = - e % tfluc
-e % prod  = - e % prod
-e % pdiss = - e % pdiss
+f % adv   = - f % adv
+f % tfluc = - f % tfluc
+f % prod  = - f % prod
+f % pdiss = - f % pdiss
 
 end function scal_specbudgx_compute
 
 !*****************************************************************************
-function scal_specbudgy_compute( a, b, bb, c, d, lbz2 ) result( e )
+function scal_specbudgy_compute( a, b, bb, c, d, e, lbz2 ) result( f )
 !*****************************************************************************
 ! 
 ! Compute the spectral budget for scalar equation. 
@@ -2023,7 +2025,8 @@ type(scal_turbspec_t), dimension(:,:,lbz2:), intent(in) :: b
 type(tavg_scal_turbspec_t), dimension(:,:,lbz2:), intent(in) :: bb
 type(tavg_budget_t), dimension(:,:,lbz2:), intent(in) :: c
 type(tavg_t), dimension(:,:,lbz2:), intent(in) :: d
-type(scal_specbudg_t), allocatable, dimension(:,:,:) :: e
+type(tavg_scal_budget_t), dimension(:,:,lbz2:), intent(in) :: e
+type(scal_specbudg_t), allocatable, dimension(:,:,:) :: f
 
 integer :: ubx, uby, ubz, vbx, vby, vbz, i, j, k
 
@@ -2035,17 +2038,17 @@ complex(rprec) :: CTudTdx, CTvdTdy, CTwdTdz
 complex(rprec) :: CTxTx, CTyTy, CTzTz
 complex(rprec) :: CTlapT
 
-! Size of a, b, and e
+! Size of a, b, and f
 ubx = ubound(a,1)
 uby = ubound(a,2)
 ubz = ubound(a,3)
 
-! Size of c and d
+! Size of c, d, and e
 vbx = ubound(c,1)
 vby = ubound(c,2)
 vbz = ubound(c,3)
 
-allocate(e(ubx,uby,lbz2:ubz))
+allocate(f(ubx,uby,lbz2:ubz))
 
 allocate(u_avg(vbx,uby,lbz2:vbz))
 allocate(v_avg(vbx,uby,lbz2:vbz))
@@ -2070,15 +2073,18 @@ do j = 1, vby
     u_avg(:,1,:) = u_avg(:,1,:) + d(:,j,:) % u_w
     v_avg(:,1,:) = v_avg(:,1,:) + d(:,j,:) % v_w
     w_avg(:,1,:) = w_avg(:,1,:) + d(:,j,:) % w
+    theta_avg(:,1,:) = theta_avg(:,1,:) + e(:,j,:) % theta
+    dTdx_avg(:,1,:) = dTdx_avg(:,1,:) + e(:,j,:) % dTdx
+    dTdy_avg(:,1,:) = dTdy_avg(:,1,:) + e(:,j,:) % dTdy
+    dTdz_avg(:,1,:) = dTdz_avg(:,1,:) + e(:,j,:) % dTdz
 enddo
 u_avg(:,1,:) = u_avg(:,1,:) / vby
 v_avg(:,1,:) = v_avg(:,1,:) / vby
 w_avg(:,1,:) = w_avg(:,1,:) / vby
-! Use ky=0 as streamwise average to avoid having to time-average dTdxj
-theta_avg(:,1,:) = real( bb(:,1,:)%thetaf )
-dTdx_avg(:,1,:) = real( a(:,1,:)%dTdx )
-dTdy_avg(:,1,:) = real( a(:,1,:)%dTdy )
-dTdz_avg(:,1,:) = real( a(:,1,:)%dTdz )
+theta_avg(:,1,:) = theta_avg(:,1,:) / vby
+dTdx_avg(:,1,:) = dTdx_avg(:,1,:) / vby
+dTdy_avg(:,1,:) = dTdy_avg(:,1,:) / vby
+dTdz_avg(:,1,:) = dTdz_avg(:,1,:) / vby
 
 do i = 1, ubx
 do j = 1, uby
@@ -2113,28 +2119,26 @@ CTlapT = a(i,j,k)%TlapT - bb(i,j,k)%thetaf * conjg(a(i,j,k)%lapT)
 ! ------------------------- Compute Budget Terms -----------------------------
 ! Mean Advection, Uk*d(T*T)dxk
 ! Multiplying by kx=0 mode time-average here
-e(i,j,k) % adv = u_avg(i,1,k)*real(conjg(CTdTdx) + CTdTdx)       &
+f(i,j,k) % adv = u_avg(i,1,k)*real(conjg(CTdTdx) + CTdTdx)       &
     + v_avg(i,1,k)*real(conjg(CTdTdy) + CTdTdy)                  &
     + w_avg(i,1,k)*real(conjg(CTdTdz) + CTdTdz)
 
 ! Turbulent Transport
-e(i,j,k) % tfluc = real( CTudTdx + conjg(CTudTdx) +              &
+f(i,j,k) % tfluc = real( CTudTdx + conjg(CTudTdx) +              &
     CTvdTdy + conjg(CTvdTdy) + CTwdTdz + conjg(CTwdTdz) )
 
 ! Production Rate, -(Rik*dUjdxk + Rjk*dUidxk)
 ! Multiplying by kx=0 mode time-average here
-e(i,j,k) % prod = 2.0_rprec*( b(i,j,k)%upthetap*dTdx_avg(i,1,k) +           &
+f(i,j,k) % prod = 2.0_rprec*( b(i,j,k)%upthetap*dTdx_avg(i,1,k) +           &
     b(i,j,k)%vpthetap*dTdy_avg(i,1,k) + b(i,j,k)%wpthetap*dTdz_avg(i,1,k) )
 
 ! Pseudo-dissipation, 2*kappa*dTdxj*dTdxj
-e(i,j,k) % pdiss = 2.0_rprec*(nu_molec/Pr_sgs)*real(CTxTx + CTyTy + CTzTz)
+f(i,j,k) % pdiss = 2.0_rprec*(nu_molec/Pr_sgs)*real(CTxTx + CTyTy + CTzTz)
 
 ! Transport by diffusion
 ! CTlapT already multiplied by (nu/Pr) because div_pi was used
 ! Change sign of CTlapT because of how div_pi is set up
-! Note: lapT terms include y-derivative terms from pseudo-dissipation
-!       which need to be canceled, which is why the CTyTy terms has opposite sign
-e(i,j,k) % tvisc = 2.0_rprec*(nu_molec/Pr_sgs)*real(CTxTx - CTyTy + CTzTz) - real( conjg(CTlapT) + CTlapT )
+f(i,j,k) % tvisc = 2.0_rprec*(nu_molec/Pr_sgs)*real(CTxTx + CTyTy + CTzTz) - real( conjg(CTlapT) + CTlapT )
 
 end do
 end do
@@ -2142,10 +2146,10 @@ end do
 
 ! ---------------------------- Prepare Output --------------------------------
 ! Move all terms to the RHS
-e % adv   = - e % adv
-e % tfluc = - e % tfluc
-e % prod  = - e % prod
-e % pdiss = - e % pdiss
+f % adv   = - f % adv
+f % tfluc = - f % tfluc
+f % prod  = - f % prod
+f % pdiss = - f % pdiss
 
 end function scal_specbudgy_compute
 #endif
