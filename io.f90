@@ -1821,6 +1821,7 @@ real(rprec), allocatable, dimension(:,:,:) :: ui, vi, wi, w_uv, wF_uv
 real(rprec), pointer, dimension(:) :: x, y, z, zw
 #ifdef PPSCALARS
 real(rprec), allocatable, dimension(:,:,:) :: thetai
+real(rprec), allocatable, dimension(:,:) :: theta_xavg
 #endif
 
 #ifndef PPCGNS
@@ -1941,6 +1942,23 @@ endif
 !        + w_uv(1:nx,1:ny,lbz:nz)**2                                     &
 !        + v(1:nx,1:ny,lbz:nz)**2 )
 !endif
+
+#ifdef PPSCALARS
+! Compute x-avg theta for output
+allocate( theta_xavg(ny,lbz:nz) )
+theta_xavg(1:ny,lbz:nz) = 0._rprec
+if (fourier) then
+    do i = 1, nxp
+        theta_xavg(1:ny,lbz:nz) = theta_xavg(1:ny,lbz:nz) + thetaF(i,1:ny,lbz:nz)
+    enddo
+    theta_xavg(1:ny,lbz:nz) = theta_xavg(1:ny,lbz:nz) / nxp
+else !! not fourier
+    do i = 1, nx
+        theta_xavg(1:ny,lbz:nz) = theta_xavg(1:ny,lbz:nz) + theta(i,1:ny,lbz:nz)
+    enddo
+    theta_xavg(1:ny,lbz:nz) = theta_xavg(1:ny,lbz:nz) / nx
+endif
+#endif
 
 !  Instantaneous velocity sampled at point
 if(itype==1) then
@@ -2257,6 +2275,28 @@ elseif(itype==3) then
         write(13,rec=1) thetaF(1,:ny,1:nz)
         close(13)
 #endif
+
+    ! Common file name portion for all output types
+    call string_splice(fname, path // 'output/theta-xavg.',jt_total)
+
+#if defined(PPCGNS) && defined(PPMPI)
+        ! Write CGNS Output
+        call string_concat(fname, '.cgns')
+        call write_parallel_cgns (fname,1,ny, nz - nz_end, nz_tot,     &
+                        (/ 1, 1,   (nz-1)*coord + 1 /),                &
+                        (/ 1, ny, (nz-1)*(coord+1) + 1 - nz_end /),    &
+                    xplane_loc(i:i) , y(1:ny) , z(1:(nz-nz_end) ),     &
+              1, (/ 'Theta_xavg' /),                                   &
+              (/ theta_xavg(1:ny,1:(nz-nz_end)) /) )
+
+#else
+        ! Write binary output
+        call string_concat(fname, bin_ext)
+        open(unit=13,file=fname,form='unformatted',convert=write_endian, access='direct',recl=ny*nz*rprec)
+        write(13,rec=1) theta_xavg(:ny,1:nz)
+        close(13)
+#endif
+
 #endif
 
 else !! not fourier
@@ -2350,6 +2390,28 @@ else !! not fourier
         write(13,rec=1) theta(1,:ny,1:nz)
         close(13)
 #endif
+
+    ! Common file name portion for all output types
+    call string_splice(fname, path // 'output/theta-xavg.',jt_total)
+
+#if defined(PPCGNS) && defined(PPMPI)
+        ! Write CGNS Output
+        call string_concat(fname, '.cgns')
+        call write_parallel_cgns (fname,1,ny, nz - nz_end, nz_tot,     &
+                        (/ 1, 1,   (nz-1)*coord + 1 /),                &
+                        (/ 1, ny, (nz-1)*(coord+1) + 1 - nz_end /),    &
+                    xplane_loc(i:i) , y(1:ny) , z(1:(nz-nz_end) ),     &
+              1, (/ 'Theta_xavg' /),                                   &
+              (/ theta(1:ny,1:(nz-nz_end)) /) )
+
+#else
+        ! Write binary output
+        call string_concat(fname, bin_ext)
+        open(unit=13,file=fname,form='unformatted',convert=write_endian, access='direct',recl=ny*nz*rprec)
+        write(13,rec=1) theta_xavg(:ny,1:nz)
+        close(13)
+#endif
+
 #endif
 
 endif !! to fourier or not to fourier
