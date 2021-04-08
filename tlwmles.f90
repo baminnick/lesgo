@@ -773,7 +773,8 @@ do jtr = 1, wm_count
     ! ustar = u_star
 
     ! Compute eddy viscosity values on inner layer grid
-    call wm_eddyvisc_blend(ustar)
+    !call wm_eddyvisc_blend(ustar)
+    call wm_eddyvisc(ustar)
 
     ! Exchange ghost node information
     ! send info down from jz=1 on coord to jz=nzr on coord-1
