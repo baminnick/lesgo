@@ -53,6 +53,14 @@ real(rprec), dimension(:,:), allocatable :: dpdxr, dpdyr
 ! Grid variables
 real(rprec), dimension(:), allocatable :: zuvr, zwr, jaco_uvr, jaco_wr
 
+#ifdef PPTLWM_LVLSET
+! Level-set parameters
+real(rprec), dimension(:,:,:), allocatable :: phi_uvr, phi_wr
+real(rprec), dimension(:,:), allocatable :: dudzr_wall, dvdzr_wall,     &
+    txzr_wall, tyzr_wall, phi_wall
+integer, dimension(:,:), allocatable :: coord_wall, k_wall
+#endif
+
 ! Whether to initialize tlwm field
 logical, public :: init_tlwm = .true.
 ! Name of file for restarting
@@ -125,7 +133,16 @@ else
     call tlwm_grid_uniform()
 endif
 
-! Additional TLWMLES Variables
+#ifdef PPTLWM_LVLSET
+! Simulation variables for level-set
+allocate ( dudzr_wall(nxr,nyr) ); dudzr_wall = 0._rprec
+allocate ( dvdzr_wall(nxr,nyr) ); dvdzr_wall = 0._rprec
+allocate ( txzr_wall(nxr,nyr) ); txzr_wall = 0._rprec
+allocate ( tyzr_wall(nxr,nyr) ); tyzr_wall = 0._rprec
+
+! Load topography and allocate parameters for level-set
+call load_tlwm_topography()
+#endif
 
 end subroutine tlwm_init
 
@@ -166,10 +183,15 @@ select case (lbc_mom)
 end select
 
 ! Compute and interpolate/filter wall-stress answer for LES using TLWM sol
+#ifdef PPTLWM_LVLSET
+call tlwm_lvlset_wallstress()
+call lvlset_les_lbc()
+#else
 if (coord == 0) then
     call inner_layer_wallstress()
     call les_lbc()
 endif
+#endif
 
 #ifdef PPOUTPUT_WMLES
 ! OUTPUT LOOP (for TLWMLES)
@@ -281,7 +303,7 @@ if (coord == 0) then
     jaco_wr(lbz) = jaco_wr(1)
     jaco_uvr(lbz) = jaco_uvr(1)
     zuvr(lbz) = -zuvr(1)
-    zwr(lbz) = - zwr(lbz)
+    zwr(lbz) = -zwr(lbz)
     write(*,*) '--> Inner-layer grid stretched using mapping function'
 else
     jaco_wr(lbz) = f1((coord-1)*(nzr-1)+nzr-1)
@@ -353,11 +375,17 @@ call tlwm_eq_ubc()
 ! Solve equilibrium wall-model ODE to initialize the TLWM field
 call tlwm_eq_solve()
 
+#ifdef PPTLWM_LVLSET
+! Compute and interpolate wall-stress for LES
+call tlwm_lvlset_wallstress()
+call lvlset_les_lbc()
+#else
 ! Interpolate/filter wall-stress answer for LES
 if (coord == 0) then
     call inner_layer_wallstress()
     call les_lbc()
 endif
+#endif
 
 end subroutine ic_tlwm_vel
 
@@ -548,9 +576,9 @@ subroutine les_lbc
 !*****************************************************************************
 !
 ! This subroutine creates the lower boundary condition for the LES using the
-! solution of the inner-layer wall-model. This requires computing the 
-! derivatives and wall-stress at z=0, then interpolating/filtering the data
-! to the LES grid
+! solution of the inner-layer wall-model. The derivatives and wall-stress
+! at z=0 are assumed to have already been computed, then in this subroutine,
+! these data are interpolated/filtered onto the LES grid.
 !
 ! This routine should only be accessed by coord=0
 !
@@ -614,7 +642,6 @@ real(rprec) :: const1
 real(rprec), dimension(nxr,nyr,0:nzr) :: a, b, c
 real(rprec), dimension(nxr+2,nyr,0:nzr) :: Rx, usol, Ry, vsol
 
-!const1 = 1._rprec/(dzr**2)
 const1 = 1._rprec/dzr
 ! Commented out old code for uniform grid which used const1=1/(dzr**2)
 ! Now using stretched grid with Jacobians
@@ -622,12 +649,20 @@ const1 = 1._rprec/dzr
 ! Find ustar for wall model eddy viscosity
 ! 1. Use wall-stress value
 if (jt_total > 1) then
+#ifdef PPTLWM_LVLSET
+    call tlwm_lvlset_wallstress
+    ustar = sqrt(abs(txzr_wall(1:nxr,1:nyr)) + abs(tyzr_wall(1:nxr,1:nyr)))
+    ! from tlwm_lvlset_wallstress, txzr_wall and tyzr_wall are 
+    ! already zero on coords where the wall interface is not located
+#else
     ! Compute wall-stress on only bottom coord
     if (coord == 0) then
         ustar = sqrt(abs(txzr(1:nxr,1:nyr,1)) + abs(tyzr(1:nxr,1:nyr,1)))
     else
         ustar = 0._rprec
     endif
+#endif
+
     ! Send wall-stress to all coords
     call mpi_allreduce(ustar, dummy, nxr*nyr, mpi_rprec,                  &
         MPI_SUM, comm, ierr)
@@ -652,6 +687,25 @@ if (coord == 0) then
 #endif
     do jy = 1, nyr
     do jx = 1, nxr
+#ifdef PPTLWM_LVLSET
+        if (phi_uvr(jx,jy,1) > 0) then !! in fluid
+             b(jx,jy,1) = -const1*(1._rprec/jaco_uvr(1))*                        &
+                (const1*(nu_wr(jx,jy,2)+nu_molec)/jaco_wr(2) + nu_molec/phi_uvr(jx,jy,1))
+             c(jx,jy,1) = const1*(1._rprec/jaco_uvr(1))*                         &
+                const1*(nu_wr(jx,jy,2)+nu_molec)/jaco_wr(2)
+
+            Rx(jx,jy,1) = Rx(jx,jy,1) - const1*(1._rprec/jaco_uvr(1))*          &
+                (nu_molec/zuvr(1))*ubot
+            ! Ry(jx,jy,1) = Ry(jx,jy,1) !! vbot = 0, so do nothing           
+        else !! in solid
+            ! Change coefficient to manually specify what the velocity is
+            b(jx,jy,1) = 1._rprec
+            c(jx,jy,1) = 0._rprec
+            ! Force velocity values to be known values
+            Rx(jx,jy,1) = ubot
+            ! Leave Ry as zero
+        endif
+#else
         ! Coefficients are different on bottom row because using one-sided
         ! finite difference at wall, also nu_t(z=0)=0
         b(jx,jy,1) = -const1*(1._rprec/jaco_uvr(1))*                        &
@@ -662,6 +716,7 @@ if (coord == 0) then
         Rx(jx,jy,1) = Rx(jx,jy,1) - const1*(1._rprec/jaco_uvr(1))*          &
             (nu_molec/zuvr(1))*ubot
         ! Ry(jx,jy,1) = Ry(jx,jy,1) !! vbot = 0, so do nothing
+#endif
     enddo
     enddo
     jz_min = 2
@@ -698,6 +753,23 @@ endif
 do jz = jz_min, jz_max
 do jy = 1, nyr
 do jx = 1, nxr
+#ifdef PPTLWM_LVLSET
+    if (phi_uvr(jx,jy,jz) > 0) then !! in fluid
+        a(jx,jy,jz) = const1*(1._rprec/jaco_uvr(jz))*                         &
+            const1*(nu_wr(jx,jy,jz)+nu_molec)/jaco_wr(jz)
+        b(jx,jy,jz) = -const1*(1._rprec/jaco_uvr(jz))*                        &
+            (const1*(nu_wr(jx,jy,jz+1)+nu_molec)/jaco_wr(jz+1) +              &
+            const1*(nu_wr(jx,jy,jz)+nu_molec)/jaco_wr(jz))
+        c(jx,jy,jz) = const1*(1._rprec/jaco_uvr(jz))*                         &
+            const1*(nu_wr(jx,jy,jz+1)+nu_molec)/jaco_wr(jz+1)
+    else !! in solid
+        a(jx,jy,jz) = 0._rprec
+        b(jx,jy,jz) = 1._rprec
+        c(jx,jy,jz) = 0._rprec
+        Rx(jx,jy,jz) = ubot
+        ! Leave Ry as is
+    endif
+#else
     a(jx,jy,jz) = const1*(1._rprec/jaco_uvr(jz))*                         &
         const1*(nu_wr(jx,jy,jz)+nu_molec)/jaco_wr(jz)
     b(jx,jy,jz) = -const1*(1._rprec/jaco_uvr(jz))*                        &
@@ -705,6 +777,7 @@ do jx = 1, nxr
         const1*(nu_wr(jx,jy,jz)+nu_molec)/jaco_wr(jz))
     c(jx,jy,jz) = const1*(1._rprec/jaco_uvr(jz))*                         &
         const1*(nu_wr(jx,jy,jz+1)+nu_molec)/jaco_wr(jz+1)
+#endif
 enddo
 enddo
 enddo
@@ -756,12 +829,19 @@ do jtr = 1, wm_count
     ! Find ustar for wall model eddy viscosity
     ! 1. Use wall-stress value
     if (jt_total > 1) then
+#ifdef PPTLWM_LVLSET
+        call tlwm_lvlset_wallstress
+        ustar = sqrt(abs(txzr_wall(1:nxr,1:nyr)) + abs(tyzr_wall(1:nxr,1:nyr)))
+        ! from tlwm_lvlset_wallstress, txzr_wall and tyzr_wall are
+        ! already zero on coords where the wall interface is not located
+#else
         ! Compute wall-stress on only bottom coord
         if (coord == 0) then
             ustar = sqrt(abs(txzr(1:nxr,1:nyr,1)) + abs(tyzr(1:nxr,1:nyr,1)))
         else
             ustar = 0._rprec
         endif
+#endif
         ! Send wall-stress to all coords
         call mpi_allreduce(ustar, dummy, nxr*nyr, mpi_rprec,                &
             MPI_SUM, comm, ierr)
@@ -1085,6 +1165,26 @@ if (coord == 0) then
 #endif
     do jy = 1, nyr
     do jx = 1, nxr
+#ifdef PPTLWM_LVLSET
+        if (phi_uvr(jx,jy,1) > 0) then !! in fluid
+            nu_c = nu_wr(jx,jy,2) + nu_molec
+            b(jx,jy,1) = 1._rprec + const1*(1._rprec/jaco_uvr(1))*              &
+                (const2*(1._rprec/jaco_wr(2))*nu_c + (nu_molec/zuvr(1)))
+            c(jx,jy,1) = -const1*(1._rprec/jaco_uvr(1))*                        &
+                const2*(1._rprec/jaco_wr(2))*nu_c
+
+            Rx(jx,jy,1) = Rx(jx,jy,1) + const1*(1._rprec/jaco_uvr(1))*          &
+                (nu_molec/zuvr(1))*ubot
+            ! Ry(jx,jy,1) = Ry(jx,jy,1) !! vbot = 0, so do nothing
+        else !! in solid
+            ! Change coefficient to manually specify what the velocity is
+            b(jx,jy,1) = 1._rprec
+            c(jx,jy,1) = 0._rprec
+            ! Force velocity values to be known values
+            Rx(jx,jy,1) = ubot
+            ! Leave Ry as zero
+        endif
+#else
         nu_c = nu_wr(jx,jy,2) + nu_molec
         b(jx,jy,1) = 1._rprec + const1*(1._rprec/jaco_uvr(1))*              &
             (const2*(1._rprec/jaco_wr(2))*nu_c + (nu_molec/zuvr(1)))
@@ -1094,6 +1194,7 @@ if (coord == 0) then
         Rx(jx,jy,1) = Rx(jx,jy,1) + const1*(1._rprec/jaco_uvr(1))*          &
             (nu_molec/zuvr(1))*ubot
         ! Ry(jx,jy,1) = Ry(jx,jy,1) !! vbot = 0, so do nothing
+#endif
     enddo
     enddo
     jz_min = 2
@@ -1132,6 +1233,24 @@ endif
 do jz = jz_min, jz_max
 do jy = 1, nyr
 do jx = 1, nxr
+#ifdef PPTLWM_LVLSET
+    if (phi_uvr(jx,jy,jz) > 0) then !! in fluid
+        nu_a = nu_wr(jx,jy,jz) + nu_molec
+        nu_b = ((nu_wr(jx,jy,jz+1)+nu_molec)/jaco_wr(jz+1)) +                 &
+            ((nu_wr(jx,jy,jz)+nu_molec)/jaco_wr(jz))
+        nu_c = nu_wr(jx,jy,jz+1) + nu_molec
+
+        a(jx,jy,jz) = -const1*(1._rprec/jaco_uvr(jz))*const2*(1._rprec/jaco_wr(jz))*nu_a
+        b(jx,jy,jz) = 1._rprec + const1*(1._rprec/jaco_uvr(jz))*const2*nu_b
+        c(jx,jy,jz) = -const1*(1._rprec/jaco_uvr(jz))*const2*(1._rprec/jaco_wr(jz+1))*nu_c
+    else !! in solid
+        a(jx,jy,jz) = 0._rprec
+        b(jx,jy,jz) = 1._rprec
+        c(jx,jy,jz) = 0._rprec
+        Rx(jx,jy,jz) = ubot
+        ! Leave Ry as is
+    endif
+#else
     nu_a = nu_wr(jx,jy,jz) + nu_molec
     nu_b = ((nu_wr(jx,jy,jz+1)+nu_molec)/jaco_wr(jz+1)) +                 &
         ((nu_wr(jx,jy,jz)+nu_molec)/jaco_wr(jz))
@@ -1140,6 +1259,7 @@ do jx = 1, nxr
     a(jx,jy,jz) = -const1*(1._rprec/jaco_uvr(jz))*const2*(1._rprec/jaco_wr(jz))*nu_a
     b(jx,jy,jz) = 1._rprec + const1*(1._rprec/jaco_uvr(jz))*const2*nu_b
     c(jx,jy,jz) = -const1*(1._rprec/jaco_uvr(jz))*const2*(1._rprec/jaco_wr(jz+1))*nu_c
+#endif
 enddo
 enddo
 enddo
@@ -1735,10 +1855,26 @@ a_plus = 17.0_rprec !! used in decay portion
 do i = 1, nxr
 do j = 1, nyr
 do k = lbz, nzr
+#ifdef PPTLWM_LVLSET
+! Using phi values to specify distance from wall
+    if (phi_uvr(i,j,k) > 0._rprec) then !! in fluid
+        nu_uvr(i,j,k) = vonk*ustar(i,j)*phi_uvr(i,j,k)*                          &
+            ((1.0_rprec - exp(-phi_uvr(i,j,k)*ustar(i,j)/(a_plus*nu_molec)))**2)
+    else !! phi_uvr <= 0 !! in solid
+        nu_uvr(i,j,k) = 0._rprec
+    endif
+    if (phi_wr(i,j,k) > 0._rprec) then !! in fluid
+        nu_wr(i,j,k) = vonk*ustar(i,j)*phi_wr(i,j,k)*                            &
+            ((1.0_rprec - exp(-phi_wr(i,j,k)*ustar(i,j)/(a_plus*nu_molec)))**2)
+    else !! phi_wr <= 0 !! in solid
+        nu_wr(i,j,k) = 0._rprec
+    endif
+#else
     nu_uvr(i,j,k) = vonk*ustar(i,j)*zuvr(k)*                             &
         ((1.0_rprec - exp(-zuvr(k)*ustar(i,j)/(a_plus*nu_molec)))**2)
     nu_wr(i,j,k) = vonk*ustar(i,j)*zwr(k)*                               &
         ((1.0_rprec - exp(-zwr(k)*ustar(i,j)/(a_plus*nu_molec)))**2)
+#endif
 end do
 end do
 end do
@@ -1771,6 +1907,22 @@ a_plus = 17.0_rprec !! used in decay portion
 do i = 1, nxr
 do j = 1, nyr
 do k = lbz, nzr
+#ifdef PPTLWM_LVLSET
+    if (phi_uvr(i,j,k) > 0._rprec) then !! in fluid
+        decay = (1.0_rprec - exp(-phi_uvr(i,j,k)*ustar(i,j)/(a_plus*nu_molec)))**2
+        Lm = min(vonk*phi_uvr(i,j,k),Co*(dxr*dyr*jaco_uvr(k)*dzr)**(1._rprec/3._rprec))
+        nu_uvr(i,j,k) = ustar(i,j)*Lm*decay
+    else !! phi_uvr <= 0 !! in solid
+        nu_uvr(i,j,k) = 0._rprec
+    endif
+    if (phi_wr(i,j,k) > 0._rprec) then !! in fluid
+        decay = (1.0_rprec - exp(-phi_wr(i,j,k)*ustar(i,j)/(a_plus*nu_molec)))**2
+        Lm = min(vonk*phi_wr(i,j,k),Co*(dxr*dyr*jaco_wr(k)*dzr)**(1._rprec/3._rprec))
+        nu_wr(i,j,k) = ustar(i,j)*Lm*decay
+    else !! phi_wr <= 0 !! in solid
+        nu_wr(i,j,k) = 0._rprec
+    endif
+#else
     decay = (1.0_rprec - exp(-zuvr(k)*ustar(i,j)/(a_plus*nu_molec)))**2
     Lm = min(vonk*zuvr(k),Co*(dxr*dyr*jaco_uvr(k)*dzr)**(1._rprec/3._rprec))
     nu_uvr(i,j,k) = ustar(i,j)*Lm*decay
@@ -1778,6 +1930,7 @@ do k = lbz, nzr
     decay = (1.0_rprec - exp(-zwr(k)*ustar(i,j)/(a_plus*nu_molec)))**2
     Lm = min(vonk*zwr(k),Co*(dxr*dyr*jaco_wr(k)*dzr)**(1._rprec/3._rprec))
     nu_wr(i,j,k) = ustar(i,j)*Lm*decay
+#endif
 end do
 end do
 end do
@@ -2324,6 +2477,174 @@ write(13,rec=3) vortzrms(:nxr,:nyr,1:nzr)
 close(13)
 
 end subroutine tavg_tlwm_finalize
+#endif
+
+#ifdef PPTLWM_LVLSET
+!*****************************************************************************
+subroutine load_tlwm_topography
+!*****************************************************************************
+!
+! Loads topography specified from "hij.dat" and outputs grid locations
+! relative to topography, phi>0 in fluid, phi<0 in solid
+!
+use param, only : nxr, nyr, lbz, nzr, coord
+implicit none
+real(rprec), dimension(nxr*nyr) :: FIELD1
+real(rprec), dimension(nxr,nyr) :: tlwm_hij
+integer :: i, j, k
+
+allocate(phi_uvr(nxr,nyr,lbz:nzr),phi_wr(nxr,nyr,lbz:nzr))
+allocate(coord_wall(nxr,nyr),k_wall(nxr,nyr),phi_wall(nxr,nyr))
+
+! Read hij.dat file
+open(1,file=path//'hij.dat')
+do i = 1, nxr*nyr
+read(1,*) FIELD1(i)
+enddo
+close(1)
+
+! Re-sort input data
+do i = 1, nxr
+do j = 1, nyr
+    tlwm_hij(i,j) = FIELD1((i-1)*nyr+j)
+enddo
+enddo
+
+! Compute output phi values
+do i = 1, nxr
+do j = 1, nyr
+do k = lbz, nzr
+    phi_uvr(i,j,k) = zuvr(k) - tlwm_hij(i,j)
+    phi_wr(i,j,k) = zwr(k) - tlwm_hij(i,j)
+enddo
+enddo
+enddo
+
+! Output dz distance from topography and first grid point
+! Also output coord and wall-normal location of this distance
+coord_wall = -1
+k_wall = -1
+phi_wall = -1
+
+do i = 1, nxr
+do j = 1, nyr
+    do k = 1, (nzr-1)
+        if ((phi_uvr(i,j,k-1)<=0) .and. (phi_uvr(i,j,k)>0)) then
+            coord_wall(i,j) = coord
+            k_wall(i,j) = k
+            phi_wall(i,j) = phi_uvr(i,j,k)
+        endif
+    enddo
+enddo
+enddo
+
+end subroutine load_tlwm_topography
+
+!*****************************************************************************
+subroutine tlwm_lvlset
+!*****************************************************************************
+!
+! Enforce topography in tlwmles using level-set method. Velocity are zeroed
+! depending on the sign of phi
+!
+use param, only : nxr, nyr, lbz, nzr
+implicit none
+integer :: i, j, k
+
+do k = lbz, nzr
+do j = 1, nyr
+do i = 1, nxr
+    if (phi_uvr(i,j,k) <= 0) then
+        ur(i,j,k) = 0._rprec
+        vr(i,j,k) = 0._rprec
+    endif
+enddo
+enddo
+enddo
+! Don't need to zero out wr-velocity b/c its found by solving continuity
+
+end subroutine tlwm_lvlset
+
+!*****************************************************************************
+subroutine tlwm_lvlset_wallstress
+!*****************************************************************************
+!
+! This subroutine computes the wallstress given a roughness topography
+! enforced by the level-set method
+!
+use param, only : nxr, nyr, lbz, nzr, coord
+use param, only : ubot, z_i, u_star, nu_molec
+use param, only : dzr !! debug
+implicit none
+integer :: i, j, k
+
+do i = 1, nxr
+do j = 1, nyr
+    if (coord == coord_wall(i,j)) then
+        k = k_wall(i,j)
+!        dudzr_wall(i,j) = ( ur(i,j,k) - ubot ) / phi_wall(i,j)
+!        dvdzr_wall(i,j) = vr(i,j,k) / phi_wall(i,j)
+        dudzr_wall(i,j) = ( ur(i,j,k) - ubot ) / (dzr*jaco_wr(k))
+        dvdzr_wall(i,j) = vr(i,j,k) / (dzr*jaco_wr(k))
+        txzr_wall(i,j) = -nu_molec/(z_i*u_star)*dudzr_wall(i,j)
+        tyzr_wall(i,j) = -nu_molec/(z_i*u_star)*dvdzr_wall(i,j)
+    else
+        ! Zero these values on the other coords so it can summed 
+        ! later to output for LES
+        dudzr_wall(i,j) = 0._rprec
+        dvdzr_wall(i,j) = 0._rprec
+        txzr_wall(i,j) = 0._rprec
+        tyzr_wall(i,j) = 0._rprec
+    endif
+enddo
+enddo
+
+end subroutine tlwm_lvlset_wallstress
+
+!*****************************************************************************
+subroutine lvlset_les_lbc
+!*****************************************************************************
+!
+! Similar to les_lbc, this subroutine creates the lower boundary condition
+! for the LES using the solution of the inner-layer wall-model. Unlike 
+! les_lbc, this subroutine needs to be called on all coords since the 
+! topography may extend beyond coord=0.
+! 
+use param, only : nxr, nyr, lbz, nzr, nx, ny
+use param, only : coord, comm, ierr, MPI_RPREC
+use sim_param, only : dudz, dvdz, txz, tyz
+use mpi
+implicit none
+integer :: i, j, k
+real(rprec), dimension(nxr,nyr) :: dummy_in
+real(rprec), dimension(nx,ny) :: dummy_out
+
+! Gather data and interpolate on bottom coord
+call mpi_allreduce(dudzr_wall, dummy_in, nxr*nyr, mpi_rprec, MPI_SUM, comm, ierr)
+if (coord == 0) then
+    call interp_tlwm_to_les(dummy_in,dummy_out)
+    dudz(1:nx,1:ny,1) = dummy_out
+endif
+
+call mpi_allreduce(dvdzr_wall, dummy_in, nxr*nyr, mpi_rprec, MPI_SUM, comm, ierr)
+if (coord == 0) then
+    call interp_tlwm_to_les(dummy_in,dummy_out)
+    dvdz(1:nx,1:ny,1) = dummy_out
+endif
+
+call mpi_allreduce(txzr_wall, dummy_in, nxr*nyr, mpi_rprec, MPI_SUM, comm, ierr)
+if (coord == 0) then
+    call interp_tlwm_to_les(dummy_in,dummy_out)
+    txz(1:nx,1:ny,1) = dummy_out
+endif
+
+call mpi_allreduce(tyzr_wall, dummy_in, nxr*nyr, mpi_rprec, MPI_SUM, comm, ierr)
+if (coord == 0) then
+    call interp_tlwm_to_les(dummy_in,dummy_out)
+    tyz(1:nx,1:ny,1) = dummy_out
+endif
+
+end subroutine lvlset_les_lbc
 #endif
 
 end module tlwmles
