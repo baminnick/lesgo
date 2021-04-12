@@ -432,6 +432,9 @@ if (coord == nproc-1) then
     vr(1:nxr,1:nyr,nzr) = dummy_out
 endif
 
+!if (coord == jz_coord) write(*,*) 'LES velocity: ', u(1,1,jz_r), v(1,1,jz_r)
+!if (coord == nproc-1) write(*,*) 'Interpolated: ', ur(2,2,nzr), vr(2,2,nzr)
+
 end subroutine tlwm_eq_ubc
 
 !*****************************************************************************
@@ -754,7 +757,17 @@ do jz = jz_min, jz_max
 do jy = 1, nyr
 do jx = 1, nxr
 #ifdef PPTLWM_LVLSET
-    if (phi_uvr(jx,jy,jz) > 0) then !! in fluid
+    if (k_wall(jx,jy) == jz) then !! fluid point near wall
+        a(jx,jy,jz) = 0._rprec !! moved to rhs
+        b(jx,jy,jz) = -const1*(1._rprec/jaco_uvr(jz))*                        &
+            (const1*(nu_wr(jx,jy,jz+1)+nu_molec)/jaco_wr(jz+1) +              &
+            (nu_wr(jx,jy,jz)+nu_molec)/phi_wall(jx,jy))
+        c(jx,jy,jz) = const1*(1._rprec/jaco_uvr(jz))*                         &
+            const1*(nu_wr(jx,jy,jz+1)+nu_molec)/jaco_wr(jz+1)
+        Rx(jx,jy,jz) = Rx(jx,jy,jz) - const1*(1._rprec/jaco_uvr(jz))*         &
+            ((nu_wr(jx,jy,jz)+nu_molec)/phi_wall(jx,jy))*ubot
+        ! Leave Ry as is
+    elseif (phi_uvr(jx,jy,jz) > 0) then !! in fluid away from wall
         a(jx,jy,jz) = const1*(1._rprec/jaco_uvr(jz))*                         &
             const1*(nu_wr(jx,jy,jz)+nu_molec)/jaco_wr(jz)
         b(jx,jy,jz) = -const1*(1._rprec/jaco_uvr(jz))*                        &
@@ -1169,7 +1182,7 @@ if (coord == 0) then
         if (phi_uvr(jx,jy,1) > 0) then !! in fluid
             nu_c = nu_wr(jx,jy,2) + nu_molec
             b(jx,jy,1) = 1._rprec + const1*(1._rprec/jaco_uvr(1))*              &
-                (const2*(1._rprec/jaco_wr(2))*nu_c + (nu_molec/zuvr(1)))
+                (const2*(1._rprec/jaco_wr(2))*nu_c + (nu_molec/phi_uvr(jx,jy,1)))
             c(jx,jy,1) = -const1*(1._rprec/jaco_uvr(1))*                        &
                 const2*(1._rprec/jaco_wr(2))*nu_c
 
@@ -1234,7 +1247,19 @@ do jz = jz_min, jz_max
 do jy = 1, nyr
 do jx = 1, nxr
 #ifdef PPTLWM_LVLSET
-    if (phi_uvr(jx,jy,jz) > 0) then !! in fluid
+    if (k_wall(jx,jy) == jz) then !! fluid point near wall
+        nu_a = (nu_wr(jx,jy,jz) + nu_molec)/phi_wall(jx,jy)
+        nu_b = (const2*(nu_wr(jx,jy,jz+1)+nu_molec)/jaco_wr(jz+1)) +          &
+            ((nu_wr(jx,jy,jz)+nu_molec)/phi_wall(jx,jy))
+        nu_c = nu_wr(jx,jy,jz+1) + nu_molec
+
+        a(jx,jy,jz) = -const1*(1._rprec/jaco_uvr(jz))*const2*(1._rprec/jaco_wr(jz))*nu_a
+        a(jx,jy,jz) = 0._rprec !! moved to rhs
+        b(jx,jy,jz) = 1._rprec + const1*(1._rprec/jaco_uvr(jz))*nu_b
+        c(jx,jy,jz) = -const1*(1._rprec/jaco_uvr(jz))*const2*(1._rprec/jaco_wr(jz+1))*nu_c
+        Rx(jx,jy,jz) = Rx(jx,jy,jz) + const1*(1._rprec/jaco_uvr(jz))*nu_a*ubot
+        ! Leave Ry as is
+    elseif (phi_uvr(jx,jy,jz) > 0) then !! in fluid, away from wall
         nu_a = nu_wr(jx,jy,jz) + nu_molec
         nu_b = ((nu_wr(jx,jy,jz+1)+nu_molec)/jaco_wr(jz+1)) +                 &
             ((nu_wr(jx,jy,jz)+nu_molec)/jaco_wr(jz))
@@ -2574,7 +2599,6 @@ subroutine tlwm_lvlset_wallstress
 !
 use param, only : nxr, nyr, lbz, nzr, coord
 use param, only : ubot, z_i, u_star, nu_molec
-use param, only : dzr !! debug
 implicit none
 integer :: i, j, k
 
@@ -2582,10 +2606,8 @@ do i = 1, nxr
 do j = 1, nyr
     if (coord == coord_wall(i,j)) then
         k = k_wall(i,j)
-!        dudzr_wall(i,j) = ( ur(i,j,k) - ubot ) / phi_wall(i,j)
-!        dvdzr_wall(i,j) = vr(i,j,k) / phi_wall(i,j)
-        dudzr_wall(i,j) = ( ur(i,j,k) - ubot ) / (dzr*jaco_wr(k))
-        dvdzr_wall(i,j) = vr(i,j,k) / (dzr*jaco_wr(k))
+        dudzr_wall(i,j) = ( ur(i,j,k) - ubot ) / phi_wall(i,j)
+        dvdzr_wall(i,j) = vr(i,j,k) / phi_wall(i,j)
         txzr_wall(i,j) = -nu_molec/(z_i*u_star)*dudzr_wall(i,j)
         tyzr_wall(i,j) = -nu_molec/(z_i*u_star)*dvdzr_wall(i,j)
     else
