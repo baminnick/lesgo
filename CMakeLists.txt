@@ -9,9 +9,9 @@ cmake_minimum_required(VERSION 2.8.9)
 set(CMAKE_Fortran_COMPILER_ID "Intel")
 
 # Set the name of the computer you are compiling on.
-# Supported computers: panoramix, njord, marcc, darwin-brew
+# Supported computers: rockfish, panoramix, njord, marcc, darwin-brew
 # Otherwise, default settings are used
-set(hostname "marcc")
+set(hostname "rockfish")
 
 # Read and write binary files as big_endian or little_endian
 # Options: DEFAULT, LITTLE, or BIG
@@ -76,6 +76,16 @@ else()
     link_libraries(fftw3)
 endif()
 
+if (${hostname} STREQUAL "rockfish")
+    if (${CMAKE_Fortran_COMPILER_ID} STREQUAL "Intel")
+        set(CMAKE_Fortran_COMPILER ${compiler_path})
+	set(CMAKE_C_COMPILER gcc)
+	set(CMAKE_CXX_COMPILER g++)
+    else()
+	link_libraries(fftw3)
+    endif()
+endif()
+
 # Common include and link directories
 include_directories(/usr/local/include)
 link_directories(/usr/local/lib)
@@ -105,6 +115,21 @@ elseif (${hostname} STREQUAL "marcc")
     elseif (${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU")
         include_directories(/software/apps/fftw3/3.3.8/gcc/5.5.0/include/)
         link_directories(/software/apps/fftw3/3.3.8/gcc/5.5.0/lib/)
+        if (USE_CGNS)
+            include_directories($ENV{HOME}/cgns/include/)
+            link_directories($ENV{HOME}/hdf5/lib/ $ENV{HOME}/cgns/lib/)
+        endif ()
+    endif ()
+#  rockfish
+elseif (${hostname} STREQUAL "rockfish")
+    # Intel
+    if (${CMAKE_Fortran_COMPILER_ID} STREQUAL "Intel")
+        include_directories(/data/apps/linux-centos8-cascadelake/intel-19.1.2.254/fftw-3.3.8-wxxony3sfn4vctui2jomkwlzs6jfnvqr/include/)
+        link_directories(/data/apps/linux-centos8-cascadelake/intel-19.1.2.254/fftw-3.3.8-wxxony3sfn4vctui2jomkwlzs6jfnvqr/lib/)
+    # GNU -- These have to be installed locally for now.
+    elseif (${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU")
+        include_directories(/data/apps/linux-centos8-cascadelake/gcc-9.3.0/fftw-3.3.8-uxkh4w5nrgeviv2ooaorhcuolbtbosyi/include/)
+        link_directories(/data/apps/linux-centos8-cascadelake/gcc-9.3.0/fftw-3.3.8-uxkh4w5nrgeviv2ooaorhcuolbtbosyi/lib/)
         if (USE_CGNS)
             include_directories($ENV{HOME}/cgns/include/)
             link_directories($ENV{HOME}/hdf5/lib/ $ENV{HOME}/cgns/lib/)
