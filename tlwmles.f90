@@ -1981,7 +1981,7 @@ real(rprec), intent(out) :: rms_global
 ! Calculate wall-normal derivative of w
 call tlwm_ddz_w(wr, dwdzr, lbz)
 
-rms = rms + maxval( abs( dudxr(1:nxr,1:nyr,1:nzr-1) +             &
+rms = maxval( abs( dudxr(1:nxr,1:nyr,1:nzr-1) +             &
     dvdyr(1:nxr,1:nyr,1:nzr-1) + dwdzr(1:nxr,1:nyr,1:nzr-1) ) )
 
 ! Transfer between processors
