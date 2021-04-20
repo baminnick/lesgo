@@ -135,10 +135,10 @@ endif
 
 #ifdef PPTLWM_LVLSET
 ! Simulation variables for level-set
-allocate ( dudzr_wall(nxr,nyr) ); dudzr_wall = 0._rprec
-allocate ( dvdzr_wall(nxr,nyr) ); dvdzr_wall = 0._rprec
-allocate ( txzr_wall(nxr,nyr) ); txzr_wall = 0._rprec
-allocate ( tyzr_wall(nxr,nyr) ); tyzr_wall = 0._rprec
+allocate ( dudzr_wall(nxr+2,nyr) ); dudzr_wall = 0._rprec
+allocate ( dvdzr_wall(nxr+2,nyr) ); dvdzr_wall = 0._rprec
+allocate ( txzr_wall(nxr+2,nyr) ); txzr_wall = 0._rprec
+allocate ( tyzr_wall(nxr+2,nyr) ); tyzr_wall = 0._rprec
 
 ! Load topography and allocate parameters for level-set
 call load_tlwm_topography()
@@ -182,7 +182,7 @@ select case (lbc_mom)
         call error (sub_name, 'invalid lbc_mom')
 end select
 
-! Compute and interpolate/filter wall-stress answer for LES using TLWM sol
+! Compute and filter wall-stress answer for LES using TLWM sol
 #ifdef PPTLWM_LVLSET
 call tlwm_lvlset_wallstress()
 call lvlset_les_lbc()
@@ -369,18 +369,18 @@ subroutine ic_tlwm_vel
 use param
 implicit none
 
-! Enforce interpolated/filtered LES velocity field as upper BC for TLWM
+! Enforce interpolated LES velocity field as upper BC for TLWM
 call tlwm_eq_ubc()
 
 ! Solve equilibrium wall-model ODE to initialize the TLWM field
 call tlwm_eq_solve()
 
 #ifdef PPTLWM_LVLSET
-! Compute and interpolate wall-stress for LES
+! Compute and filter wall-stress for LES
 call tlwm_lvlset_wallstress()
 call lvlset_les_lbc()
 #else
-! Interpolate/filter wall-stress answer for LES
+! Filter wall-stress answer for LES
 if (coord == 0) then
     call inner_layer_wallstress()
     call les_lbc()
@@ -396,7 +396,7 @@ subroutine tlwm_eq_ubc
 ! This subroutine creates the upper boundary condition for the equilibrium
 ! inner-layer wall-model. This requires grabbing the LES velocity at z = hwm
 ! on a lower coord, then moving the data to coord = nproc-1 and 
-! interpolating/filtering the data to the TLWM grid.
+! interpolating the data to the TLWM grid.
 ! 
 ! The equilibrium wall-model only requires the u, v velocity from the LES.
 ! 
@@ -581,34 +581,39 @@ subroutine les_lbc
 ! This subroutine creates the lower boundary condition for the LES using the
 ! solution of the inner-layer wall-model. The derivatives and wall-stress
 ! at z=0 are assumed to have already been computed, then in this subroutine,
-! these data are interpolated/filtered onto the LES grid.
+! these data are filtered onto the LES grid.
 !
 ! This routine should only be accessed by coord=0
 !
 use param, only : nx, ny, ubot, nu_molec, z_i, u_star
-use param, only : nxr, nyr,dzr
+use param, only : nxr, nyr, dzr
 use sim_param, only : dudz, dvdz, txz, tyz
 use mpi
+use test_filtermodule, only : tlwm_filter
 implicit none
 integer :: jx, jy
-real(rprec), dimension(nxr,nyr) :: dummy_in
+real(rprec), dimension(nxr+2,nyr) :: dummy_in
 real(rprec), dimension(nx,ny) :: dummy_out
 
-! Interpolate/filter the data to LES
-dummy_in = dudzr(1:nxr,1:nyr,1)
-call interp_tlwm_to_les(dummy_in,dummy_out)
+! Filter data to LES
+dummy_in = dudzr(:,:,1)
+call tlwm_filter(dummy_in)
+call interp_tlwm_to_les(dummy_in(1:nxr,1:nyr),dummy_out)
 dudz(1:nx,1:ny,1) = dummy_out
 
-dummy_in = dvdzr(1:nxr,1:nyr,1)
-call interp_tlwm_to_les(dummy_in,dummy_out)
+dummy_in = dvdzr(:,:,1)
+call tlwm_filter(dummy_in)
+call interp_tlwm_to_les(dummy_in(1:nxr,1:nyr),dummy_out)
 dvdz(1:nx,1:ny,1) = dummy_out
 
-dummy_in = txzr(1:nxr,1:nyr,1)
-call interp_tlwm_to_les(dummy_in,dummy_out)
+dummy_in = txzr(:,:,1)
+call tlwm_filter(dummy_in)
+call interp_tlwm_to_les(dummy_in(1:nxr,1:nyr),dummy_out)
 txz(1:nx,1:ny,1) = dummy_out
 
-dummy_in = tyzr(1:nxr,1:nyr,1)
-call interp_tlwm_to_les(dummy_in,dummy_out)
+dummy_in = tyzr(:,:,1)
+call tlwm_filter(dummy_in)
+call interp_tlwm_to_les(dummy_in(1:nxr,1:nyr),dummy_out)
 tyz(1:nx,1:ny,1) = dummy_out
 
 end subroutine les_lbc
@@ -740,7 +745,7 @@ if (coord == nproc-1) then
             (const1*(nu_wr(jx,jy,nzr-1)+nu_molec)/jaco_wr(nzr-1) +          &
             (nu_wr(jx,jy,nzr)+nu_molec)/(L_zr-zuvr(nzr-1)))
 
-        !! interpolated/filtered LES velocity as upper BC
+        !! interpolated LES velocity as upper BC
         Rx(jx,jy,nzr-1) = Rx(jx,jy,nzr-1) - const1*(1._rprec/jaco_uvr(nzr-1))*   &
             ((nu_wr(jx,jy,nzr)+nu_molec)/(L_zr-zuvr(nzr-1)))*ur(jx,jy,nzr)
         Ry(jx,jy,nzr-1) = Ry(jx,jy,nzr-1) - const1*(1._rprec/jaco_uvr(nzr-1))*   &
@@ -973,22 +978,22 @@ do jtr = 1, wm_count
 
     ! Exchange information between processors to set values at nz
     ! from jz=1 above to jz=nz below
-    call mpi_sendrecv( txzr(:,:,1), (nxr+2)*nyr, MPI_RPREC, down, 1,            &
+    call mpi_sendrecv( txzr(:,:,1), (nxr+2)*nyr, MPI_RPREC, down, 1,        &
         txzr(:,:,nzr), (nxr+2)*nyr, MPI_RPREC, up, 1, comm, status, ierr)
-    call mpi_sendrecv( txzr_half1(:,:,1), (nxr+2)*nyr, MPI_RPREC, down, 1,      &
+    call mpi_sendrecv( txzr_half1(:,:,1), (nxr+2)*nyr, MPI_RPREC, down, 1,  &
         txzr_half1(:,:,nzr), (nxr+2)*nyr, MPI_RPREC, up, 1, comm, status, ierr)
-    call mpi_sendrecv( txzr_half2(:,:,1), (nxr+2)*nyr, MPI_RPREC, down, 1,      &
+    call mpi_sendrecv( txzr_half2(:,:,1), (nxr+2)*nyr, MPI_RPREC, down, 1,  &
         txzr_half2(:,:,nzr), (nxr+2)*nyr, MPI_RPREC, up, 1, comm, status, ierr)
-    call mpi_sendrecv( tyzr(:,:,1), (nxr+2)*nyr, MPI_RPREC, down, 1,            &
+    call mpi_sendrecv( tyzr(:,:,1), (nxr+2)*nyr, MPI_RPREC, down, 1,        &
         tyzr(:,:,nzr), (nxr+2)*nyr, MPI_RPREC, up, 1, comm, status, ierr)
-    call mpi_sendrecv( tyzr_half1(:,:,1), (nxr+2)*nyr, MPI_RPREC, down, 1,      &
+    call mpi_sendrecv( tyzr_half1(:,:,1), (nxr+2)*nyr, MPI_RPREC, down, 1,  &
         tyzr_half1(:,:,nzr), (nxr+2)*nyr, MPI_RPREC, up, 1, comm, status, ierr)
-    call mpi_sendrecv( tyzr_half2(:,:,1), (nxr+2)*nyr, MPI_RPREC, down, 1,      &
+    call mpi_sendrecv( tyzr_half2(:,:,1), (nxr+2)*nyr, MPI_RPREC, down, 1,  &
         tyzr_half2(:,:,nzr), (nxr+2)*nyr, MPI_RPREC, up, 1, comm, status, ierr)
 
-    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     ! Diffusive term
-    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     ! Calculate divergence of stress
     ! Compute stress gradients
     call tlwm_ddx(txxr, dtxdx, lbz)
@@ -1230,7 +1235,7 @@ if (coord == nproc-1) then
         b(jx,jy,nzr-1) = 1._rprec + const1*(1._rprec/jaco_uvr(nzr-1))*          &
             (const2*(1._rprec/jaco_wr(nzr-1))*nu_a + nu_c/(L_zr-zuvr(nzr-1)))
 
-        !! interpolated/filtered LES velocity as upper BC
+        !! interpolated LES velocity as upper BC
         Rx(jx,jy,nzr-1) = Rx(jx,jy,nzr-1) + const1*(1._rprec/jaco_uvr(nzr-1))*  &
             (nu_c/(L_zr-zuvr(nzr-1)))*ur(jx,jy,nzr)
         Ry(jx,jy,nzr-1) = Ry(jx,jy,nzr-1) + const1*(1._rprec/jaco_uvr(nzr-1))*  &
@@ -1299,9 +1304,9 @@ vr(:nxr,:nyr,1:nzr-1) = vsol(:nxr,:nyr,1:nzr-1)
 
 end subroutine tlwm_diff_stag_array_uv
 
-!*******************************************************************************
+!*****************************************************************************
 subroutine tlwm_ddx(f, dfdx, lbz)
-!*******************************************************************************
+!*****************************************************************************
 !
 ! This subroutine computes the partial derivative of f with respect to
 ! x using spectral decomposition.
@@ -1338,9 +1343,9 @@ enddo
 
 end subroutine tlwm_ddx
 
-!*******************************************************************************
+!*****************************************************************************
 subroutine tlwm_ddy(f, dfdy, lbz)
-!*******************************************************************************
+!*****************************************************************************
 !
 ! This subroutine computes the partial derivative of f with respect to
 ! y using spectral decomposition.
@@ -1377,9 +1382,9 @@ end do
 
 end subroutine tlwm_ddy
 
-!*******************************************************************************
+!*****************************************************************************
 subroutine tlwm_ddxy (f, dfdx, dfdy, lbz)
-!*******************************************************************************
+!*****************************************************************************
 !
 ! This subroutine computes the partial derivative of f with respect to
 ! x and y using spectral decomposition.
@@ -1454,7 +1459,7 @@ do jz = lbz, nzr
     dfdy(:,:,jz) = f(:,:,jz) .TLWMMULI. kyr
 
     ! Perform inverse transform to get pseudospectral derivative
-    ! The oddballs for derivatives should already be dead, since they are for f
+    ! The oddballs for derivatives should already be dead, since they are for
     ! inverse transform
     call dfftw_execute_dft_c2r(tlwm_back, f(:,:,jz), f(:,:,jz))
     call dfftw_execute_dft_c2r(tlwm_back, dfdx(:,:,jz), dfdx(:,:,jz))
@@ -2636,33 +2641,38 @@ use param, only : nxr, nyr, lbz, nzr, nx, ny
 use param, only : coord, comm, ierr, MPI_RPREC
 use sim_param, only : dudz, dvdz, txz, tyz
 use mpi
+use test_filtermodule, only : tlwm_filter
 implicit none
 integer :: i, j, k
-real(rprec), dimension(nxr,nyr) :: dummy_in
+real(rprec), dimension(nxr+2,nyr) :: dummy_in
 real(rprec), dimension(nx,ny) :: dummy_out
 
 ! Gather data and interpolate on bottom coord
-call mpi_allreduce(dudzr_wall, dummy_in, nxr*nyr, mpi_rprec, MPI_SUM, comm, ierr)
+call mpi_allreduce(dudzr_wall, dummy_in, (nxr+2)*nyr, mpi_rprec, MPI_SUM, comm, ierr)
 if (coord == 0) then
-    call interp_tlwm_to_les(dummy_in,dummy_out)
+    call tlwm_filter(dummy_in)
+    call interp_tlwm_to_les(dummy_in(1:nxr,1:nyr),dummy_out)
     dudz(1:nx,1:ny,1) = dummy_out
 endif
 
-call mpi_allreduce(dvdzr_wall, dummy_in, nxr*nyr, mpi_rprec, MPI_SUM, comm, ierr)
+call mpi_allreduce(dvdzr_wall, dummy_in, (nxr+2)*nyr, mpi_rprec, MPI_SUM, comm, ierr)
 if (coord == 0) then
-    call interp_tlwm_to_les(dummy_in,dummy_out)
+    call tlwm_filter(dummy_in)
+    call interp_tlwm_to_les(dummy_in(1:nxr,1:nyr),dummy_out)
     dvdz(1:nx,1:ny,1) = dummy_out
 endif
 
-call mpi_allreduce(txzr_wall, dummy_in, nxr*nyr, mpi_rprec, MPI_SUM, comm, ierr)
+call mpi_allreduce(txzr_wall, dummy_in, (nxr+2)*nyr, mpi_rprec, MPI_SUM, comm, ierr)
 if (coord == 0) then
-    call interp_tlwm_to_les(dummy_in,dummy_out)
+    call tlwm_filter(dummy_in)
+    call interp_tlwm_to_les(dummy_in(1:nxr,1:nyr),dummy_out)
     txz(1:nx,1:ny,1) = dummy_out
 endif
 
-call mpi_allreduce(tyzr_wall, dummy_in, nxr*nyr, mpi_rprec, MPI_SUM, comm, ierr)
+call mpi_allreduce(tyzr_wall, dummy_in, (nxr+2)*nyr, mpi_rprec, MPI_SUM, comm, ierr)
 if (coord == 0) then
-    call interp_tlwm_to_les(dummy_in,dummy_out)
+    call tlwm_filter(dummy_in)
+    call interp_tlwm_to_les(dummy_in(1:nxr,1:nyr),dummy_out)
     tyz(1:nx,1:ny,1) = dummy_out
 endif
 
