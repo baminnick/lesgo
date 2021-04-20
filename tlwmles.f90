@@ -598,22 +598,22 @@ real(rprec), dimension(nx,ny) :: dummy_out
 ! Filter data to LES
 dummy_in = dudzr(:,:,1)
 call tlwm_filter(dummy_in)
-call interp_tlwm_to_les(dummy_in(1:nxr,1:nyr),dummy_out)
+call interp_tlwm_to_les(dummy_in,dummy_out)
 dudz(1:nx,1:ny,1) = dummy_out
 
 dummy_in = dvdzr(:,:,1)
 call tlwm_filter(dummy_in)
-call interp_tlwm_to_les(dummy_in(1:nxr,1:nyr),dummy_out)
+call interp_tlwm_to_les(dummy_in,dummy_out)
 dvdz(1:nx,1:ny,1) = dummy_out
 
 dummy_in = txzr(:,:,1)
 call tlwm_filter(dummy_in)
-call interp_tlwm_to_les(dummy_in(1:nxr,1:nyr),dummy_out)
+call interp_tlwm_to_les(dummy_in,dummy_out)
 txz(1:nx,1:ny,1) = dummy_out
 
 dummy_in = tyzr(:,:,1)
 call tlwm_filter(dummy_in)
-call interp_tlwm_to_les(dummy_in(1:nxr,1:nyr),dummy_out)
+call interp_tlwm_to_les(dummy_in,dummy_out)
 tyz(1:nx,1:ny,1) = dummy_out
 
 end subroutine les_lbc
@@ -822,7 +822,7 @@ use messages
 use param, only : nxr, nyr, nzr, lbz, dzr, L_zr
 use param, only : nu_molec, z_i, ubot, u_star, jt_total, wbase
 use param, only : coord, nproc, comm, ierr, MPI_RPREC, up, down, status
-use param, only : dt, tadv1, tadv2, dtr, tadvr1, tadvr2, wm_count
+use param, only : dt, tadv1, tadv2, dtr, tadvr1, tadvr2, wm_count, use_tlwm_visc_dt
 #ifdef PPSAFETYMODE
 use param, only : BOGUS
 #endif
@@ -837,7 +837,8 @@ real(rprec), dimension(nxr+2,nyr,lbz:nzr) :: dtxdx, dtydy, dtzdz,         &
 real(rprec), dimension(nxr,nyr,0:nzr) :: a, b, c
 real(rprec), dimension(nxr+2,nyr,0:nzr) :: Rx, usol, Ry, vsol
 
-! Wall-model time-steps are fixed regardless of use_cfl_dt
+! Determine time-step size, wall-model time-steps are fixed regardless of use_cfl_dt
+if (use_tlwm_visc_dt) call get_tlwm_dt(wm_count)
 dtr = dt / wm_count
 tadvr1 = 1.5_rprec
 tadvr2 = -0.5_rprec
@@ -1128,6 +1129,7 @@ if (modulo (jt_total, wbase) == 0) then
         write(*,*) 
         write(*,'(a,E15.7)') ' TLWM DIV: ', rmsdivvel
         write(*,'(a,E15.7)') ' TLWM VISC: ', maxvisc
+        write(*,'(a,i9)')    ' TLWM Nsteps: ', wm_count
     endif
 endif
 
@@ -1819,7 +1821,7 @@ implicit none
 integer :: i, j, i1, i2, j1, j2
 real(rprec), allocatable, dimension(:) :: x1, y1, x2, y2
 real(rprec) :: ax, ay, bx, by
-real(rprec), dimension(nxr,nyr), intent(in) :: u1
+real(rprec), dimension(nxr+2,nyr), intent(in) :: u1
 real(rprec), dimension(nx,ny), intent(out) :: u2
 
 ! Recreate TLWM grid
@@ -1995,13 +1997,43 @@ call mpi_allreduce(rms, rms_global, 1, MPI_RPREC, MPI_MAX, MPI_COMM_WORLD, ierr)
 end subroutine tlwm_rmsdiv
 
 !******************************************************************************
+subroutine get_tlwm_dt(wm_count)
+!******************************************************************************
+!
+! This subroutine determines the smallest number of wall-model time-steps
+! are needed to satisfy the specified viscous stability ratio
+!
+use param, only : dxr, dyr, dzr, nxr, nyr, nzr, nu_molec, visc_ratio, dt
+use mpi
+use param, only : ierr, MPI_RPREC
+implicit none
+integer, intent(out) :: wm_count
+real(rprec) :: visc_x, visc_y, visc_z, nu_eff, visc, visc_global
+real(rprec), dimension(1:nzr-1) :: visc_z_temp
+integer :: jz
+
+! In wall-model, nu_t is defined on uv and w grids
+! Only using nu_t on the uv grid for simplicity
+nu_eff = maxval( abs(nu_uvr(1:nxr,1:nyr,1:nzr-1)) ) + nu_molec
+visc_x = nu_eff / (dxr**2)
+visc_y = nu_eff / (dyr**2)
+do jz = 1, nzr-1
+    visc_z_temp(jz) = nu_eff / ((jaco_uvr(jz)*dzr)**2)
+enddo
+visc_z = maxval( visc_z_temp(1:nzr-1) )
+visc = maxval( (/ visc_x, visc_y, visc_z /) )
+call mpi_allreduce(visc, visc_global, 1, MPI_RPREC, MPI_MAX, MPI_COMM_WORLD, ierr)
+wm_count = max( nint( visc_global*dt/visc_ratio ), 1 )
+
+end subroutine get_tlwm_dt
+
+!******************************************************************************
 subroutine max_tlwm_visc(visc_global)
 !******************************************************************************
 ! 
 ! This subroutine provides the value of the maximum viscous stability term,
 ! (nu + nu_t)*dt / (dx^2) for the non-equilibrium wall-model
 ! 
-use types, only : rprec
 use param, only : dtr, dxr, dyr, dzr, nxr, nyr, nzr, nu_molec
 use mpi
 use param, only : ierr, MPI_RPREC
@@ -2651,28 +2683,28 @@ real(rprec), dimension(nx,ny) :: dummy_out
 call mpi_allreduce(dudzr_wall, dummy_in, (nxr+2)*nyr, mpi_rprec, MPI_SUM, comm, ierr)
 if (coord == 0) then
     call tlwm_filter(dummy_in)
-    call interp_tlwm_to_les(dummy_in(1:nxr,1:nyr),dummy_out)
+    call interp_tlwm_to_les(dummy_in,dummy_out)
     dudz(1:nx,1:ny,1) = dummy_out
 endif
 
 call mpi_allreduce(dvdzr_wall, dummy_in, (nxr+2)*nyr, mpi_rprec, MPI_SUM, comm, ierr)
 if (coord == 0) then
     call tlwm_filter(dummy_in)
-    call interp_tlwm_to_les(dummy_in(1:nxr,1:nyr),dummy_out)
+    call interp_tlwm_to_les(dummy_in,dummy_out)
     dvdz(1:nx,1:ny,1) = dummy_out
 endif
 
 call mpi_allreduce(txzr_wall, dummy_in, (nxr+2)*nyr, mpi_rprec, MPI_SUM, comm, ierr)
 if (coord == 0) then
     call tlwm_filter(dummy_in)
-    call interp_tlwm_to_les(dummy_in(1:nxr,1:nyr),dummy_out)
+    call interp_tlwm_to_les(dummy_in,dummy_out)
     txz(1:nx,1:ny,1) = dummy_out
 endif
 
 call mpi_allreduce(tyzr_wall, dummy_in, (nxr+2)*nyr, mpi_rprec, MPI_SUM, comm, ierr)
 if (coord == 0) then
     call tlwm_filter(dummy_in)
-    call interp_tlwm_to_les(dummy_in(1:nxr,1:nyr),dummy_out)
+    call interp_tlwm_to_les(dummy_in,dummy_out)
     tyz(1:nx,1:ny,1) = dummy_out
 endif
 

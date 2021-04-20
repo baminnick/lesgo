@@ -321,6 +321,8 @@ logical :: str_on = .false.
 real(rprec) :: str_r = 1.25
 
 ! Time-step parameters
+logical :: use_tlwm_visc_dt = .true.
+real(rprec) :: visc_ratio
 integer :: wm_count = 5
 real(rprec) :: dtr = 2.0e-4_rprec
 real(rprec) :: tadvr1, tadvr2

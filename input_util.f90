@@ -860,6 +860,10 @@ do
                 read (buff(equal_pos+1:), *) str_on
             case ('STR_R')
                 read (buff(equal_pos+1:), *) str_r
+            case ('USE_TLWM_VISC_DT')
+                read (buff(equal_pos+1:), *) use_tlwm_visc_dt
+            case ('VISC_RATIO')
+                read (buff(equal_pos+1:), *) visc_ratio
             case ('WM_COUNT')
                 read (buff(equal_pos+1:), *) wm_count
             case default

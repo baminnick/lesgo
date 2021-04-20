@@ -253,7 +253,11 @@ write(2,f_fmt) 'L_zr : ', L_zr
 write(2,x3f_fmt) 'dxr, dyr, dzr : ', dxr, dyr, dzr
 write(2,x3l_fmt) 'str_on : ', str_on
 write(2,x3f_fmt) 'str_r : ', str_r
-write(2,i_fmt) 'wm_count : ', wm_count
+if (use_tlwm_visc_dt) then
+    write(2,x3f_fmt) 'visc_ratio : ', visc_ratio
+else
+    write(2,i_fmt) 'wm_count : ', wm_count
+endif
 #endif
 
 close(2)
