@@ -2273,6 +2273,22 @@ write(13,rec=2) vortyr(:nxr,:nyr,1:nzr)
 write(13,rec=3) vortzr_w(:nxr,:nyr,1:nzr)
 close(13)
 
+! Instantaneous wall-stress output
+if (coord == 0) then
+    call string_splice(fname, path // 'output/tlwm_wallstress.', jt_total)
+    call string_concat(fname, bin_ext)
+    open(unit=13, file=fname, form='unformatted', convert=write_endian,         &
+        access='direct', recl=nxr*nyr*rprec)
+#ifdef PPTLWM_LVLSET
+    write(13,rec=1) txzr_wall(:nxr,:nyr)
+    write(13,rec=2) tyzr_wall(:nxr,:nyr)
+#else
+    write(13,rec=1) txzr(:nxr,:nyr,1)
+    write(13,rec=2) tyzr(:nxr,:nyr,1)
+#endif
+    close(13)
+endif
+
 end subroutine tlwm_inst_write
 
 !*****************************************************************************
