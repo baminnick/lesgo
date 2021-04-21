@@ -322,6 +322,9 @@ subroutine ic_tlwm
 !
 use param, only : coord, lbc_mom, BOGUS, lbz, nz
 use string_util
+implicit none
+
+logical :: interp_flag
 
 fname = path // 'tlwm.out'
 #ifdef PPMPI
@@ -329,12 +332,20 @@ call string_concat( fname, '.c', coord )
 #endif
 inquire (file=fname, exist=init_tlwm)
 
-! Initialize any additional TLWM simulation parameters here
+! Check if we need to interpolate the tlwmles velocity field
+if (init_tlwm) then
+    interp_flag = check_for_interp()
+endif
 
 ! Initialize TLWM field
 if (init_tlwm) then
-    if (coord == 0) write(*,*) "--> Reading initial TLWM field from file"
-    call ic_tlwm_file
+    if (.not. interp_flag) then
+        if (coord == 0) write(*,*) "--> Reading initial TLWM field from file"
+        call ic_tlwm_file
+    else
+        if (coord == 0) write(*,*) "--> Interpolating initial TLWM field from file"
+        call ic_tlwm_interp
+    endif
 else
     if (coord == 0) write(*,*) "--> Creating initial TLWM field from prescribed turbulent profile"
     call ic_tlwm_vel
@@ -359,6 +370,173 @@ read(12) ur(:,:,1:nzr), vr(:,:,1:nzr), rhs_xr(:,:,1:nzr), rhs_yr(:,:,1:nzr)
 close(12)
 
 end subroutine ic_tlwm_file
+
+!******************************************************************************
+function check_for_interp() result(flag)
+!******************************************************************************
+use param, only : nproc, nxr, nyr, nzr, L_x, L_y, L_zr, read_endian
+integer :: Nx_f, Ny_f, Nz_f, nproc_f
+real(rprec) :: Lx_f, Ly_f, Lz_f
+logical :: exst, flag
+
+inquire (file='tlwm_grid.out', exist=exst)
+if (exst) then
+    open(12, file='tlwm_grid.out', form='unformatted', convert=read_endian)
+    read(12) nproc_f, Nx_f, Ny_f, Nz_f, Lx_f, Ly_f, Lz_f
+    close(12)
+
+    if (nproc_f == nproc .and. Nx_f == Nxr .and. Ny_f == Nyr .and. Nz_f == Nzr    &
+        .and. Lx_f == L_x .and. Ly_f == L_y .and. Lz_f == L_zr) then
+        flag = .false.
+    else !! interpolating to new grid
+        flag = .true.
+    end if
+else
+    flag = .false.
+end if
+
+end function check_for_interp
+
+!*****************************************************************************
+subroutine ic_tlwm_interp
+!*****************************************************************************
+! This subroutine reads the initial conditions from a checkpoint file and 
+! interpolates onto the current TLWM grid. This routine mimics the ic_interp
+! routine in initial.f90
+!
+use functions
+use param
+
+integer :: nproc_f, Nx_f, Ny_f, Nz_f
+real(rprec) :: Lx_f, Ly_f, Lz_f
+integer :: i, j, k, z1, z2, ld_f, lh_f, Nz_tot_f
+real(rprec) :: dx_f, dy_f, dz_f
+integer :: i1, i2, j1, j2, k1, k2
+real(rprec) :: ax, ay, az, bx, by, bz, xx, yy
+real(rprec), allocatable, dimension(:) :: x_f, y_f, x, y
+real(rprec), allocatable, dimension(:,:,:) :: u_f, v_f
+character(64) :: ff
+integer :: npr1, npr2, nproc_r, Nz_tot_r
+real(rprec), allocatable, dimension(:) :: z_r, ztot, zcoord
+
+! Read grid information from file
+open(12, file='tlwm_grid.out', form='unformatted', convert=read_endian)
+read(12) nproc_f, Nx_f, Ny_f, Nz_f, Lx_f, Ly_f, Lz_f
+close(12)
+
+! Compute intermediate values
+lh_f = nx_f/2+1
+ld_f = 2*lh_f
+Nz_tot_f = (nz_f - 1) * nproc_f + 1
+dx_f = Lx_f / nx_f
+dy_f = Ly_f / ny_f
+dz_f = Lz_f / (nz_tot_f - 0.5_rprec)
+
+! Create current wall-normal positions on each coord to determine
+! which processors need to be read
+! Assuming a uniform grid for now
+allocate( zcoord(lbz:nzr) )
+do i = lbz, nzr
+    zcoord(i) = (coord*(nzr-1) + i - 0.5_rprec) * dzr
+enddo
+
+! Figure out which processors actually need to be read
+npr1 = max(floor(zcoord(lbz)/dz_f/Nz_f), 0)
+npr2 = min(ceiling(zcoord(nzr)/dz_f/Nz_f), nproc_f-1)
+nproc_r = npr2-npr1+1
+Nz_tot_r = ( nz_f - 1 ) * nproc_r + 1
+! write(*,*) coord, npr1, npr2, nproc_r, Nz_tot_r
+
+! Create file grid
+allocate( x_f(nx_f), y_f(ny_f), z_r(nz_tot_r) )
+do i = 1, nx_f
+    x_f(i) = (i-1) * Lx_f/nx_f
+enddo
+do i = 1, ny_f
+    y_f(i) = (i-1) * Ly_f/ny_f
+enddo
+do i = 1, nz_tot_r
+    z_r(i) = (i - 0.5_rprec + npr1*(nz_f-1)) * dz_f
+enddo
+
+! Repeat for current grid
+allocate( x(nxr), y(nyr), ztot(nzr_tot) )
+do i = 1, nxr
+    x(i) = (i-1) * L_x/nxr
+enddo
+do i = 1, nyr
+    y(i) = (i-1) * L_y/nyr
+enddo
+do i = 1, nzr_tot
+    ztot(i) = (i - 0.5_rprec) * dzr
+enddo
+
+! Read velocities from file
+! Remember only need u and v velocities, w determined from continuity
+allocate( u_f(ld_f, ny_f, nz_tot_r) )
+allocate( v_f(ld_f, ny_f, nz_tot_r) )
+
+! Loop through all levels
+do i = 1, nproc_r
+    ! Set level bounds
+    z1 = nz_tot_f / nproc_f * (i-1) + 1
+    z2 = nz_tot_f / nproc_f * i  + 1
+
+    ! Read from file
+    write(ff,*) i+npr1-1
+    ff = "./tlwm.out.c"//trim(adjustl(ff))
+    open(12, file=ff,  action='read', form='unformatted')
+    read(12) u_f(:, :, z1:z2), v_f(:, :, z1:z2)
+    close(12)
+end do
+
+! Calculate velocities
+do i = 1, nxr
+    xx = x(i) - floor(x(i)/Lx_f) * Lx_f
+    i1 = binary_search(x_f, xx)
+    i2 = mod(i1, nx_f) + 1
+    bx = (xx - x_f(i1)) / dx_f
+    ax = 1._rprec - bx
+    do j = 1, nyr
+        yy = y(j) - floor(y(j)/Ly_f) * Ly_f
+        j1 = binary_search(y_f, yy)
+        j2 = mod(j1, ny_f) + 1
+        by = (yy - y_f(j1)) / dy_f
+        ay = 1._rprec - by
+        ! Interpolating based on z positions, not stretched grid position
+        ! i.e. not ready if str_on is .true. and a different stretch is used
+        do k = 1, nzr
+            ! for u and v
+            k1 = binary_search(z_r, zcoord(k))
+            k2 = k1 + 1
+            if (k1 == nz_tot_r) then
+                ur(i,j,k) = ax*ay*u_f(i1,j1,k1) + bx*ay*u_f(i2,j1,k1)        &
+                         + ax*by*u_f(i1,j2,k1) + bx*by*u_f(i2,j2,k1)
+                vr(i,j,k) = ax*ay*v_f(i1,j1,k1) + bx*ay*v_f(i2,j1,k1)        &
+                         + ax*by*v_f(i1,j2,k1) + bx*by*v_f(i2,j2,k1)
+            else if (k1 == 0) then
+                ur(i,j,k) = ax*ay*u_f(i1,j1,k2) + bx*ay*u_f(i2,j1,k2)        &
+                         + ax*by*u_f(i1,j2,k2) + bx*by*u_f(i2,j2,k2)
+                vr(i,j,k) = ax*ay*v_f(i1,j1,k2) + bx*ay*v_f(i2,j1,k2)        &
+                         + ax*by*v_f(i1,j2,k2) + bx*by*v_f(i2,j2,k2)
+            else
+                bz = (zcoord(k) - z_r(k1)) / dz_f
+                az = 1._rprec - bz
+                ur(i,j,k) = ax*ay*az*u_f(i1,j1,k1) + bx*ay*az*u_f(i2,j1,k1)  &
+                         + ax*by*az*u_f(i1,j2,k1) + bx*by*az*u_f(i2,j2,k1)   &
+                         + ax*ay*bz*u_f(i1,j1,k2) + bx*ay*bz*u_f(i2,j1,k2)   &
+                         + ax*by*bz*u_f(i1,j2,k2) + bx*by*bz*u_f(i2,j2,k2)
+                vr(i,j,k) = ax*ay*az*v_f(i1,j1,k1) + bx*ay*az*v_f(i2,j1,k1)  &
+                         + ax*by*az*v_f(i1,j2,k1) + bx*by*az*v_f(i2,j2,k1)   &
+                         + ax*ay*bz*v_f(i1,j1,k2) + bx*ay*bz*v_f(i2,j1,k2)   &
+                         + ax*by*bz*v_f(i1,j2,k2) + bx*by*bz*v_f(i2,j2,k2)
+            end if
+
+        end do
+    end do
+end do
+
+end subroutine ic_tlwm_interp
 
 !*****************************************************************************
 subroutine ic_tlwm_vel
@@ -2194,12 +2372,19 @@ subroutine tlwm_checkpoint
 !
 ! This subroutine saves checkpoint variables for MFM analysis
 !
-use param, only : nzr, write_endian
+use param, only : nzr, write_endian, coord, L_x, L_y, L_zr, nproc, nxr, nyr
 
 open(11, file=fname, form='unformatted', convert=write_endian,              &
     status='unknown', position='rewind')
 write (11) ur(:,:,1:nzr), vr(:,:,1:nzr), rhs_xr(:,:,1:nzr), rhs_yr(:,:,1:nzr)
 close(11)
+
+! Open tlwm_grid.out for final output
+if (coord == 0) then
+    open(11, file='tlwm_grid.out', form='unformatted', convert=write_endian)
+    write(11) nproc, nxr, nyr, nzr, L_x, L_y, L_zr
+    close(11)
+endif
 
 end subroutine tlwm_checkpoint
 
