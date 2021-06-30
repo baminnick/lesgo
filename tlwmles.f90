@@ -177,6 +177,11 @@ select case (lbc_mom)
         call tlwm_noneq_ubc() !! compute u, v, w, dudz, dvdz, dwdz upper BC
         call tlwm_noneq_solve() !! Solve for wall-model velocities
 
+    ! Restricted non-equilibrium wall-model
+    case (7)
+        call tlwm_noneq_ubc() !! compute u, v, w, dudz, dvdz, dwdz upper BC
+        call tlwm_rnl_solve() !! Solve for wall-model velocities
+
     ! Otherwise, invalid
     case default
         call error (sub_name, 'invalid lbc_mom')
@@ -1313,6 +1318,320 @@ endif
 
 end subroutine tlwm_noneq_solve
 
+!*****************************************************************************
+subroutine tlwm_rnl_solve
+!*****************************************************************************
+! 
+! This subroutine solves the streamwise, spanwise momentum equations, and the
+! equation of continuity for a non-equilibrium wall-model boundary condition
+! for the outer-layer LES.
+! 
+use messages
+use param, only : nxr, nyr, nzr, lbz, dzr, L_zr
+use param, only : nu_molec, z_i, ubot, u_star, jt_total, wbase
+use param, only : coord, nproc, comm, ierr, MPI_RPREC, up, down, status
+use param, only : dt, tadv1, tadv2, dtr, tadvr1, tadvr2, wm_count, use_tlwm_visc_dt
+#ifdef PPSAFETYMODE
+use param, only : BOGUS
+#endif
+use mpi
+implicit none
+integer :: jx, jy, jz, jz_min, jz_max, jtr
+real(rprec), dimension(nxr, nyr) :: ustar, dummy
+real(rprec) :: const, const1, maxvisc, rmsdivvel
+real(rprec), dimension(nxr,nyr,lbz:nzr) :: diff_coef_uv, diff_coef_w
+real(rprec), dimension(nxr+2,nyr,lbz:nzr) :: dtxdx, dtydy, dtzdz,         &
+    dtxdx2, dtydy2, dtzdz2
+real(rprec), dimension(nxr,nyr,0:nzr) :: a, b, c
+real(rprec), dimension(nxr+2,nyr,0:nzr) :: Rx, usol, Ry, vsol
+
+! Determine time-step size, wall-model time-steps are fixed regardless of use_cfl_dt
+if (use_tlwm_visc_dt) call get_tlwm_dt(wm_count)
+dtr = dt / wm_count
+tadvr1 = 1.5_rprec
+tadvr2 = -0.5_rprec
+
+do jtr = 1, wm_count
+
+    ! Find ustar for wall model eddy viscosity
+    ! 1. Use wall-stress value
+    if (jt_total > 1) then
+#ifdef PPTLWM_LVLSET
+        call tlwm_lvlset_wallstress
+        ustar = sqrt(abs(txzr_wall(1:nxr,1:nyr)) + abs(tyzr_wall(1:nxr,1:nyr)))
+        ! from tlwm_lvlset_wallstress, txzr_wall and tyzr_wall are
+        ! already zero on coords where the wall interface is not located
+#else
+        ! Compute wall-stress on only bottom coord
+        if (coord == 0) then
+            ustar = sqrt(abs(txzr(1:nxr,1:nyr,1)) + abs(tyzr(1:nxr,1:nyr,1)))
+        else
+            ustar = 0._rprec
+        endif
+#endif
+        ! Send wall-stress to all coords
+        call mpi_allreduce(ustar, dummy, nxr*nyr, mpi_rprec,                &
+            MPI_SUM, comm, ierr)
+        ustar = dummy
+    else !! first time-step, use assumed nonzero ustar
+        ustar = u_star
+    endif
+    ! 2. Use constant value specified by user
+    ! ustar = u_star
+
+    ! Compute eddy viscosity values on inner layer grid
+    !call wm_eddyvisc_blend(ustar)
+    call wm_eddyvisc(ustar)
+
+    ! Exchange ghost node information
+    ! send info down from jz=1 on coord to jz=nzr on coord-1
+    call mpi_sendrecv( ur(:,:,1), (nxr+2)*nyr, MPI_RPREC, down, 1,          &
+        ur(:,:,nzr), (nxr+2)*nyr, MPI_RPREC, up, 1, comm, status, ierr)
+    call mpi_sendrecv( vr(:,:,1), (nxr+2)*nyr, MPI_RPREC, down, 1,          &
+        vr(:,:,nzr), (nxr+2)*nyr, MPI_RPREC, up, 1, comm, status, ierr)
+    ! send info up from jz=nzr-1 on coord to jz=0 on coord+1
+    call mpi_sendrecv( ur(:,:,nzr-1), (nxr+2)*nyr, MPI_RPREC, up, 2,        &
+        ur(:,:,0), (nxr+2)*nyr, MPI_RPREC, down, 2, comm, status, ierr)
+    call mpi_sendrecv( vr(:,:,nzr-1), (nxr+2)*nyr, MPI_RPREC, up, 2,        &
+        vr(:,:,0), (nxr+2)*nyr, MPI_RPREC, down, 2, comm, status, ierr)
+
+    ! Save previous timestep's RHS
+    rhs_xr_f = rhs_xr
+    rhs_yr_f = rhs_yr
+
+    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    ! Calculate derivatives
+    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    ! Compute spanwise derivatives of u and v (not calculating x-derivatives)
+    call tlwm_filt_da_rnl(ur, dudyr, lbz)
+    call tlwm_filt_da_rnl(vr, dvdyr, lbz)
+
+    ! Compute the velocity w that satisfies dvdy + dwdz = 0
+    call div_calc_w_rnl()
+
+    ! Report divergence calculation
+    if (( modulo (jt_total, wbase) == 0) .and. (jtr == wm_count) ) then
+        call tlwm_rmsdiv(rmsdivvel)
+    endif
+
+    ! Now compute spanwise derivative of w
+    call tlwm_filt_da_rnl(wr, dwdyr, lbz)
+
+    ! Compute vertical derivatives of u and v
+    call tlwm_ddz_uv(ur, dudzr, lbz)
+    call tlwm_ddz_uv(vr, dvdzr, lbz)
+
+    ! Compute dudz, dvdz, txz, and tyz at wall on bottom coord
+    if (coord == 0) then
+        call inner_layer_wallstress()
+        ! Add boundary condition to explicit portion
+        txzr_half2(1:nxr,:,1) = txzr(1:nxr,:,1)
+        tyzr_half2(1:nxr,:,1) = tyzr(1:nxr,:,1)
+    endif
+
+    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    ! Calculate stress
+    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    ! Diffusion coefficient
+    diff_coef_uv = -2.0_rprec*(nu_molec + nu_uvr(:,:,:))
+    diff_coef_w = -2.0_rprec*(nu_molec + nu_wr(:,:,:))
+
+    ! Note: Only some stress components included, excluding purely x-derivatives
+    ! Calculate stress for bottom level
+    if (coord == 0) then
+        txyr(1:nxr,:,1) = diff_coef_uv(:,:,1)*0.5_rprec*dudyr(1:nxr,:,1)
+        tyyr(1:nxr,:,1) = diff_coef_uv(:,:,1)*dvdyr(1:nxr,:,1)
+        ! Remember txz & tyz already calculated in routine inner_layer_wallstress
+
+        ! since first level already calculated
+        jz_min = 2
+    else
+        jz_min = 1
+    endif
+
+    ! Calculate stress at top level
+    ! in main.f90 this is done in wallstress, however here the only upper BC
+    ! is to use the LES velocity, so use derivatives as normal
+    !     dudzr and dvdzr are defined as normal on top coord at jz=nzr
+    ! txx, txy, and tyy are not needed to step in time, but calculated anyway
+    if (coord == nproc-1) then
+        ! Stresses on uv-grid
+        txyr(1:nxr,:,nzr) = diff_coef_uv(:,:,nzr)*0.5_rprec*dudyr(1:nxr,:,nzr)
+        tyyr(1:nxr,:,nzr) = diff_coef_uv(:,:,nzr)*dvdyr(1:nxr,:,nzr)
+
+        ! Stresses on w-grid
+        txzr(1:nxr,:,nzr) = diff_coef_w(:,:,nzr)*0.5_rprec*dudzr(1:nxr,:,nzr)
+        txzr_half2(1:nxr,:,nzr) = diff_coef_w(:,:,nzr)*0.5_rprec*( dudzr(1:nxr,:,nzr) )
+        tyzr(1:nxr,:,nzr) = diff_coef_w(:,:,nzr)*0.5_rprec*(dvdzr(1:nxr,:,nzr)+dwdyr(1:nxr,:,nzr))
+        tyzr_half1(1:nxr,:,nzr) = diff_coef_w(:,:,nzr)*0.5_rprec*( dwdyr(1:nxr,:,nzr) )
+        tyzr_half2(1:nxr,:,nzr) = diff_coef_w(:,:,nzr)*0.5_rprec*( dvdzr(1:nxr,:,nzr) )
+    endif
+
+    ! Calculate stress for entire domain
+    do jz = jz_min, nzr-1
+        ! Stresses on uv-grid
+        txyr(1:nxr,:,jz) = diff_coef_uv(:,:,jz)*0.5_rprec*dudyr(1:nxr,:,jz)
+        tyyr(1:nxr,:,jz) = diff_coef_uv(:,:,jz)*dvdyr(1:nxr,:,jz)
+
+        ! Stresses on w-grid
+        txzr(1:nxr,:,jz) = diff_coef_w(:,:,jz)*0.5_rprec*dudzr(1:nxr,:,jz)
+        txzr_half2(1:nxr,:,jz) = diff_coef_w(:,:,jz)*0.5_rprec*( dudzr(1:nxr,:,jz) )
+        tyzr(1:nxr,:,jz) = diff_coef_w(:,:,jz)*0.5_rprec*(dvdzr(1:nxr,:,jz)+dwdyr(1:nxr,:,jz))
+        tyzr_half1(1:nxr,:,jz) = diff_coef_w(:,:,jz)*0.5_rprec*( dwdyr(1:nxr,:,jz) )
+        tyzr_half2(1:nxr,:,jz) = diff_coef_w(:,:,jz)*0.5_rprec*( dvdzr(1:nxr,:,jz) )
+    enddo
+
+    ! Exchange information between processors to set values at nz
+    ! from jz=1 above to jz=nz below
+    call mpi_sendrecv( txzr(:,:,1), (nxr+2)*nyr, MPI_RPREC, down, 1,        &
+        txzr(:,:,nzr), (nxr+2)*nyr, MPI_RPREC, up, 1, comm, status, ierr)
+    call mpi_sendrecv( txzr_half2(:,:,1), (nxr+2)*nyr, MPI_RPREC, down, 1,  &
+        txzr_half2(:,:,nzr), (nxr+2)*nyr, MPI_RPREC, up, 1, comm, status, ierr)
+    call mpi_sendrecv( tyzr(:,:,1), (nxr+2)*nyr, MPI_RPREC, down, 1,        &
+        tyzr(:,:,nzr), (nxr+2)*nyr, MPI_RPREC, up, 1, comm, status, ierr)
+    call mpi_sendrecv( tyzr_half1(:,:,1), (nxr+2)*nyr, MPI_RPREC, down, 1,  &
+        tyzr_half1(:,:,nzr), (nxr+2)*nyr, MPI_RPREC, up, 1, comm, status, ierr)
+    call mpi_sendrecv( tyzr_half2(:,:,1), (nxr+2)*nyr, MPI_RPREC, down, 1,  &
+        tyzr_half2(:,:,nzr), (nxr+2)*nyr, MPI_RPREC, up, 1, comm, status, ierr)
+
+    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    ! Diffusive term
+    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    ! Calculate divergence of stress
+    ! Compute stress gradients
+    call tlwm_ddy(tyyr, dtydy2, lbz)
+    call tlwm_ddy(txyr, dtydy, lbz)
+    call tlwm_ddz_w(tyzr_half1, dtzdz2, lbz)
+    ! For Adams-Bashforth time-advancement uncomment:
+    ! call tlwm_ddz_w(txzr, dtzdz, lbz)
+    ! call tlwm_ddz_w(tyzr, dtzdz2, lbz)
+
+    ! Take sum, remember only 1:nzr-1 are valid
+    ! Note: dtzdz = d(dwdx)/dz = 0 since dwdx = 0 here
+    ! However d(dudz)/dz is included in txzr_half2, and accounted for 
+    ! in tlwm_diff_stag_array_uv
+    div_txr(:,:,1:nzr-1) = dtydy(:,:,1:nzr-1) !! dtzdz = 0 because dwdx = 0
+    div_tyr(:,:,1:nzr-1) = dtydy2(:,:,1:nzr-1) + dtzdz2(:,:,1:nzr-1)
+
+    ! Set ld-1 and ld oddballs to 0
+    div_txr(nxr+1:nxr+2,:,1:nzr-1) = 0._rprec
+    div_tyr(nxr+1:nxr+2,:,1:nzr-1) = 0._rprec
+
+    ! Set boundary points to BOGUS
+#ifdef PPSAFETYMODE
+    div_txr(:,:,0) = BOGUS
+    div_tyr(:,:,0) = BOGUS
+#endif
+
+    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    ! Advective term
+    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    ! Take variables to big domain
+    call to_big(ur, ur_big)
+    call to_big(vr, vr_big)
+    call to_big(dudyr, dudyr_big)
+    call to_big(dudzr, dudzr_big)
+    call to_big(dvdyr, dvdyr_big)
+    call to_big(dvdzr, dvdzr_big)
+
+    ! Normalization for FFTs
+    const = 1._rprec/( (3*nxr/2) * (3*nyr/2) )
+
+    ! Compute advective term in x-momentum
+    ! Interpolate w and dudz onto uv-grid 
+    if (coord == 0) then
+        ! Bottom wall take w(jz=1) = 0
+        temp_big(:,:,1) = const*(vr_big(:,:,1)*dudyr_big(:,:,1) +         &
+            0.5_rprec*wr_big(:,:,2)*dudzr_big(:,:,2))
+        jz_min = 2
+    else
+        jz_min = 1
+    endif
+
+    ! In other advec routine, would take w(jz=nz)=0 on top coord
+    ! however here that is not necessarily true
+
+    ! For entire domain
+    do jz = jz_min, nzr-1
+        temp_big(:,:,jz) = const*(vr_big(:,:,jz)*dudyr_big(:,:,jz) +      &
+            0.5_rprec*(wr_big(:,:,jz+1)*dudzr_big(:,:,jz+1) +             &
+            wr_big(:,:,jz)*dudzr_big(:,:,jz)))
+    enddo
+
+    ! Move temp_big into RHSx and make small
+    call to_small(temp_big, rhs_xr)
+
+    ! Compute advective term in y-momentum
+    ! Interpolate w and dvdz onto uv-grid 
+    if (coord == 0) then
+        ! Bottom wall take w(jz=1) = 0
+        temp_big(:,:,1) = const*(vr_big(:,:,1)*dvdyr_big(:,:,1) +         &
+            0.5_rprec*wr_big(:,:,2)*dvdzr_big(:,:,2))
+        jz_min = 2
+    else
+        jz_min = 1
+    endif
+
+    ! In other advec routine, would take w(jz=nz)=0 on top coord
+    ! however here that is not necessarily true
+
+    ! For entire domain
+    do jz = jz_min, nzr-1
+        temp_big(:,:,jz) = const*(vr_big(:,:,jz)*dvdyr_big(:,:,jz) +      &
+            0.5_rprec*(wr_big(:,:,jz+1)*dvdzr_big(:,:,jz+1) +             &
+            wr_big(:,:,jz)*dvdzr_big(:,:,jz)))
+    enddo
+
+    ! Move temp_big into RHSx and make small
+    call to_small(temp_big, rhs_yr)
+
+    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    ! Add terms to the RHS
+    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    ! Add div-tau term
+    rhs_xr(:,:,1:nzr-1) = -rhs_xr(:,:,1:nzr-1) - div_txr(:,:,1:nzr-1)
+    rhs_yr(:,:,1:nzr-1) = -rhs_yr(:,:,1:nzr-1) - div_tyr(:,:,1:nzr-1)
+
+    ! Add pressure forcing
+    ! Use pressure gradients from LES to every wall-normal point
+    do jz = 1, nzr-1
+        rhs_xr(1:nxr,:,jz) = rhs_xr(1:nxr,:,jz) + dpdxr(1:nxr,1:nyr)
+        rhs_yr(1:nxr,:,jz) = rhs_yr(1:nxr,:,jz) + dpdyr(1:nxr,1:nyr)
+    enddo
+
+    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    ! Euler Integration check
+    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    if (jt_total == 1) then
+        ! Make rhs_f = rhs for Euler integration
+        rhs_xr_f = rhs_xr
+        rhs_yr_f = rhs_yr
+    endif
+
+    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    ! Calculate velocity at next time-step
+    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    ! Prepare matrix equation and solve using TDMA
+    call tlwm_diff_stag_array_uv()
+
+enddo !! end of main wall-model time-loop
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! Write time-iteration info to the screen
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+if (modulo (jt_total, wbase) == 0) then
+    call max_tlwm_visc(maxvisc)
+
+    if (coord == 0) then
+        write(*,*) 
+        write(*,'(a,E15.7)') ' TLWM DIV: ', rmsdivvel
+        write(*,'(a,E15.7)') ' TLWM VISC: ', maxvisc
+        write(*,'(a,i9)')    ' TLWM Nsteps: ', wm_count
+    endif
+endif
+
+end subroutine tlwm_rnl_solve
+
 !*******************************************************************************
 subroutine tlwm_diff_stag_array_uv
 !*******************************************************************************
@@ -1649,6 +1968,48 @@ end do
 end subroutine tlwm_filt_da
 
 !*******************************************************************************
+subroutine tlwm_filt_da_rnl(f, dfdy, lbz)
+!*******************************************************************************
+!
+! This subroutine kills the oddball components in f and computes the partial
+! derivative of f with respect to y using spectral decomposition.
+!
+use types, only : rprec
+use param, only : nxr, nyr, nzr
+use fft
+use emul_complex, only : OPERATOR(.TLWMMULI.)
+implicit none
+
+integer, intent(in) :: lbz
+real(rprec), dimension(:,:,lbz:), intent(inout) :: f
+real(rprec), dimension(:,:,lbz:), intent(inout) :: dfdy
+integer :: jz
+
+! loop through horizontal slices
+do jz = lbz, nzr
+    ! Calculate FFT in place
+    f(:,:,jz) = f(:,:,jz) / (nxr*nyr)
+    call dfftw_execute_dft_r2c(tlwm_forw, f(:,:,jz), f(:,:,jz))
+
+    ! Kill oddballs in zero padded region and Nyquist frequency
+    f(nxr+1:nxr+2,:,jz) = 0._rprec
+    f(:,nyr/2+1,jz) = 0._rprec
+
+    ! Use complex emulation of dfdy to perform complex multiplication
+    ! Optimized version for real(eye*ky)=0
+    ! only passing imaginary part of eye*ky
+    dfdy(:,:,jz) = f(:,:,jz) .TLWMMULI. kyr
+
+    ! Perform inverse transform to get pseudospectral derivative
+    ! The oddballs for derivatives should already be dead, since they are for
+    ! inverse transform
+    call dfftw_execute_dft_c2r(tlwm_back, f(:,:,jz), f(:,:,jz))
+    call dfftw_execute_dft_c2r(tlwm_back, dfdy(:,:,jz), dfdy(:,:,jz))
+end do
+
+end subroutine tlwm_filt_da_rnl
+
+!*******************************************************************************
 subroutine tlwm_ddz_uv(f, dfdz, lbz)
 !*******************************************************************************
 !
@@ -1924,6 +2285,51 @@ if (coord /= nproc-1) then
 endif
 
 end subroutine div_calc_w
+
+!*****************************************************************************
+subroutine div_calc_w_rnl
+!*****************************************************************************
+!
+! Compute w that satisfies continuity for a given u and v. Only one boundary
+! condition is imposed, no-penetration at wall.
+! 
+! This subroutine assumes dudx and dvdy have already been calculated.
+! w is on the w-grid upon exit.
+! 
+use messages
+use param, only : nxr, nyr, nzr, dzr, coord, nproc
+use param, only : status, comm, ierr, MPI_RPREC, up, down
+use mpi
+implicit none
+integer :: jx, jy, jz
+real(rprec), dimension(nxr+2,nyr,0:nzr) :: rhs
+
+! Prepare the RHS, does not include dudxr
+rhs(:,:,:) = -dvdyr(:,:,:)
+
+! No-penetration boundary condition
+if (coord == 0) then
+    wr(1:nxr,1:nyr,1) = 0._rprec
+endif
+
+! This ODE is solved starting at the bottom wall, then moving up
+! wait for wr(:,:,1) from "down"
+if (coord /= 0) then
+    call mpi_recv(wr(1,1,1), (nxr+2)*nyr, MPI_RPREC, down, 8, comm, status, ierr)
+endif
+
+! Solve ODE on given coord with known lower boundary (at jz=1)
+do jz = 2, nzr
+    wr(1:nxr,1:nyr,jz) = (jaco_uvr(jz-1)*dzr)*rhs(1:nxr,1:nyr,jz-1) +     &
+        wr(1:nxr,1:nyr,jz-1)
+enddo
+
+! Send wr(:,:,nzr) to "up" 
+if (coord /= nproc-1) then
+    call mpi_send(wr(1,1,nzr), (nxr+2)*nyr, MPI_RPREC, up, 8, comm, ierr)
+endif
+
+end subroutine div_calc_w_rnl
 
 !*****************************************************************************
 subroutine interp_les_to_tlwm(u1,u2)
