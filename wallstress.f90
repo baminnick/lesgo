@@ -51,7 +51,6 @@ use param, only : lbc_mom
 use param, only : ubc_mom, coord, nproc, nz ! these necessary only for upper bc
 use messages, only : error
 use iwmles, only : iwm_wallstress
-use tlwmles, only : tlwm
 use sim_param, only : txz, tyz, dudz, dvdz
 implicit none
 character(*), parameter :: sub_name = 'wallstress'
@@ -78,30 +77,6 @@ if (coord == 0) then
         ! Smooth equilibrium wall model
         case (4)
             call ws_smoothequil_lbc
-
-        ! two-layer equilibrium wall model
-        case (5)
-            call tlwm()
-
-        ! two-layer nonequilibrium wall model
-        case (6)
-            call tlwm()
-
-        ! two-layer equilibrium wall model in (kx,ky) space
-        case (7)
-            call tlwm()
-
-        ! two-layer nonequilibrium wall model in (kx,ky) space
-        case (8)
-            call tlwm()
-
-        ! Equilibrium wall model for RNL-LES, assumes horizontal average
-        case (9)
-            call ws_equilibrium_lbc_fourier_xyavg
-
-        ! Equilibrium wall model for RNL-LES, assumes streamwise average
-        case (10)
-            call ws_equilibrium_lbc_fourier_xavg
 
         ! Otherwise, invalid
         case default

@@ -24,9 +24,6 @@ use param
 #ifdef PPLVLSET
 use level_set_base
 #endif
-#ifdef PPOUTPUT_WMLES
-use tlwmles, only : hwm, nzr
-#endif
 
 implicit none
 
@@ -122,19 +119,9 @@ write(2,l_fmt) 'initu : ', initu
 write(2,l_fmt) 'inilag : ', inilag
 write(2,i_fmt) 'lbc_mom : ', lbc_mom
 write(2,i_fmt) 'ubc_mom : ', ubc_mom
-if (lbc_mom == 7) then
-do n = 1, tlwm_kxnum
-    write(2,if_fmt), 'n, tlwm_kxin(n) : ', n, tlwm_kxin(n)
-enddo
-endif
 write(2,f_fmt) 'ubot : ', ubot
 write(2,f_fmt) 'utop : ', utop
 write(2,f_fmt) 'zo : ', zo
-#ifdef PPOUTPUT_WMLES
-write(2,i_fmt) 'ihwm : ', ihwm
-write(2,f_fmt) 'hwm : ', hwm
-write(2,i_fmt) 'nzr : ', nzr
-#endif
 write(2,l_fmt) 'inflow : ', inflow
 write(2,f_fmt) 'fringe_region_end : ', fringe_region_end
 write(2,f_fmt) 'fringe_region_len : ', fringe_region_len

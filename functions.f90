@@ -29,7 +29,7 @@ private
 
 public interp_to_uv_grid, trilinear_interp, trilinear_interp_w, binary_search, &
     bilinear_interp, linear_interp, cell_indx, buff_indx, interp_to_w_grid,    &
-    get_tau_wall_bot, get_tau_wall_top, x_avg, y_avg, int2str,                 &
+    get_tau_wall_bot, get_tau_wall_top, x_avg, int2str,                        &
     interleave_c2r, interleave_r2c
 #ifdef PPGQL
 public gql_filter
@@ -1046,37 +1046,6 @@ enddo
 return
 end function gql_filter
 #endif
-
-!*******************************************************************************
-function y_avg(q) result(q_avg)
-!*******************************************************************************
-!
-! This function provides the spanwise average of the quantity q on the velocity
-! field. Unlike x_avg, the input of y_avg is of size (nx,ny,1) and the output 
-! is of size (nx).
-! 
-! This function is used to dynamically modify the wall model coefficient in
-! tlwmles.f90
-!
-
-use types, only: rprec
-use param, only: nx, ny
-
-implicit none
-real(rprec), dimension(:,:), intent(in)  :: q
-real(rprec), dimension(nx) :: q_avg
-integer :: j
-
-q_avg = 0._rprec
-
-do j = 1, ny
-    q_avg = q_avg + q(:,j)
-enddo
-
-q_avg = q_avg / real(ny,rprec)
-
-return
-end function y_avg
 
 !*******************************************************************************
 function interleave_c2r(fc) result(f)

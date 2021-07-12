@@ -136,7 +136,7 @@ set (Sources cfl_util.f90 clocks.f90 convec.f90 derivatives.f90 divstress_uv.f90
      sgs_param.f90 sgs_stag_util.f90 sim_param.f90 stat_defs.f90 
      std_dynamic.f90 string_util.f90 test_filtermodule.f90 tridag_array.f90 
      types.f90 wallstress.f90 init_random_seed.f90
-     iwmles.f90 tlwmles.f90 vreman.f90 dyn_vreman.f90 wale.f90)
+     iwmles.f90 vreman.f90 dyn_vreman.f90 wale.f90)
 
 if (USE_MPI)
     add_definitions(-DPPMPI)

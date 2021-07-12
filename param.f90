@@ -224,13 +224,6 @@ logical :: inilag = .true.
 integer :: lbc_mom = 1
 integer :: ubc_mom = 0
 
-! Inputs for All TLWMLES
-integer :: ihwm = 1
-
-! Inputs for RNL TLWMLES
-real(rprec), allocatable, dimension(:) :: tlwm_kxin
-integer :: tlwm_kxnum = 3
-
 ! Prescribe bottom and top wall streamwise velocity
 ! Only for DNS (sgs=.false.) and full channel (lbc_mom = ubc_mom = 1)
 real(rprec) :: ubot = 0.0_rprec   ! nondimensional
