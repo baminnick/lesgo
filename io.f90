@@ -46,6 +46,7 @@ private
 public jt_total, openfiles, energy, output_loop, output_final, output_init, &
     write_tau_wall_bot, write_tau_wall_top, kx_energy, kx_energy_fourier,   &
     ky_energy
+public kx_vel_inst_by_z
 #ifdef PPOUTPUT_CLOCK
 public write_clocks
 #endif
@@ -879,6 +880,66 @@ do jz = 1, nz-1
 enddo
 
 end subroutine kx_energy_by_z_fourier
+
+!*****************************************************************************
+subroutine kx_vel_inst_by_z()
+!*****************************************************************************
+!
+! Write instantaneous velocity field by (kx,z) at arbitrary y location
+!
+! This function is intended for fourier
+!
+use types, only : rprec
+use sim_param, only : u, v, w
+use param, only : wbase, jt_total, ld, ny, kx_num, kxs_in
+use derivatives, only : dft_direct_back_2d_n_yonlyC
+use functions, only : int2str
+implicit none
+
+integer :: jx, jy, jz
+real(rprec), dimension(ld,ny) :: uk, vk, wk
+character(len = 20) :: fname
+character(len = 10), dimension(kx_num-1) :: fhead !! file header variable
+
+! Change arbitrary y-location index here
+jy = ny/2
+
+! Initialize file, write header
+if (jt_total == wbase) then
+    do jx = 1, (kx_num-1)
+        fhead(jx) = 'kx='//trim(int2str(int(kxs_in(jx))))//' '
+    enddo
+endif
+
+! Record at each z
+do jz = 1, nz-1
+
+    ! Initialize variables
+    uk(:,:) = u(:,:,jz)
+    vk(:,:) = v(:,:,jz)
+    wk(:,:) = w(:,:,jz)
+
+    ! Fourier transform, ky --> y
+    call dft_direct_back_2d_n_yonlyC( uk(:,:) )
+    call dft_direct_back_2d_n_yonlyC( vk(:,:) )
+    call dft_direct_back_2d_n_yonlyC( wk(:,:) )
+
+    ! Create file name
+    fname = 'kx_vel' !! refresh with each z
+    call string_concat( fname,'_c',coord )
+    call string_concat( fname,'_zi',jz )
+    call string_concat( fname,'.dat' )
+
+    ! Write data to file
+    open(2,file=path // fname, status='unknown',               &
+        form='formatted', position='append')
+    if (jt_total==wbase) write(2,*) 'jt_total ', fhead
+    write(2,*) jt_total, uk(1:nx,jy), vk(1:nx,jy), wk(1:nx,jy) !! Ignore Nyquist
+    close(2)
+
+enddo
+
+end subroutine kx_vel_inst_by_z
 
 !*****************************************************************************
 subroutine write_tau_wall_bot()

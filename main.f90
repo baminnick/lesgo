@@ -32,6 +32,7 @@ use sim_param
 use grid_m
 use io, only : energy, output_loop, output_final, jt_total
 use io, only : write_tau_wall_bot, write_tau_wall_top, kx_energy, kx_energy_fourier
+!use io, only : kx_vel_inst_by_z
 !use io, only : ky_energy
 #ifdef PPOUTPUT_CLOCK
 use io, only : write_clocks
@@ -697,6 +698,7 @@ call clock_convec%stop
             !call ky_energy()
         else
             call kx_energy_fourier()
+            !call kx_vel_inst_by_z()
         endif
 
 #ifdef PPOUTPUT_CLOCK
